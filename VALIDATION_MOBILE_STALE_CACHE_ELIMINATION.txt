@@ -1,0 +1,32 @@
+LSO MOBILE STALE-CACHE ELIMINATION — VALIDATION REPORT
+
+Result: 22/22 checks passed
+
+PASS — GitHub file count under 100 — 78 files
+PASS — No file exceeds GitHub 100 MB limit — pdf-lib.min.js: 0.50 MB
+PASS — All JavaScript syntax checks — 29 files
+PASS — All local HTML references exist — 53 references; missing: []
+PASS — No duplicate HTML IDs — 489 IDs; duplicates: []
+PASS — Workflow v2 contains no undefined renderAll call — workflow-attendance-month-v2.js
+PASS — Workflow v3 contains no undefined renderAll call — workflow-attendance-month-v3.js
+PASS — Workflow v4 contains no undefined renderAll call — workflow-attendance-month-v4.js
+PASS — Current index loads workflow v4
+PASS — Compatibility shim loads before workflow
+PASS — Classic global renderAll compatibility binding exists
+PASS — Service worker v25 is active
+PASS — Service worker remaps obsolete v2/v3 workflows
+PASS — All service-worker core assets exist — 59 assets; missing: []
+PASS — Emergency page unregisters service workers
+PASS — Emergency page deletes every origin cache
+PASS — Emergency page redirects with unique build query
+PASS — Known stale renderAll error self-recovers
+PASS — LSO_MASTER_MIGRATION_INSTALLER.sql unchanged — No database migration required
+PASS — supabase-setup.sql unchanged — No database migration required
+PASS — PWA manifest points to v25 start URL — ./index.html?build=enterprise-v25
+PASS — Stale v2 compatibility runtime test — Node VM simulation passed
+
+Browser automation note:
+The execution environment blocks local browser navigation with ERR_BLOCKED_BY_ADMINISTRATOR. JavaScript was therefore validated through Node syntax checks and a Node VM simulation of the exact obsolete renderAll event. Live GitHub Pages/PWA confirmation still requires the documented emergency-refresh-v25.html step on the affected phone.
+
+Database note:
+No Supabase SQL or shared data file was changed.

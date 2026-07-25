@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v4-mobile-cache-elimination';
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -933,6 +934,7 @@
   }
 
   window.addEventListener('lso:auth-changed', () => setTimeout(() => { activeAttendanceGroup(); renderEverything(); }, 0));
+  window.addEventListener('lso:attendance-refresh-request', () => setTimeout(() => renderEverything(), 0));
 
   window.LSOAttendanceMonthWorkspace = Object.freeze({
     refresh: () => renderEverything(),

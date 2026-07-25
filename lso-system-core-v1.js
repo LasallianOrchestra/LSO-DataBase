@@ -1,3 +1,13 @@
+'use strict';
+
+function lsoLegacyAttendanceRefreshV25() {
+  if (window.LSOAttendanceMonthWorkspace?.refresh) return window.LSOAttendanceMonthWorkspace.refresh();
+  window.dispatchEvent(new CustomEvent('lso:attendance-refresh-request'));
+  return undefined;
+}
+var renderAll = typeof window.renderAll === 'function' ? window.renderAll : lsoLegacyAttendanceRefreshV25;
+window.renderAll = renderAll;
+
 (() => {
   'use strict';
 
@@ -60,13 +70,14 @@
   });
 
   const VERSION = Object.freeze({
-    app: '3.0.1',
-    build: '2026.07.25-enterprise.2',
+    app: '3.0.2',
+    build: '2026.07.25-enterprise.3',
     schemaTarget: '006_enterprise_operations',
-    cache: 'lso-enterprise-v24',
+    cache: 'lso-enterprise-v25',
     permissions: 'permissions-manifest-v1',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });
+
 
   const ERROR_CODES = Object.freeze({
     NETWORK: 'NET-CONNECTION-001',

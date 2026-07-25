@@ -2,7 +2,7 @@
   'use strict';
 
   const CORE = window.LSOSystemCore || {};
-  const VERSION = CORE.VERSION || { app: '3.0.1', build: '2026.07.25-enterprise.2', schemaTarget: '006_enterprise_operations', cache: 'lso-enterprise-v24' };
+  const VERSION = CORE.VERSION || { app: '3.0.2', build: '2026.07.25-enterprise.3', schemaTarget: '006_enterprise_operations', cache: 'lso-enterprise-v25' };
   const SETTINGS_KEY = 'lso_system_settings_v2';
   const DUTY_KEY = 'lso_duty_hours_v1';
   const MONTHLY_KEY = 'lso_monthly_reports_v1';
@@ -475,7 +475,7 @@
     ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>setTimeout(renderDutyEnhancements,40)));
     ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>setTimeout(renderMonthlyWorkflow,50)));
     window.addEventListener('lso:system-error',(event)=>{if(loggingServerError&&event.detail?.rpc==='lso_log_system_error')return;reportError(event.detail||{});});
-    window.addEventListener('error',(event)=>{if(!event.error&&!event.message)return;reportError({module:'Website',publicMessage:'A website component stopped unexpectedly. Your shared records were not intentionally changed.',technicalMessage:event.error?.stack||event.message||'Unknown JavaScript error'}, {show:true});});
+    window.addEventListener('error',(event)=>{if(!event.error&&!event.message)return;const technical=String(event.error?.stack||event.message||'Unknown JavaScript error');if(/renderAll is not defined/i.test(technical)&&/workflow-attendance-month-v2\.js/i.test(technical)){event.preventDefault?.();window.LSORenderCompatibility?.refreshAttendance?.();window.renderAll?.();closeErrorDialog();console.warn('Obsolete attendance cache recovered without blocking the website.');return;}reportError({module:'Website',publicMessage:'A website component stopped unexpectedly. Your shared records were not intentionally changed.',technicalMessage:technical}, {show:true});});
     window.addEventListener('unhandledrejection',(event)=>{const reason=event.reason;reportError({module:'Website',publicMessage:'A background operation could not be completed.',technicalMessage:reason?.stack||reason?.message||String(reason||'Unknown promise rejection')},{show:true});});
     window.addEventListener('lso:auth-changed',()=>setTimeout(()=>{if(isAdmin()){ensureDailyRecovery();refreshSystemHealth({quiet:true});refreshRecoveryPoints({quiet:true});}renderDutyEnhancements();renderMonthlyWorkflow();},300));
     wireRiskProtection();

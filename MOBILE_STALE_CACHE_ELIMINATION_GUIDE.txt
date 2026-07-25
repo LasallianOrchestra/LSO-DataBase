@@ -1,0 +1,31 @@
+LSO MOBILE STALE-CACHE ELIMINATION — REQUIRED DEPLOYMENT
+
+CAUSE
+The screenshot proves the phone is still executing workflow-attendance-month-v2.js from an older installed PWA cache. The current fixed page cannot remove an already-running old worker until the unique emergency repair page is opened.
+
+DEPLOYMENT
+1. Extract this ZIP.
+2. In the GitHub Pages repository, upload ALL files from the extracted folder.
+3. Confirm these exact files exist in GitHub:
+   - workflow-attendance-month-v2.js
+   - workflow-attendance-month-v3.js
+   - workflow-attendance-month-v4.js
+   - renderall-compat-v25.js
+   - service-worker-enterprise-v25.js
+   - pwa-enterprise-v25.js
+   - emergency-refresh-v25.html
+4. Wait for GitHub Pages deployment to finish.
+5. On EACH affected phone, open this exact URL once:
+   https://YOUR-USERNAME.github.io/YOUR-REPOSITORY/emergency-refresh-v25.html
+6. Keep the page open until it automatically returns to the login screen.
+7. Close the browser/PWA completely, reopen it, and log in.
+
+WHY THIS FIX IS DIFFERENT
+- The exact obsolete filename workflow-attendance-month-v2.js is now replaced with corrected code.
+- The new service worker redirects any v2 or v3 request to the fixed v4 workflow.
+- A global compatibility function prevents the obsolete renderAll call from crashing the website.
+- The error reporter suppresses and self-recovers this one known stale-cache error.
+- The unique emergency page unregisters every old service worker and deletes every origin cache.
+
+DATABASE
+No Supabase SQL is needed. No shared record, role, Attendance record, Duty Hour, or Monthly Report is modified.
