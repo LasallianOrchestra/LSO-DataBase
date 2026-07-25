@@ -1,0 +1,23 @@
+LSO RENDERALL RUNTIME FIX
+
+PROBLEM
+The Attendance monthly workflow listened for lso:auth-changed and called an undefined renderAll() function. The global error reporter then displayed SYS-UNEXPECTED-999 throughout the website.
+
+FIX
+- Replaced the undefined call with the module-local renderEverything() function.
+- Added a safe LSOAttendanceMonthWorkspace.refresh() API.
+- Renamed the workflow file and advanced the PWA cache to enterprise-v24 so GitHub Pages and installed apps cannot keep serving the defective script.
+- Updated website version to 3.0.1 / build 2026.07.25-enterprise.2.
+
+DEPLOYMENT
+1. Extract the ZIP.
+2. Upload every file to the GitHub Pages publishing root, including index.html.
+3. Confirm these files exist online:
+   workflow-attendance-month-v3.js
+   pwa-enterprise-v24.js
+   service-worker-enterprise-v24.js
+4. Open refresh-lso.html once.
+5. Close and reopen the installed app or browser tab, then log in.
+
+DATABASE
+No Supabase SQL update is needed. Do not rerun the master migration for this JavaScript-only correction.

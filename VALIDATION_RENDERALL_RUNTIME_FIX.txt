@@ -1,0 +1,36 @@
+LSO RENDERALL RUNTIME FIX - VALIDATION REPORT
+
+Build: 2026.07.25-enterprise.2
+Website version: 3.0.1
+PWA cache: enterprise-v24
+
+Result: 19/19 checks passed
+
+[PASS] Undefined renderAll removed from Attendance workflow
+[PASS] Authentication refresh uses renderEverything
+[PASS] Attendance public refresh API available
+[PASS] HTML loads workflow v3
+[PASS] HTML loads PWA v24
+[PASS] Service worker v24 exists
+[PASS] Old service worker removed
+[PASS] Manifest cache-busting version updated
+[PASS] Refresh page cache-busting version updated
+[PASS] All local HTML assets exist
+[PASS] All service-worker core assets exist
+[PASS] Service worker caches workflow v3
+[PASS] Service worker caches PWA v24
+[PASS] No duplicate HTML IDs
+[PASS] JavaScript syntax valid (26 files)
+[PASS] LSO_MASTER_MIGRATION_INSTALLER.sql unchanged
+[PASS] supabase-setup.sql unchanged
+[PASS] Attendance authentication-event runtime test — WORKFLOW_RUNTIME_TEST_PASS
+[PASS] GitHub file count under 100 (72 files)
+
+ROOT CAUSE
+workflow-attendance-month-v2.js called renderAll() from an lso:auth-changed listener, but that function did not exist in the module. The correct local renderer is renderEverything().
+
+DATABASE IMPACT
+No database schema, migration, Supabase setup, or stored record was changed.
+
+LIMITATION
+The package was not connected to the user’s private live Supabase project. The corrected Attendance workflow was executed in an isolated runtime harness, including the lso:auth-changed event that previously produced the error.

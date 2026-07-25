@@ -60,10 +60,10 @@
   });
 
   const VERSION = Object.freeze({
-    app: '3.0.0',
-    build: '2026.07.25-enterprise.1',
+    app: '3.0.1',
+    build: '2026.07.25-enterprise.2',
     schemaTarget: '006_enterprise_operations',
-    cache: 'lso-enterprise-v23',
+    cache: 'lso-enterprise-v24',
     permissions: 'permissions-manifest-v1',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });

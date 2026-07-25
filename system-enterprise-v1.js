@@ -2,7 +2,7 @@
   'use strict';
 
   const CORE = window.LSOSystemCore || {};
-  const VERSION = CORE.VERSION || { app: '3.0.0', build: '2026.07.25-enterprise.1', schemaTarget: '006_enterprise_operations', cache: 'lso-enterprise-v23' };
+  const VERSION = CORE.VERSION || { app: '3.0.1', build: '2026.07.25-enterprise.2', schemaTarget: '006_enterprise_operations', cache: 'lso-enterprise-v24' };
   const SETTINGS_KEY = 'lso_system_settings_v2';
   const DUTY_KEY = 'lso_duty_hours_v1';
   const MONTHLY_KEY = 'lso_monthly_reports_v1';
