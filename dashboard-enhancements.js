@@ -201,6 +201,9 @@
         });
       });
 
+    const enterpriseNotifications = window.LSOEnterprise?.getNotifications?.();
+    if (Array.isArray(enterpriseNotifications)) notifications.push(...enterpriseNotifications);
+
     const severityOrder = { high: 0, medium: 1, low: 2 };
     const readIds = readNotificationIds();
     return notifications
@@ -314,6 +317,28 @@
     }
     if (action === 'event' && targetId) {
       openEvent(targetId);
+      return;
+    }
+    if (action === 'duty-hours') {
+      showView('dutyHoursView');
+      setTimeout(() => document.getElementById('dutyApprovalPanel')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 80);
+      return;
+    }
+    if (action === 'monthly-report') {
+      showView('monthlyReportView');
+      setTimeout(() => {
+        const month = document.getElementById('monthlyReportMonth');
+        if (month && targetId) {
+          month.value = targetId;
+          month.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        document.getElementById('monthlyReportWorkflowPanel')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }, 80);
+      return;
+    }
+    if (action === 'system-health') {
+      showView('systemHealthView');
+      setTimeout(() => document.getElementById('systemHealthView')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
       return;
     }
     showView('alertsView');
@@ -532,7 +557,7 @@
       if (button.dataset.view === 'dashboardView') setTimeout(renderDashboardModules, 20);
     }));
 
-    ['lso:members-changed', 'lso:operations-changed', 'lso:duty-hours-changed', 'lso:accounts-changed', 'lso:auth-changed', 'lso:cloud-state-changed'].forEach((eventName) => {
+    ['lso:members-changed', 'lso:operations-changed', 'lso:duty-hours-changed', 'lso:accounts-changed', 'lso:auth-changed', 'lso:cloud-state-changed', 'lso:enterprise-ready', 'lso:monthly-report-changed', 'lso:system-health-changed'].forEach((eventName) => {
       window.addEventListener(eventName, () => setTimeout(renderDashboardModules, 0));
     });
 

@@ -175,6 +175,9 @@
         timeIn,
         timeOut,
         description: String(entry?.description || ''),
+        category: String(entry?.category || ''),
+        manualReason: String(entry?.manualReason || ''),
+        correctionReason: String(entry?.correctionReason || ''),
         memberApprovers: String(entry?.memberApprovers || entry?.membersApproved || ''),
         clockInAt: String(entry?.clockInAt || ''),
         clockOutAt: String(entry?.clockOutAt || ''),
@@ -1010,6 +1013,13 @@
     button.textContent = busy ? busyLabel : readyLabel;
   }
 
+  function categorizedDescription(category, description) {
+    const cleanCategory = String(category || '').trim();
+    const cleanDescription = String(description || '').trim();
+    if (!cleanCategory) return cleanDescription;
+    return cleanDescription ? `[${cleanCategory}] ${cleanDescription}` : `[${cleanCategory}]`;
+  }
+
   async function timeInNow() {
     if (!isTraineeAccount()) return;
     const member = linkedMember();
@@ -1044,7 +1054,7 @@
       setPunchBusy(button, true, 'Submitting Time In…', 'Submit Time In');
       await window.LSOCloud.timeInDuty({
         semester: activeSemester,
-        description: el('dutySelfDescription')?.value.trim() || '',
+        description: categorizedDescription(el('dutySelfCategory')?.value, el('dutySelfDescription')?.value),
         memberApprovers: el('dutySelfMemberApprovers')?.value.trim() || ''
       });
       renderAll();
@@ -1087,7 +1097,7 @@ This will record the secure server time for the session that started on ${dateLa
 
       setPunchBusy(button, true, 'Submitting Time Out…', 'Submit Time Out');
       await window.LSOCloud.timeOutDuty({
-        description: el('dutySelfDescription')?.value.trim() || '',
+        description: categorizedDescription(el('dutySelfCategory')?.value, el('dutySelfDescription')?.value),
         memberApprovers: el('dutySelfMemberApprovers')?.value.trim() || ''
       });
       if (el('dutySelfDescription')) el('dutySelfDescription').value = '';
@@ -1183,12 +1193,19 @@ This will record the secure server time for the session that started on ${dateLa
       updateRenderedDurationPreview();
       return;
     }
+    const manualReason = el('dutyRenderedManualReason')?.value.trim() || '';
+    if (manualReason.length < 3) {
+      window.LSOApp?.showToast?.('Enter a clear reason for the manual Duty Hours entry.', true);
+      return;
+    }
     const minutes = duration.minutes;
     const data = loadData();
     const account = currentAccount();
     data.entries.push({
       id: uid('duty-entry'), memberId: member.id, semester: activeSemester, period: selectedPeriod,
       entryType: 'Duty', date, minutes, timeIn, timeOut,
+      category: el('dutyRenderedCategory')?.value || 'Other',
+      manualReason,
       description: el('dutyRenderedDescription')?.value.trim() || '',
       approvalStatus: 'Approved', approvedAt: new Date().toISOString(), approvedBy: account?.username || 'Administrator',
       createdAt: new Date().toISOString(), createdBy: account?.displayName || account?.username || 'Administrator', createdByUsername: account?.username || ''
@@ -1197,6 +1214,7 @@ This will record the secure server time for the session that started on ${dateLa
     if (el('dutyRenderedTimeIn')) el('dutyRenderedTimeIn').value = '';
     if (el('dutyRenderedTimeOut')) el('dutyRenderedTimeOut').value = '';
     if (el('dutyRenderedDescription')) el('dutyRenderedDescription').value = '';
+    if (el('dutyRenderedManualReason')) el('dutyRenderedManualReason').value = '';
     updateRenderedDurationPreview();
     window.LSOApp?.showToast?.(`Rendered duty added: ${durationLabel(minutes)}.`);
     renderAll();
@@ -1219,6 +1237,8 @@ This will record the secure server time for the session that started on ${dateLa
     data.entries.push({
       id: uid('duty-entry'), memberId: member.id, semester: activeSemester, period: selectedPeriod,
       entryType: 'Incentive', date, minutes,
+      category: direction === 'Credit' ? 'Incentive Credit' : 'Incentive Deduction',
+      manualReason: el('dutyIncentiveDescription')?.value.trim() || '',
       description: el('dutyIncentiveDescription')?.value.trim() || '',
       approvalStatus: 'Approved', approvedAt: new Date().toISOString(), approvedBy: account?.username || 'Administrator',
       createdAt: new Date().toISOString(), createdBy: account?.displayName || account?.username || 'Administrator', createdByUsername: account?.username || ''
@@ -1235,9 +1255,15 @@ This will record the secure server time for the session that started on ${dateLa
     const data = loadData();
     const entry = data.entries.find((item) => item.id === entryId);
     const member = getMembers().find((item) => item.id === entry?.memberId);
-    if (!entry || !window.confirm('Delete this duty-hour ledger entry?')) return;
+    if (!entry) return;
+    const reason = window.prompt('Enter the reason for deleting this duty-hour ledger entry:');
+    if (reason === null) return;
+    if (reason.trim().length < 3) {
+      window.LSOApp?.showToast?.('A deletion reason with at least 3 characters is required.', true);
+      return;
+    }
     data.entries = data.entries.filter((item) => item.id !== entryId);
-    persistData(data, { action: 'Deleted duty-hour entry', details: `${member?.fullName || 'Member'} • ${entry.semester} • ${entry.period} • ${durationLabel(entry.minutes, entry.entryType === 'Incentive')}` });
+    persistData(data, { action: 'Deleted duty-hour entry', details: `${member?.fullName || 'Member'} • ${entry.semester} • ${entry.period} • ${durationLabel(entry.minutes, entry.entryType === 'Incentive')} • Reason: ${reason.trim()}` });
     window.LSOApp?.showToast?.('Duty-hour entry deleted.');
     renderAll();
   }
@@ -1569,6 +1595,11 @@ This will record the secure server time for the session that started on ${dateLa
 
   window.LSODutyHours = {
     getData: loadData,
+    getSelectedMemberId: () => selectedMemberId,
+    getSelectedPeriod: () => selectedPeriod,
+    getActiveSemester: () => activeSemester,
+    getSelectedMember: () => selectedMember(),
+    persistData,
     calculateMember: (memberId) => calculateMember(loadData(), memberId),
     calculateClockDuration,
     memberPeriodOnDate,

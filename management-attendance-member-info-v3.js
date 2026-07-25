@@ -958,8 +958,13 @@
     return ['Pending', 'Approved', 'Rejected'].includes(account?.approvalStatus) ? account.approvalStatus : 'Approved';
   }
 
+  function availableAccountRoles() {
+    const configured = Object.values(window.LSOSystemCore?.ROLES || {});
+    return configured.length ? configured : ['Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary'];
+  }
+
   function normalizeAccountRole(role) {
-    return ['Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary'].includes(role) ? role : 'Staff Account';
+    return availableAccountRoles().includes(role) ? role : 'Staff Account';
   }
 
   function returnAccountToPending(account) {
@@ -1042,10 +1047,11 @@
           ? '<small class="table-subtext">This account will use only this member’s Duty Hours.</small>'
           : '<small class="table-subtext warning-text">Required before approval</small>'
         : '<small class="table-subtext">Required only for Trainee/Probationary.</small>';
+      const roleOptions = availableAccountRoles().map((roleName) => `<option ${account.role === roleName ? 'selected' : ''}>${safeText(roleName)}</option>`).join('');
       return `<tr data-account-row="${safeText(account.id)}">
         <td><strong>${safeText(account.displayName || account.username)}</strong>${approvalNote}</td>
         <td><strong>@${safeText(account.username)}</strong><small class="table-subtext">${safeText(account.email || 'No optional email')}</small></td>
-        <td><select class="account-role-select account-approval-select" data-account-id="${safeText(account.id)}" aria-label="${approval === 'Pending' ? 'Role to approve' : 'Account role'}" ${account.isDefault ? 'disabled' : ''}><option ${account.role === 'Administrator' ? 'selected' : ''}>Administrator</option><option ${account.role === 'Membership' ? 'selected' : ''}>Membership</option><option ${account.role === 'General Secretary' ? 'selected' : ''}>General Secretary</option><option ${account.role === 'Staff Account' ? 'selected' : ''}>Staff Account</option><option ${account.role === 'Trainee/Probationary' ? 'selected' : ''}>Trainee/Probationary</option></select>${roleInstruction}</td>
+        <td><select class="account-role-select account-approval-select" data-account-id="${safeText(account.id)}" aria-label="${approval === 'Pending' ? 'Role to approve' : 'Account role'}" ${account.isDefault ? 'disabled' : ''}>${roleOptions}</select>${roleInstruction}</td>
         <td><select class="account-member-select" data-account-id="${safeText(account.id)}" ${account.isDefault || account.role !== 'Trainee/Probationary' ? 'disabled' : ''}>${memberOptions}</select>${memberInstruction}</td>
         <td>${safeText(dateLabel(String(requestedDate || '').slice(0, 10), true))}</td>
         <td><span class="badge ${accessBadge}">${safeText(accessLabel)}</span></td>
@@ -1224,6 +1230,9 @@
     if (el('settingRegular1Days')) el('settingRegular1Days').value = '';
     if (el('settingAlertDays')) el('settingAlertDays').value = settings.alertDays || 30;
     if (el('settingAttendanceThreshold')) el('settingAttendanceThreshold').value = settings.attendanceThreshold || 75;
+    if (el('settingDefaultTraineeDutyHours')) el('settingDefaultTraineeDutyHours').value = Math.max(0, Number(settings.defaultTraineeDutyMinutes || 0) / 60) || 30;
+    if (el('settingDefaultProbationaryDutyHours')) el('settingDefaultProbationaryDutyHours').value = Math.max(0, Number(settings.defaultProbationaryDutyMinutes || 0) / 60) || 30;
+    if (el('settingDutyCompletionAlert')) el('settingDutyCompletionAlert').value = Math.min(100, Math.max(1, Number(settings.dutyCompletionAlertPercent) || 80));
     updateTimelineHelp();
   }
 
@@ -1233,18 +1242,30 @@
       const value = el(id).value;
       return value === '' ? '' : Math.max(1, Number(value) || 1);
     };
+    const existing = loadSettings();
+    const hoursToMinutes = (id, fallbackMinutes) => {
+      const node = el(id);
+      if (!node) return Number(existing[fallbackMinutes]) || 0;
+      const hours = Math.max(0, Number(node.value) || 0);
+      return Math.round(hours * 60);
+    };
     const settings = {
+      ...existing,
       traineeDays: numberOrBlank('settingTraineeDays'),
       probationaryDays: numberOrBlank('settingProbationaryDays'),
       regular1Days: '',
       alertDays: Math.min(365, Math.max(1, Number(el('settingAlertDays').value) || 30)),
-      attendanceThreshold: Math.min(100, Math.max(1, Number(el('settingAttendanceThreshold').value) || 75))
+      attendanceThreshold: Math.min(100, Math.max(1, Number(el('settingAttendanceThreshold').value) || 75)),
+      defaultTraineeDutyMinutes: hoursToMinutes('settingDefaultTraineeDutyHours', 'defaultTraineeDutyMinutes'),
+      defaultProbationaryDutyMinutes: hoursToMinutes('settingDefaultProbationaryDutyHours', 'defaultProbationaryDutyMinutes'),
+      dutyCompletionAlertPercent: Math.min(100, Math.max(1, Number(el('settingDutyCompletionAlert')?.value) || Number(existing.dutyCompletionAlertPercent) || 80))
     };
     saveSettings(settings);
-    logActivity('Updated system settings', 'Settings', `Alerts: ${settings.alertDays} days • Attendance threshold: ${settings.attendanceThreshold}%`);
+    logActivity('Updated system settings', 'Settings', `Alerts: ${settings.alertDays} days • Attendance threshold: ${settings.attendanceThreshold}% • Duty defaults: ${Math.round(settings.defaultTraineeDutyMinutes / 60)}h Trainee / ${Math.round(settings.defaultProbationaryDutyMinutes / 60)}h Probationary`);
     updateTimelineHelp();
     renderAlerts();
-    toast('Automation settings saved.');
+    window.dispatchEvent(new CustomEvent('lso:settings-changed', { detail: settings }));
+    toast('Automation and Duty Hours settings saved.');
   }
 
   function timelineConfigured(settings = loadSettings()) {

@@ -1,0 +1,120 @@
+LSO SYSTEM STABILITY & ENTERPRISE OPERATIONS UPGRADE
+VALIDATION REPORT
+
+Automated/structural checks passed: 46 of 46
+Detected failures: 0
+
+01. PASS — GitHub file count below 100
+    70 files
+02. PASS — All JavaScript files pass syntax validation
+    26 files; zero failures
+03. PASS — No duplicate HTML IDs
+    489 IDs; duplicates: []
+04. PASS — All local HTML assets exist
+    51 references; missing: []
+05. PASS — Fail-closed authentication gate preserved
+    HTML-level lock before authentication
+06. PASS — All CSS stylesheets parse without syntax errors
+    20 stylesheets; []
+07. PASS — Enterprise CSS includes mobile enterprise layout
+    @media(max-width:760px)
+08. PASS — Enterprise CSS includes high contrast mode
+    data-lso-high-contrast
+09. PASS — Enterprise CSS includes text sizing
+    data-lso-text-size
+10. PASS — Enterprise CSS includes reduced motion
+    data-lso-reduced-motion
+11. PASS — Enterprise CSS includes permission matrix
+    permission-matrix-table
+12. PASS — Enterprise CSS includes error dialog
+    system-error-dialog
+13. PASS — System Health and Version Center UI is complete
+    missing IDs: []
+14. PASS — Centralized permission center UI is complete
+    missing IDs: []
+15. PASS — Backup and Recovery Center UI is complete
+    missing IDs: []
+16. PASS — Notification and Approval Center UI is complete
+    missing IDs: []
+17. PASS — Duty Hours enhancements UI is complete
+    missing IDs: []
+18. PASS — Better Monthly Reports UI is complete
+    missing IDs: []
+19. PASS — Friendly error reporting UI is complete
+    missing IDs: []
+20. PASS — Accessibility controls UI is complete
+    missing IDs: []
+21. PASS — Centralized role permission unit tests
+    {
+  "total": 14,
+  "passed": 14,
+  "failed": []
+}
+22. PASS — Website and server write permissions align
+    all role column sets match
+23. PASS — Master migration is transactional
+    BEGIN and COMMIT found
+24. PASS — Master migration dollar quotes are balanced
+    22 delimiters
+25. PASS — Master migration contains all enterprise objects
+    missing: []
+26. PASS — Master migration has no duplicate pre-restore insert statement
+    1
+27. PASS — Fresh-install SQL embeds the master migration once
+    markers=1
+28. PASS — Schema reload is requested
+    PostgREST schema cache refresh
+29. PASS — Only the enterprise PWA is referenced
+    v23 active
+30. PASS — All service-worker core assets exist
+    58 paths; missing: []
+31. PASS — Manifest targets enterprise build
+    ./?v=20260725-enterprise-v23
+32. PASS — Manifest icons exist
+    3 icons
+33. PASS — PWA removes obsolete LSO caches
+    cache cleanup and active version
+34. PASS — Enterprise logic includes automatic daily recovery
+    ensureDailyRecovery
+35. PASS — Enterprise logic includes pre-operation recovery
+    prepareRiskyOperation
+36. PASS — Enterprise logic includes backup validation
+    validateBackupObject
+37. PASS — Enterprise logic includes friendly error classification
+    classifyError
+38. PASS — Enterprise logic includes local error fallback
+    saveLocalError
+39. PASS — Enterprise logic includes server error synchronization
+    logSystemError
+40. PASS — Enterprise logic includes monthly finalization
+    finalizeMonthlyReport
+41. PASS — Enterprise logic includes monthly reopen reason
+    reopenMonthlyReport
+42. PASS — Enterprise logic includes duty certification
+    printDutyCertification
+43. PASS — Enterprise logic includes notification contributions
+    enterpriseNotifications
+44. PASS — Enterprise logic includes permission matrix rendering
+    renderPermissionMatrix
+45. PASS — Enterprise logic includes accessibility persistence
+    ACCESSIBILITY_KEY
+46. PASS — Obsolete validation/update files removed
+    []
+
+ADDITIONAL REVIEW NOTES
+- All JavaScript files were parsed by Node.js syntax validation.
+- All CSS files were parsed with tinycss2.
+- HTML IDs, local asset references, manifest icons, and service-worker assets were checked.
+- Website and server write-permission manifests were compared role by role.
+- The master migration was checked for transactions, balanced dollar quotes, required objects, and the PostgREST schema reload.
+- The authentication fail-closed markers and enterprise feature controls were confirmed in the deployed HTML structure.
+- A local Chromium interaction test was attempted, but this execution environment blocks localhost/file browser navigation by administrator policy. Therefore, visual interaction against the deployed GitHub Pages address and live RPC execution against the private Supabase project cannot be confirmed here.
+- Live acceptance should be completed after Supabase reports Success: run System Health, create/restore a test recovery point using non-production sample data, test one Duty Hours approval, finalize/reopen one sample Monthly Report, and verify role access using test accounts.
+
+LIVE-SYSTEM LIMITATION
+The private Supabase project is not accessible from this environment. The database migration and website integration were validated structurally, but the actual production database result is confirmed only after the installer runs successfully in the user’s Supabase SQL Editor.
+
+PACKAGE INTEGRITY
+- Final package file count: 71 files (below the requested 100-file GitHub limit).
+- Final ZIP size: approximately 1.9 MB.
+- `unzip -t` reported: No errors detected in compressed data.

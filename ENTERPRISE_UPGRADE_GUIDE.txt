@@ -1,0 +1,170 @@
+LASALLIAN SYMPHONY ORCHESTRA
+SYSTEM STABILITY & ENTERPRISE OPERATIONS UPGRADE
+Website v3.0.0 | Database target 006_enterprise_operations
+
+============================================================
+IMPORTANT INSTALLATION ORDER FOR AN EXISTING SUPABASE PROJECT
+============================================================
+
+1. BACK UP THE CURRENT SYSTEM FIRST
+   - Log in as Administrator.
+   - Open Data & Backup / Data & Recovery.
+   - Download a Complete System Backup JSON.
+   - Keep this file outside the GitHub repository.
+
+2. INSTALL THE ONE MASTER DATABASE MIGRATION
+   - Open Supabase > SQL Editor > New query.
+   - Open LSO_MASTER_MIGRATION_INSTALLER.sql from this package.
+   - Copy the ENTIRE file into the SQL Editor.
+   - Click Run once and wait for Supabase to display Success.
+   - The installer is idempotent and may be run again if execution is interrupted.
+   - Do not run older account-role, Duty Hours, member_id, or monthly-report hotfix files.
+
+3. DEPLOY THE COMPLETE WEBSITE PACKAGE
+   - Upload every file from this extracted folder to the GitHub Pages publishing root.
+   - Keep index.html in the publishing root.
+   - Do not rename files with suffixes such as (1), (2), or Copy.
+   - Wait until GitHub Pages reports that deployment is complete.
+
+4. REMOVE THE PREVIOUS PWA CACHE
+   - Open refresh-lso.html once from the deployed website.
+   - It unregisters prior LSO service workers, deletes old LSO caches, and opens build v23.
+   - Close and reopen an installed LSO app after the refresh page completes.
+
+5. VERIFY THE INSTALLATION
+   - Log in as Administrator.
+   - Open System Health.
+   - Click Run Health Check.
+   - Database Schema must show 006_enterprise_operations.
+   - Applied Migrations must show versions 1 through 6.
+   - All database compatibility checks should show Passed.
+   - Open Data & Recovery and create one manual recovery point.
+   - Open Accessibility & Display and confirm preferences save on the device.
+
+FRESH SUPABASE INSTALLATION
+---------------------------
+Use supabase-setup.sql instead of the migration-only file. The complete fresh-install SQL already includes the enterprise migration at the end. Do not run both files on a brand-new project.
+
+============================================================
+UPGRADE CONTENTS
+============================================================
+
+1. SYSTEM HEALTH & VERSION CENTER
+   - Website, build, schema target, migration, and PWA cache versions.
+   - Database object checks for accounts, sessions, state, Duty Hours functions,
+     Monthly Reports, recovery points, error logs, and the permission manifest.
+   - Shared record counts and last state update.
+   - Copyable diagnostic report.
+
+2. ONE MASTER DATABASE MIGRATION SYSTEM
+   - lso_schema_migrations records immutable migration versions 001 to 006.
+   - LSO_MASTER_MIGRATION_INSTALLER.sql repairs older compatible projects safely.
+   - PostgREST schema cache is refreshed automatically.
+   - The installer preserves members, accounts, attendance, Duty Hours, reports,
+     settings, events, instruments, and activity logs.
+
+3. AUTOMATED BACKUP & RECOVERY CENTER
+   - Server-side snapshots of the complete shared system_state.
+   - One automatic daily recovery point after Administrator sign-in.
+   - Automatic recovery point before complete restore, member JSON restore,
+     CSV import, or clearing the member database.
+   - Backup-file validation before a complete restore is allowed.
+   - Restore history, record-count preview, and automatic pre-restore snapshot.
+   - Maximum of 20 server recovery points retained to control database growth.
+
+4. CENTRALIZED ROLE & PERMISSION MANAGEMENT
+   - One website permission manifest: lso-system-core-v1.js.
+   - One server permission manifest: lso_role_permissions.
+   - Navigation, form controls, action guards, and cloud writes use the same
+     role/action vocabulary.
+   - System Health contains a readable and downloadable role permission matrix.
+   - Specialized server checks still protect finalized attendance and restrict
+     Membership Duty Hours work to current Trainee/Probationary records.
+
+5. NOTIFICATION & APPROVAL CENTER
+   - Existing account approvals and upcoming activities remain available.
+   - Added pending Time In, pending Time Out, Draft Monthly Report, and System
+     Health notifications.
+   - Notifications open the correct Duty Hours, Monthly Report, Account, Event,
+     Member, or System Health workspace.
+
+6. DUTY HOURS ENHANCEMENTS
+   - Duty category on member punch submissions and manual entries.
+   - Required manual-entry reason and deletion/correction explanation.
+   - Configurable default Trainee and Probationary hour requirements.
+   - Configurable completion-alert percentage.
+   - Requirement progress, pending/approved/rejected metrics, completion alerts,
+     and printable individual certification.
+   - Existing separate Time In and Time Out approval remains unchanged.
+   - Only entries with both required approvals contribute credited minutes.
+
+7. BETTER MONTHLY REPORTS
+   - Draft and Finalized workflow.
+   - Administrator-only finalization and reopening with a required reason.
+   - Revision number, finalization/reopen history, and locked finalized fields.
+   - Prepared By, Noted By, and Approved By signatories.
+   - Missing-field validation before finalization.
+   - Existing editable Table 5 and user-entered Original Entry Date remain active.
+
+8. FRIENDLY ERROR REPORTING
+   - Stable public error codes instead of raw database messages.
+   - Technical details remain expandable and copyable.
+   - Local fallback error log when the database is unavailable.
+   - Server error history, CSV export, and Administrator resolution notes.
+
+9. ACCESSIBILITY & DISPLAY CONTROLS
+   - Normal, Large, and Extra Large text.
+   - Standard and High Contrast modes.
+   - Device-controlled, reduced, or full motion.
+   - Comfortable or compact layout density.
+   - Automatic or card-style small-screen tables.
+   - Enhanced keyboard focus indicators.
+   - Preferences are stored only on the current device.
+
+============================================================
+ROLE SAFETY
+============================================================
+
+Administrator
+- Full system access, health, recovery, errors, accounts, finalizations, and settings.
+
+Membership
+- Existing approved modules remain available.
+- Can review Duty punches, manage Duty Hours, apply Duty requirements, and create
+  Duty certification.
+- Can edit Monthly Reports, but cannot finalize or reopen them.
+
+General Secretary
+- Dashboard and Attendance activity/draft workflow only.
+
+Staff Account
+- Existing read-only modules only.
+
+Trainee/Probationary
+- Personal Duty Hours punch workflow only.
+
+============================================================
+RECOVERY AND TROUBLESHOOTING
+============================================================
+
+If System Health reports that the migration is missing:
+1. Run LSO_MASTER_MIGRATION_INSTALLER.sql again in Supabase.
+2. Confirm Supabase displays Success.
+3. Open refresh-lso.html on the deployed website.
+4. Log in and run System Health again.
+
+If an old design or script remains on a phone:
+1. Open refresh-lso.html while online.
+2. Close all LSO browser tabs and the installed app.
+3. Reopen the website.
+4. Clear only the LSO website storage if the old service worker still remains.
+
+If a restore is needed:
+1. Open Data & Recovery.
+2. Select a recovery point and review its record counts.
+3. Restore it. The system creates another point immediately before restoring.
+4. Reload shared state after the restore completes.
+
+SECURITY NOTE
+-------------
+Do not publish private JSON backups, account exports, or Supabase service-role keys in GitHub. The included supabase-config.js contains only the normal public client configuration used by the website.

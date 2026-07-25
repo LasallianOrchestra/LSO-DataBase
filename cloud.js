@@ -78,7 +78,9 @@
   }
 
   function canReviewDuty() {
-    return ['Administrator', 'Membership'].includes(sessionAccount?.role);
+    if (!sessionAccount) return false;
+    if (window.LSORoleAccess?.can) return window.LSORoleAccess.can('reviewDutyPunches', sessionAccount);
+    return sessionAccount.role === 'Administrator';
   }
 
   function isTraineeAccount() {
@@ -232,6 +234,15 @@
     const { data, error } = await client.rpc(name, params);
     if (error) {
       const message = rpcErrorMessage(error);
+      const technicalMessage = String(error?.message || error?.details || error?.hint || message);
+      const code = /migration|schema|column|function .*does not exist|schema cache/i.test(technicalMessage)
+        ? (window.LSOSystemCore?.ERROR_CODES?.MIGRATION || 'DB-MIGRATION-004')
+        : /permission|42501|access is required/i.test(technicalMessage)
+          ? (window.LSOSystemCore?.ERROR_CODES?.PERMISSION || 'AUTH-PERMISSION-005')
+          : /failed to fetch|networkerror|load failed/i.test(technicalMessage)
+            ? (window.LSOSystemCore?.ERROR_CODES?.NETWORK || 'NET-CONNECTION-001')
+            : (window.LSOSystemCore?.ERROR_CODES?.UNKNOWN || 'SYS-UNEXPECTED-999');
+      emit('lso:system-error', { errorCode: code, module: 'Shared Database', publicMessage: message, technicalMessage, rpc: name, severity: 'error' });
       if (/invalid or expired session/i.test(message)) emit('lso:session-invalid', { message });
       throw new Error(message);
     }
@@ -615,6 +626,50 @@
     return cloneState();
   }
 
+
+  async function getSystemHealth() {
+    return rpc('lso_system_health', { p_token: sessionToken });
+  }
+
+  async function createRecoveryPoint({ label = 'Manual recovery point', reason = '', metadata = {} } = {}) {
+    return rpc('lso_create_recovery_point', {
+      p_token: sessionToken,
+      p_label: label,
+      p_reason: reason,
+      p_metadata: metadata && typeof metadata === 'object' ? metadata : {}
+    });
+  }
+
+  async function listRecoveryPoints() {
+    return rpc('lso_list_recovery_points', { p_token: sessionToken });
+  }
+
+  async function restoreRecoveryPoint(recoveryId) {
+    const nextState = await rpc('lso_restore_recovery_point', { p_token: sessionToken, p_recovery_id: recoveryId });
+    dirtyVersions.clear();
+    persistDirtyMarkers();
+    applyState(nextState, 'recovery-restore');
+    status('online', 'Recovery point restored successfully');
+    return cloneState();
+  }
+
+  async function deleteRecoveryPoint(recoveryId) {
+    return rpc('lso_delete_recovery_point', { p_token: sessionToken, p_recovery_id: recoveryId });
+  }
+
+  async function logSystemError(payload = {}) {
+    if (!sessionToken) return null;
+    return rpc('lso_log_system_error', { p_token: sessionToken, p_error: payload });
+  }
+
+  async function listSystemErrors(limit = 100) {
+    return rpc('lso_list_system_errors', { p_token: sessionToken, p_limit: limit });
+  }
+
+  async function resolveSystemError(errorId, note = '') {
+    return rpc('lso_resolve_system_error', { p_token: sessionToken, p_error_id: errorId, p_note: note });
+  }
+
   window.LSOStorage = {
     getItem: storageGetItem,
     setItem: storageSetItem,
@@ -655,6 +710,14 @@
     timeOutDuty,
     reviewDutyEntry,
     reviewDutyPunch,
+    getSystemHealth,
+    createRecoveryPoint,
+    listRecoveryPoints,
+    restoreRecoveryPoint,
+    deleteRecoveryPoint,
+    logSystemError,
+    listSystemErrors,
+    resolveSystemError,
     flush: flushDirty,
     pollNow: pollState,
     canWrite: canWriteColumn,

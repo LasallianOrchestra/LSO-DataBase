@@ -1,47 +1,9 @@
 (() => {
   'use strict';
 
-  const ROLES = Object.freeze({
-    ADMIN: 'Administrator',
-    STAFF: 'Staff Account',
-    MEMBERSHIP: 'Membership',
-    SECRETARY: 'General Secretary',
-    TRAINEE: 'Trainee/Probationary'
-  });
-
-  const VIEW_RULES = Object.freeze({
-    [ROLES.ADMIN]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'accountsView', 'dataView'],
-    [ROLES.STAFF]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'dataView'],
-    [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView'],
-    [ROLES.SECRETARY]: ['dashboardView', 'attendanceView'],
-    [ROLES.TRAINEE]: ['dutyHoursView']
-  });
-
-  const ACTION_RULES = Object.freeze({
-    manageAccounts: [ROLES.ADMIN],
-    manageMembers: [ROLES.ADMIN, ROLES.MEMBERSHIP],
-    generateContract: [ROLES.ADMIN, ROLES.MEMBERSHIP],
-    editMonthlyReport: [ROLES.ADMIN, ROLES.MEMBERSHIP],
-    manageEvents: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.SECRETARY],
-    deleteEvents: [ROLES.ADMIN],
-    saveDraftAttendance: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.SECRETARY],
-    finalizeAttendance: [ROLES.ADMIN],
-    unlockAttendance: [ROLES.ADMIN],
-    reviewDutyPunches: [ROLES.ADMIN, ROLES.MEMBERSHIP],
-    manageDutyHours: [ROLES.ADMIN, ROLES.MEMBERSHIP],
-    manageSettings: [ROLES.ADMIN],
-    manageInventory: [ROLES.ADMIN],
-    manageData: [ROLES.ADMIN],
-    writeActivityLog: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.SECRETARY],
-    selfDutyPunch: [ROLES.TRAINEE]
-  });
-
-  const COLUMN_RULES = Object.freeze({
-    [ROLES.ADMIN]: ['members', 'events', 'attendance', 'duty_hours', 'monthly_reports', 'monthly_reports_compat', 'instruments', 'settings', 'activity_log'],
-    [ROLES.MEMBERSHIP]: ['members', 'events', 'attendance', 'duty_hours', 'monthly_reports', 'monthly_reports_compat', 'settings', 'activity_log'],
-    [ROLES.SECRETARY]: ['events', 'attendance', 'activity_log'],
-    [ROLES.STAFF]: [],
-    [ROLES.TRAINEE]: []
+  const core = window.LSOSystemCore || {};
+  const ROLES = core.ROLES || Object.freeze({
+    ADMIN: 'Administrator', STAFF: 'Staff Account', MEMBERSHIP: 'Membership', SECRETARY: 'General Secretary', TRAINEE: 'Trainee/Probationary'
   });
 
   function currentAccount() {
@@ -49,26 +11,23 @@
   }
 
   function role(account = currentAccount()) {
-    const value = account?.role;
-    return Object.values(ROLES).includes(value) ? value : ROLES.STAFF;
+    return core.role ? core.role(account) : (Object.values(ROLES).includes(account?.role) ? account.role : ROLES.STAFF);
   }
 
   function canAccessView(viewId, account = currentAccount()) {
-    return (VIEW_RULES[role(account)] || []).includes(String(viewId || ''));
+    return core.canAccessView ? core.canAccessView(viewId, account) : true;
   }
 
   function can(action, account = currentAccount()) {
-    return (ACTION_RULES[action] || []).includes(role(account));
+    return core.can ? core.can(action, account) : role(account) === ROLES.ADMIN;
   }
 
   function canWriteColumn(column, account = currentAccount()) {
-    return (COLUMN_RULES[role(account)] || []).includes(String(column || ''));
+    return core.canWriteColumn ? core.canWriteColumn(column, account) : role(account) === ROLES.ADMIN;
   }
 
   function canUseAttendanceGroup(group, account = currentAccount()) {
-    const accountRole = role(account);
-    if (accountRole === ROLES.MEMBERSHIP) return ['Trainee Members', 'Probationary Members'].includes(String(group || ''));
-    return [ROLES.ADMIN, ROLES.STAFF, ROLES.SECRETARY].includes(accountRole);
+    return core.canUseAttendanceGroup ? core.canUseAttendanceGroup(group, account) : role(account) !== ROLES.TRAINEE;
   }
 
   function defaultAttendanceGroup(account = currentAccount()) {
@@ -76,7 +35,8 @@
   }
 
   function defaultView(account = currentAccount()) {
-    return (VIEW_RULES[role(account)] || ['dashboardView'])[0] || 'dashboardView';
+    const allowed = core.PERMISSIONS?.views?.[role(account)] || ['dashboardView'];
+    return allowed[0] || 'dashboardView';
   }
 
   function roleDescription(account = currentAccount()) {
@@ -116,6 +76,7 @@
     defaultView,
     roleDescription,
     deniedMessage,
-    viewsForRole: (account = currentAccount()) => [...(VIEW_RULES[role(account)] || [])]
+    viewsForRole: (account = currentAccount()) => [...(core.PERMISSIONS?.views?.[role(account)] || [])],
+    permissionManifest: () => JSON.parse(JSON.stringify(core.PERMISSIONS || {}))
   };
 })();

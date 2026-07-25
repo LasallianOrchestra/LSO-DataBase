@@ -1,9 +1,15 @@
-# Latest update: Login Color Contrast Final v6
+# LSO System Stability & Enterprise Operations Upgrade
 
-The Login and Register Account cards now use explicit readable colors, including a 7.67:1 subtitle contrast ratio on white. This update is presentation-only.
+This package upgrades the Lasallian Symphony Orchestra system to website **v3.0.0**, database target **006_enterprise_operations**, and PWA cache **enterprise-v23**.
 
-# LSO Modern Lasallian Emerald System
+For an existing Supabase project:
 
-This GitHub-ready package applies a unified Deep Green, Emerald, Warm Gold, and White design system across the complete Lasallian Symphony Orchestra database website.
+1. Download a Complete System Backup.
+2. Run `LSO_MASTER_MIGRATION_INSTALLER.sql` once in Supabase SQL Editor.
+3. Upload every website file to the GitHub Pages publishing root.
+4. Open `refresh-lso.html` once.
+5. Log in as Administrator and run **System Health**.
 
-See `MODERN_LASALLIAN_PALETTE_GUIDE.txt` for deployment instructions and `VALIDATION_MODERN_LASALLIAN_PALETTE.txt` for the verification results.
+For a fresh Supabase project, use `supabase-setup.sql` instead of the migration-only installer.
+
+See `ENTERPRISE_UPGRADE_GUIDE.txt` for the full installation, feature, permission, recovery, and troubleshooting guide.

@@ -1,0 +1,678 @@
+-- Lasallian Symphony Orchestra
+-- Master Database Migration Installer
+-- Target schema: 006_enterprise_operations
+-- Safe to run repeatedly. Existing system records are preserved.
+
+begin;
+
+create extension if not exists pgcrypto;
+
+-- Required compatibility columns. These statements are intentionally
+-- idempotent so this one installer can repair older LSO projects.
+alter table if exists public.lso_accounts
+  add column if not exists member_id text;
+
+alter table if exists public.system_state
+  add column if not exists members jsonb not null default '[]'::jsonb,
+  add column if not exists events jsonb not null default '[]'::jsonb,
+  add column if not exists attendance jsonb not null default '[]'::jsonb,
+  add column if not exists duty_hours jsonb not null default '{"version":7,"commitments":{},"entries":[]}'::jsonb,
+  add column if not exists monthly_reports jsonb not null default '{}'::jsonb,
+  add column if not exists instruments jsonb not null default '[]'::jsonb,
+  add column if not exists settings jsonb not null default '{}'::jsonb,
+  add column if not exists activity_log jsonb not null default '[]'::jsonb,
+  add column if not exists updated_at timestamptz not null default now();
+
+insert into public.system_state (id) values (1) on conflict (id) do nothing;
+
+-- Every future database change must be represented by one immutable row here.
+create table if not exists public.lso_schema_migrations (
+  migration_key text primary key,
+  version_number integer not null,
+  title text not null,
+  checksum text not null,
+  applied_at timestamptz not null default now(),
+  applied_by text not null default 'master-installer',
+  notes text not null default ''
+);
+
+create unique index if not exists lso_schema_migrations_version_unique
+  on public.lso_schema_migrations (version_number);
+
+insert into public.lso_schema_migrations
+  (migration_key, version_number, title, checksum, notes)
+values
+  ('001_initial_shared_database', 1, 'Initial shared database', 'baseline-001', 'Accounts, sessions, and shared state.'),
+  ('002_member_account_linkage', 2, 'Member account linkage', 'baseline-002', 'Member ID linkage and expanded account roles.'),
+  ('003_separate_duty_punch_approval', 3, 'Separate Duty Hours punch approval', 'baseline-003', 'Independent Time In and Time Out review.'),
+  ('004_attendance_governance', 4, 'Attendance governance', 'baseline-004', 'Draft, finalization, unlock, and audit workflow.'),
+  ('005_monthly_report_workspace', 5, 'Monthly report workspace', 'baseline-005', 'Shared monthly reports and editable filing tables.'),
+  ('006_enterprise_operations', 6, 'Enterprise operations controls', 'enterprise-006-v2', 'Health center, recovery points, error log, permissions manifest, and version tracking.')
+on conflict (migration_key) do update
+set title = excluded.title,
+    checksum = excluded.checksum,
+    notes = excluded.notes;
+
+-- Versioned server permission manifest. Website and database permissions use
+-- the same role/action vocabulary, while the specialized workflow guards below
+-- continue to protect finalized attendance and current-stage Duty Hours records.
+create table if not exists public.lso_role_permissions (
+  role_name text not null,
+  permission_key text not null,
+  resource text not null default '',
+  allowed boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (role_name, permission_key, resource)
+);
+
+delete from public.lso_role_permissions
+where role_name in ('Administrator','Staff Account','Membership','General Secretary','Trainee/Probationary')
+  and permission_key in ('write_column','view','manage','self');
+
+insert into public.lso_role_permissions(role_name, permission_key, resource, allowed)
+values
+  ('Administrator','write_column','members',true),
+  ('Administrator','write_column','events',true),
+  ('Administrator','write_column','attendance',true),
+  ('Administrator','write_column','duty_hours',true),
+  ('Administrator','write_column','monthly_reports',true),
+  ('Administrator','write_column','instruments',true),
+  ('Administrator','write_column','settings',true),
+  ('Administrator','write_column','activity_log',true),
+  ('Membership','write_column','members',true),
+  ('Membership','write_column','events',true),
+  ('Membership','write_column','attendance',true),
+  ('Membership','write_column','duty_hours',true),
+  ('Membership','write_column','monthly_reports',true),
+  ('Membership','write_column','settings',true),
+  ('Membership','write_column','activity_log',true),
+  ('General Secretary','write_column','events',true),
+  ('General Secretary','write_column','attendance',true),
+  ('General Secretary','write_column','activity_log',true),
+  ('Administrator','view','systemHealthView',true),
+  ('Administrator','manage','recovery',true),
+  ('Administrator','manage','systemErrors',true),
+  ('Administrator','manage','monthlyFinalization',true),
+  ('Administrator','manage','attendanceFinalization',true),
+  ('Membership','manage','dutyReview',true),
+  ('Administrator','manage','dutyReview',true),
+  ('Trainee/Probationary','self','dutyPunch',true)
+on conflict (role_name, permission_key, resource) do update
+set allowed=excluded.allowed, updated_at=now();
+
+create or replace function public.lso_role_can(p_role text, p_permission_key text, p_resource text default '')
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+  select coalesce((select allowed from public.lso_role_permissions
+    where role_name=p_role and permission_key=p_permission_key and resource=coalesce(p_resource,'')), false);
+$$;
+
+-- Server-side recovery points preserve complete system_state snapshots before
+-- risky operations. A maximum of 20 points is retained automatically.
+create table if not exists public.lso_recovery_points (
+  id uuid primary key default gen_random_uuid(),
+  label text not null,
+  reason text not null default '',
+  snapshot jsonb not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  created_by_account_id uuid references public.lso_accounts(id) on delete set null,
+  created_by_username text not null default '',
+  restored_at timestamptz,
+  restored_by_username text
+);
+
+create index if not exists lso_recovery_points_created_at_index
+  on public.lso_recovery_points (created_at desc);
+
+-- Friendly error records. Technical details are stored for Administrators,
+-- while the normal interface displays the public message and stable code.
+create table if not exists public.lso_system_errors (
+  id uuid primary key default gen_random_uuid(),
+  error_code text not null,
+  severity text not null default 'error',
+  module text not null default 'System',
+  public_message text not null,
+  technical_message text not null default '',
+  context jsonb not null default '{}'::jsonb,
+  app_version text not null default '',
+  browser_info text not null default '',
+  created_at timestamptz not null default now(),
+  created_by_account_id uuid references public.lso_accounts(id) on delete set null,
+  created_by_username text not null default '',
+  resolved_at timestamptz,
+  resolved_by_username text,
+  resolution_note text not null default ''
+);
+
+create index if not exists lso_system_errors_created_at_index
+  on public.lso_system_errors (created_at desc);
+create index if not exists lso_system_errors_unresolved_index
+  on public.lso_system_errors (resolved_at) where resolved_at is null;
+
+create or replace function public.lso_admin_account(p_token text)
+returns public.lso_accounts
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_account public.lso_accounts%rowtype;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select * into v_account from public.lso_accounts where id = v_account_id;
+  if not found or v_account.role <> 'Administrator' then
+    raise exception 'Administrator access is required.' using errcode = '42501';
+  end if;
+  return v_account;
+end;
+$$;
+
+create or replace function public.lso_system_health(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account public.lso_accounts%rowtype;
+  v_state public.system_state%rowtype;
+  v_latest_recovery timestamptz;
+  v_unresolved_errors integer := 0;
+  v_recovery_count integer := 0;
+  v_migrations jsonb;
+  v_checks jsonb;
+begin
+  v_account := public.lso_admin_account(p_token);
+  select * into v_state from public.system_state where id = 1;
+  select max(created_at), count(*)::integer into v_latest_recovery, v_recovery_count from public.lso_recovery_points;
+  select count(*)::integer into v_unresolved_errors from public.lso_system_errors where resolved_at is null;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'key', migration_key,
+    'version', version_number,
+    'title', title,
+    'checksum', checksum,
+    'appliedAt', applied_at,
+    'appliedBy', applied_by,
+    'notes', notes
+  ) order by version_number), '[]'::jsonb)
+  into v_migrations
+  from public.lso_schema_migrations;
+
+  v_checks := jsonb_build_array(
+    jsonb_build_object('id','accounts-table','label','Accounts table','ok',to_regclass('public.lso_accounts') is not null),
+    jsonb_build_object('id','sessions-table','label','Sessions table','ok',to_regclass('public.lso_sessions') is not null),
+    jsonb_build_object('id','state-table','label','Shared system state','ok',to_regclass('public.system_state') is not null),
+    jsonb_build_object('id','member-link','label','Account member linkage','ok',exists(select 1 from information_schema.columns where table_schema='public' and table_name='lso_accounts' and column_name='member_id')),
+    jsonb_build_object('id','monthly-reports','label','Monthly Reports storage','ok',exists(select 1 from information_schema.columns where table_schema='public' and table_name='system_state' and column_name='monthly_reports')),
+    jsonb_build_object('id','duty-time-in','label','Duty Time In function','ok',to_regprocedure('public.lso_duty_time_in(text,text,text,text)') is not null),
+    jsonb_build_object('id','duty-time-out','label','Duty Time Out function','ok',to_regprocedure('public.lso_duty_time_out(text,text,text)') is not null),
+    jsonb_build_object('id','duty-review','label','Separate punch review','ok',to_regprocedure('public.lso_review_duty_punch(text,text,text,text)') is not null),
+    jsonb_build_object('id','recovery','label','Recovery Center','ok',to_regclass('public.lso_recovery_points') is not null),
+    jsonb_build_object('id','error-log','label','System error log','ok',to_regclass('public.lso_system_errors') is not null),
+    jsonb_build_object('id','permission-manifest','label','Server permission manifest','ok',to_regclass('public.lso_role_permissions') is not null and to_regprocedure('public.lso_role_can(text,text,text)') is not null)
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'databaseVersion', '006_enterprise_operations',
+    'targetMigration', 6,
+    'serverTime', clock_timestamp(),
+    'philippinesDate', to_char(clock_timestamp() at time zone 'Asia/Manila', 'YYYY-MM-DD'),
+    'stateUpdatedAt', v_state.updated_at,
+    'counts', jsonb_build_object(
+      'members', case when jsonb_typeof(v_state.members)='array' then jsonb_array_length(v_state.members) else 0 end,
+      'events', case when jsonb_typeof(v_state.events)='array' then jsonb_array_length(v_state.events) else 0 end,
+      'attendance', case when jsonb_typeof(v_state.attendance)='array' then jsonb_array_length(v_state.attendance) else 0 end,
+      'dutyEntries', case when jsonb_typeof(v_state.duty_hours->'entries')='array' then jsonb_array_length(v_state.duty_hours->'entries') else 0 end,
+      'accounts', (select count(*) from public.lso_accounts),
+      'recoveryPoints', v_recovery_count,
+      'unresolvedErrors', v_unresolved_errors
+    ),
+    'latestRecoveryAt', v_latest_recovery,
+    'migrations', v_migrations,
+    'checks', v_checks,
+    'requestedBy', v_account.username
+  );
+end;
+$$;
+
+create or replace function public.lso_create_recovery_point(
+  p_token text,
+  p_label text,
+  p_reason text default '',
+  p_metadata jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account public.lso_accounts%rowtype;
+  v_snapshot jsonb;
+  v_point public.lso_recovery_points%rowtype;
+begin
+  v_account := public.lso_admin_account(p_token);
+  select to_jsonb(state) into v_snapshot from public.system_state as state where id = 1 for share;
+  if v_snapshot is null then raise exception 'The shared system state is missing.' using errcode='P0002'; end if;
+
+  insert into public.lso_recovery_points(label, reason, snapshot, metadata, created_by_account_id, created_by_username)
+  values(left(coalesce(nullif(btrim(p_label),''),'Recovery point'),120), left(coalesce(p_reason,''),500), v_snapshot, coalesce(p_metadata,'{}'::jsonb), v_account.id, v_account.username)
+  returning * into v_point;
+
+  delete from public.lso_recovery_points
+  where id in (
+    select id from public.lso_recovery_points order by created_at desc offset 20
+  );
+
+  return jsonb_build_object('ok',true,'recoveryPoint',jsonb_build_object(
+    'id',v_point.id,'label',v_point.label,'reason',v_point.reason,'createdAt',v_point.created_at,'createdBy',v_point.created_by_username,'metadata',v_point.metadata
+  ));
+end;
+$$;
+
+create or replace function public.lso_list_recovery_points(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  perform public.lso_admin_account(p_token);
+  return coalesce((select jsonb_agg(jsonb_build_object(
+    'id',id,'label',label,'reason',reason,'metadata',metadata,'createdAt',created_at,'createdBy',created_by_username,
+    'restoredAt',restored_at,'restoredBy',restored_by_username,
+    'summary',jsonb_build_object(
+      'members',case when jsonb_typeof(snapshot->'members')='array' then jsonb_array_length(snapshot->'members') else 0 end,
+      'events',case when jsonb_typeof(snapshot->'events')='array' then jsonb_array_length(snapshot->'events') else 0 end,
+      'attendance',case when jsonb_typeof(snapshot->'attendance')='array' then jsonb_array_length(snapshot->'attendance') else 0 end,
+      'dutyEntries',case when jsonb_typeof(snapshot->'duty_hours'->'entries')='array' then jsonb_array_length(snapshot->'duty_hours'->'entries') else 0 end
+    )
+  ) order by created_at desc) from public.lso_recovery_points), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.lso_restore_recovery_point(p_token text, p_recovery_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account public.lso_accounts%rowtype;
+  v_point public.lso_recovery_points%rowtype;
+  v_current jsonb;
+begin
+  v_account := public.lso_admin_account(p_token);
+  select * into v_point from public.lso_recovery_points where id = p_recovery_id for update;
+  if not found then raise exception 'The selected recovery point was not found.' using errcode='P0002'; end if;
+
+  select to_jsonb(state) into v_current from public.system_state as state where id=1 for update;
+  insert into public.lso_recovery_points(label,reason,snapshot,metadata,created_by_account_id,created_by_username)
+  values('Automatic point before restore','Created immediately before restoring '||v_point.label,v_current,jsonb_build_object('type','pre-restore','sourceRecoveryId',v_point.id),v_account.id,v_account.username);
+
+  update public.system_state set
+    members = case when jsonb_typeof(v_point.snapshot->'members')='array' then v_point.snapshot->'members' else members end,
+    events = case when jsonb_typeof(v_point.snapshot->'events')='array' then v_point.snapshot->'events' else events end,
+    attendance = case when jsonb_typeof(v_point.snapshot->'attendance')='array' then v_point.snapshot->'attendance' else attendance end,
+    duty_hours = case when jsonb_typeof(v_point.snapshot->'duty_hours')='object' then v_point.snapshot->'duty_hours' else duty_hours end,
+    monthly_reports = case when jsonb_typeof(v_point.snapshot->'monthly_reports')='object' then v_point.snapshot->'monthly_reports' else monthly_reports end,
+    instruments = case when jsonb_typeof(v_point.snapshot->'instruments')='array' then v_point.snapshot->'instruments' else instruments end,
+    settings = case when jsonb_typeof(v_point.snapshot->'settings')='object' then v_point.snapshot->'settings' else settings end,
+    activity_log = case when jsonb_typeof(v_point.snapshot->'activity_log')='array' then v_point.snapshot->'activity_log' else activity_log end,
+    updated_at = now()
+  where id=1;
+
+  update public.lso_recovery_points set restored_at=now(), restored_by_username=v_account.username where id=v_point.id;
+  return public.lso_get_state(p_token);
+end;
+$$;
+
+create or replace function public.lso_delete_recovery_point(p_token text, p_recovery_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  perform public.lso_admin_account(p_token);
+  delete from public.lso_recovery_points where id=p_recovery_id;
+  return jsonb_build_object('ok',true);
+end;
+$$;
+
+create or replace function public.lso_log_system_error(p_token text, p_error jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_account public.lso_accounts%rowtype;
+  v_id uuid;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select * into v_account from public.lso_accounts where id=v_account_id;
+  insert into public.lso_system_errors(
+    error_code,severity,module,public_message,technical_message,context,app_version,browser_info,created_by_account_id,created_by_username
+  ) values(
+    left(coalesce(nullif(p_error->>'errorCode',''),'SYS-UNEXPECTED-999'),60),
+    left(coalesce(nullif(p_error->>'severity',''),'error'),20),
+    left(coalesce(nullif(p_error->>'module',''),'System'),80),
+    left(coalesce(nullif(p_error->>'publicMessage',''),'An unexpected system error occurred.'),500),
+    left(coalesce(p_error->>'technicalMessage',''),4000),
+    case when jsonb_typeof(p_error->'context')='object' then p_error->'context' else '{}'::jsonb end,
+    left(coalesce(p_error->>'appVersion',''),80),
+    left(coalesce(p_error->>'browserInfo',''),500),
+    v_account.id,v_account.username
+  ) returning id into v_id;
+  return jsonb_build_object('ok',true,'id',v_id);
+end;
+$$;
+
+create or replace function public.lso_list_system_errors(p_token text, p_limit integer default 100)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  perform public.lso_admin_account(p_token);
+  return coalesce((select jsonb_agg(to_jsonb(errors) order by errors.created_at desc) from (
+    select id,error_code,severity,module,public_message,technical_message,context,app_version,browser_info,created_at,created_by_username,resolved_at,resolved_by_username,resolution_note
+    from public.lso_system_errors order by created_at desc limit greatest(1,least(coalesce(p_limit,100),500))
+  ) errors),'[]'::jsonb);
+end;
+$$;
+
+create or replace function public.lso_resolve_system_error(p_token text, p_error_id uuid, p_note text default '')
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare v_account public.lso_accounts%rowtype;
+begin
+  v_account := public.lso_admin_account(p_token);
+  update public.lso_system_errors set resolved_at=now(),resolved_by_username=v_account.username,resolution_note=left(coalesce(p_note,''),500) where id=p_error_id;
+  return jsonb_build_object('ok',true);
+end;
+$$;
+
+-- Rebuild the shared-state writer so its broad column permissions come from
+-- the centralized server manifest. Detailed attendance and Duty Hours guards
+-- remain in place inside this function.
+create or replace function public.lso_update_state(
+  p_token text,
+  p_column text,
+  p_value jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_existing jsonb;
+  v_old jsonb;
+  v_new jsonb;
+  v_key text;
+  v_value jsonb;
+  v_event jsonb;
+  v_allowed boolean;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select role into v_role from public.lso_accounts where id = v_account_id;
+
+  if p_column in ('members', 'events', 'attendance', 'instruments', 'activity_log')
+     and jsonb_typeof(p_value) <> 'array' then
+    raise exception 'The selected data collection must be a JSON array.' using errcode = '22023';
+  end if;
+  if p_column in ('settings', 'duty_hours', 'monthly_reports')
+     and jsonb_typeof(p_value) <> 'object' then
+    raise exception 'The selected data collection must be a JSON object.' using errcode = '22023';
+  end if;
+
+  v_allowed := public.lso_role_can(v_role, 'write_column', p_column);
+  if not v_allowed then
+    raise exception 'This account role cannot update the selected system area.' using errcode = '42501';
+  end if;
+
+  select case p_column
+    when 'members' then members
+    when 'events' then events
+    when 'attendance' then attendance
+    when 'duty_hours' then duty_hours
+    when 'monthly_reports' then monthly_reports
+    when 'instruments' then instruments
+    when 'settings' then settings
+    when 'activity_log' then activity_log
+  end
+  into v_existing
+  from public.system_state
+  where id = 1
+  for update;
+
+  -- Non-administrator attendance roles may create and edit activities, but may
+  -- not delete them or alter an already finalized/unlocked attendance workflow.
+  if v_role in ('Membership', 'General Secretary') and p_column = 'events' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
+      select value into v_new
+      from jsonb_array_elements(p_value)
+      where value ->> 'id' = v_old ->> 'id'
+      limit 1;
+      if v_new is null then
+        raise exception 'Only the Administrator can delete activities.' using errcode = '42501';
+      end if;
+      for v_key, v_value in
+        select key, value from jsonb_each(coalesce(v_old -> 'attendanceWorkflows', '{}'::jsonb))
+        where value ->> 'state' = 'Finalized'
+           or nullif(value ->> 'unlockedAt', '') is not null
+           or nullif(value ->> 'finalizedAt', '') is not null
+      loop
+        if coalesce(v_new -> 'attendanceWorkflows' -> v_key, 'null'::jsonb) is distinct from v_value then
+          raise exception 'Only the Administrator can finalize, unlock, or modify a protected attendance workflow.' using errcode = '42501';
+        end if;
+      end loop;
+      for v_key, v_value in
+        select key, value from jsonb_each(coalesce(v_new -> 'attendanceWorkflows', '{}'::jsonb))
+        where value ->> 'state' = 'Finalized'
+           or nullif(value ->> 'unlockedAt', '') is not null
+           or nullif(value ->> 'finalizedAt', '') is not null
+      loop
+        if coalesce(v_old -> 'attendanceWorkflows' -> v_key, 'null'::jsonb) is distinct from v_value then
+          raise exception 'Only the Administrator can finalize, unlock, or modify a protected attendance workflow.' using errcode = '42501';
+        end if;
+      end loop;
+    end loop;
+
+    -- A newly created activity must begin with Draft attendance workflows.
+    -- Existing protected workflow objects must remain byte-for-byte unchanged.
+    for v_new in select value from jsonb_array_elements(p_value) loop
+      select value into v_old
+      from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb))
+      where value ->> 'id' = v_new ->> 'id'
+      limit 1;
+      for v_key, v_value in
+        select key, value from jsonb_each(coalesce(v_new -> 'attendanceWorkflows', '{}'::jsonb))
+        where value ->> 'state' = 'Finalized'
+           or nullif(value ->> 'unlockedAt', '') is not null
+           or nullif(value ->> 'finalizedAt', '') is not null
+      loop
+        if v_old is null
+           or coalesce(v_old -> 'attendanceWorkflows' -> v_key, 'null'::jsonb) is distinct from v_value then
+          raise exception 'Only the Administrator can create, finalize, unlock, or modify a protected attendance workflow.' using errcode = '42501';
+        end if;
+      end loop;
+    end loop;
+  end if;
+
+  -- Draft editors cannot silently change attendance rows whose matching roster
+  -- is currently Finalized. An Administrator must unlock the roster first.
+  if v_role in ('Membership', 'General Secretary') and p_column = 'attendance' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
+      select value into v_event
+      from public.system_state as state,
+           jsonb_array_elements(coalesce(state.events, '[]'::jsonb)) as event
+      where state.id = 1 and event ->> 'id' = v_old ->> 'eventId'
+      limit 1;
+      v_key := coalesce(nullif(v_old ->> 'attendanceGroup', ''), 'Official Members') || '::' ||
+               coalesce(nullif(v_old ->> 'rosterModeAtEdit', ''), 'Current');
+      if coalesce(v_event -> 'attendanceWorkflows' -> v_key ->> 'state', 'Draft') = 'Finalized'
+         and not exists (select 1 from jsonb_array_elements(p_value) as item where item = v_old) then
+        raise exception 'Finalized attendance is locked. The Administrator must unlock it before corrections.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_new in select value from jsonb_array_elements(p_value) loop
+      select value into v_event
+      from public.system_state as state,
+           jsonb_array_elements(coalesce(state.events, '[]'::jsonb)) as event
+      where state.id = 1 and event ->> 'id' = v_new ->> 'eventId'
+      limit 1;
+      v_key := coalesce(nullif(v_new ->> 'attendanceGroup', ''), 'Official Members') || '::' ||
+               coalesce(nullif(v_new ->> 'rosterModeAtEdit', ''), 'Current');
+      if coalesce(v_event -> 'attendanceWorkflows' -> v_key ->> 'state', 'Draft') = 'Finalized'
+         and not exists (select 1 from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) as item where item = v_new) then
+        raise exception 'Finalized attendance is locked. The Administrator must unlock it before corrections.' using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  -- Membership attendance editing is limited to Trainee and Probationary rows.
+  if v_role = 'Membership' and p_column = 'attendance' then
+    for v_old in
+      select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb))
+      where coalesce(value ->> 'attendanceGroup', '') not in ('Trainee Members', 'Probationary Members')
+    loop
+      if not exists (select 1 from jsonb_array_elements(p_value) as item where item = v_old) then
+        raise exception 'Membership attendance access is limited to Trainee and Probationary rosters.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_new in
+      select value from jsonb_array_elements(p_value)
+      where coalesce(value ->> 'attendanceGroup', '') not in ('Trainee Members', 'Probationary Members')
+    loop
+      if not exists (select 1 from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) as item where item = v_new) then
+        raise exception 'Membership attendance access is limited to Trainee and Probationary rosters.' using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  -- Membership may update the report payload stored in settings, but cannot
+  -- change system-wide automation settings.
+  if v_role = 'Membership' and p_column = 'settings' then
+    if (p_value - '__lso_monthly_reports_v1') is distinct from (coalesce(v_existing, '{}'::jsonb) - '__lso_monthly_reports_v1') then
+      raise exception 'Only the Administrator can change system settings.' using errcode = '42501';
+    end if;
+  end if;
+
+  -- Membership Duty Hours changes are restricted to people who are currently
+  -- in the Trainee or Probationary Period. Historical/official records are kept exact.
+  if v_role = 'Membership' and p_column = 'duty_hours' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing -> 'entries', '[]'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_old ->> 'memberId'
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and not exists (select 1 from jsonb_array_elements(coalesce(p_value -> 'entries', '[]'::jsonb)) as item where item = v_old) then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_new in select value from jsonb_array_elements(coalesce(p_value -> 'entries', '[]'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_new ->> 'memberId'
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and not exists (select 1 from jsonb_array_elements(coalesce(v_existing -> 'entries', '[]'::jsonb)) as item where item = v_new) then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_key, v_value in select key, value from jsonb_each(coalesce(v_existing -> 'commitments', '{}'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_key
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and coalesce(p_value -> 'commitments' -> v_key, 'null'::jsonb) is distinct from v_value then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_key, v_value in select key, value from jsonb_each(coalesce(p_value -> 'commitments', '{}'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_key
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and coalesce(v_existing -> 'commitments' -> v_key, 'null'::jsonb) is distinct from v_value then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  case p_column
+    when 'members' then update public.system_state set members = p_value, updated_at = now() where id = 1;
+    when 'events' then update public.system_state set events = p_value, updated_at = now() where id = 1;
+    when 'attendance' then update public.system_state set attendance = p_value, updated_at = now() where id = 1;
+    when 'duty_hours' then update public.system_state set duty_hours = p_value, updated_at = now() where id = 1;
+    when 'monthly_reports' then update public.system_state set monthly_reports = p_value, updated_at = now() where id = 1;
+    when 'instruments' then update public.system_state set instruments = p_value, updated_at = now() where id = 1;
+    when 'settings' then update public.system_state set settings = p_value, updated_at = now() where id = 1;
+    when 'activity_log' then update public.system_state set activity_log = p_value, updated_at = now() where id = 1;
+    else raise exception 'Unsupported shared-data column.' using errcode = '22023';
+  end case;
+
+  return public.lso_get_state(p_token);
+end;
+$$;
+
+alter table public.lso_role_permissions enable row level security;
+alter table public.lso_schema_migrations enable row level security;
+alter table public.lso_recovery_points enable row level security;
+alter table public.lso_system_errors enable row level security;
+
+revoke all on table public.lso_role_permissions from anon, authenticated;
+revoke all on table public.lso_schema_migrations from anon, authenticated;
+revoke all on table public.lso_recovery_points from anon, authenticated;
+revoke all on table public.lso_system_errors from anon, authenticated;
+
+revoke all on function public.lso_role_can(text,text,text) from public;
+revoke all on function public.lso_admin_account(text) from public;
+revoke all on function public.lso_system_health(text) from public;
+revoke all on function public.lso_create_recovery_point(text,text,text,jsonb) from public;
+revoke all on function public.lso_list_recovery_points(text) from public;
+revoke all on function public.lso_restore_recovery_point(text,uuid) from public;
+revoke all on function public.lso_delete_recovery_point(text,uuid) from public;
+revoke all on function public.lso_log_system_error(text,jsonb) from public;
+revoke all on function public.lso_list_system_errors(text,integer) from public;
+revoke all on function public.lso_resolve_system_error(text,uuid,text) from public;
+
+grant execute on function public.lso_system_health(text) to anon, authenticated;
+grant execute on function public.lso_create_recovery_point(text,text,text,jsonb) to anon, authenticated;
+grant execute on function public.lso_list_recovery_points(text) to anon, authenticated;
+grant execute on function public.lso_restore_recovery_point(text,uuid) to anon, authenticated;
+grant execute on function public.lso_delete_recovery_point(text,uuid) to anon, authenticated;
+grant execute on function public.lso_log_system_error(text,jsonb) to anon, authenticated;
+grant execute on function public.lso_list_system_errors(text,integer) to anon, authenticated;
+grant execute on function public.lso_resolve_system_error(text,uuid,text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+commit;
+
+-- Verification after running:
+-- select migration_key, version_number, applied_at from public.lso_schema_migrations order by version_number;

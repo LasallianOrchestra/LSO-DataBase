@@ -90,6 +90,15 @@
       preparedTitle: 'EVP for Membership',
       notedBy: '',
       notedTitle: 'President',
+      approvedBy: '',
+      approvedTitle: '',
+      workflowStatus: 'Draft',
+      revision: 0,
+      finalizedAt: '',
+      finalizedBy: '',
+      reopenedAt: '',
+      reopenedBy: '',
+      workflowHistory: [],
       loaRows: [],
       ojtRows: [],
       quittedRows: [],
@@ -105,6 +114,11 @@
   function currentReport() {
     if (!state.reports[activeReportKey]) state.reports[activeReportKey] = blankReport(activeReportKey);
     const report = state.reports[activeReportKey];
+    report.workflowStatus = report.workflowStatus === 'Finalized' ? 'Finalized' : 'Draft';
+    report.revision = Math.max(0, Number(report.revision) || 0);
+    report.workflowHistory = Array.isArray(report.workflowHistory) ? report.workflowHistory : [];
+    report.approvedBy = String(report.approvedBy || '');
+    report.approvedTitle = String(report.approvedTitle || '');
     report.loaRows = Array.isArray(report.loaRows) ? report.loaRows : [];
     report.ojtRows = Array.isArray(report.ojtRows) ? report.ojtRows : [];
     report.quittedRows = Array.isArray(report.quittedRows) ? report.quittedRows : [];
@@ -145,9 +159,13 @@
     else if (error) window.alert(message);
   }
 
-  function saveState({ quiet = false } = {}) {
+  function saveState({ quiet = false, allowFinalized = false } = {}) {
     if (!canModify()) {
-      if (!quiet) toast('Only an Administrator can modify the Overall Monthly Report.', true);
+      if (!quiet) toast('Only an Administrator or Membership account can modify the Overall Monthly Report.', true);
+      return false;
+    }
+    if (currentReport().workflowStatus === 'Finalized' && !allowFinalized) {
+      if (!quiet) toast('This Monthly Report is finalized and locked. An Administrator must reopen it before changes can be saved.', true);
       return false;
     }
     currentReport().updatedAt = new Date().toISOString();
@@ -365,6 +383,8 @@
     reportField('monthlyReportPreparedTitle', 'preparedTitle');
     reportField('monthlyReportNotedBy', 'notedBy');
     reportField('monthlyReportNotedTitle', 'notedTitle');
+    reportField('monthlyReportApprovedBy', 'approvedBy');
+    reportField('monthlyReportApprovedTitle', 'approvedTitle');
   }
 
   function percent(count, total) {
@@ -604,7 +624,9 @@
       monthlyReportPreparedBy: 'preparedBy',
       monthlyReportPreparedTitle: 'preparedTitle',
       monthlyReportNotedBy: 'notedBy',
-      monthlyReportNotedTitle: 'notedTitle'
+      monthlyReportNotedTitle: 'notedTitle',
+      monthlyReportApprovedBy: 'approvedBy',
+      monthlyReportApprovedTitle: 'approvedTitle'
     };
     Object.entries(mapping).forEach(([id, key]) => { if (el(id)) report[key] = el(id).value.trim(); });
   }
@@ -1011,6 +1033,7 @@
       y = drawTableRow(page, columns, ['TOTAL:', counts.total, '100%'], bounds.left, y, { size: 9, minHeight: 25, total: true, bold: true });
       drawSignatoryBlock(page, bounds.left, y - 38, 210, 'Prepared By:', report.preparedBy, report.preparedTitle);
       drawSignatoryBlock(page, bounds.left, y - 168, 210, 'Noted By:', report.notedBy, report.notedTitle);
+      if (report.approvedBy) drawSignatoryBlock(page, bounds.left + 245, y - 168, 210, 'Approved By:', report.approvedBy, report.approvedTitle);
     }
 
     // Manpower Complement: continuous numbering across Official, Trainee and Probationary records.
@@ -1058,6 +1081,7 @@
       const page = await templatePage();
       drawSignatoryBlock(page, bounds.left, 610, 240, 'Prepared By:', report.preparedBy, report.preparedTitle);
       drawSignatoryBlock(page, bounds.left, 455, 240, 'Noted By:', report.notedBy, report.notedTitle);
+      if (report.approvedBy) drawSignatoryBlock(page, bounds.left + 270, 455, 240, 'Approved By:', report.approvedBy, report.approvedTitle);
     }
 
     // Summary of Manpower Count: Gender and Year Level.
@@ -1279,7 +1303,7 @@
     }));
 
     el('monthlyReportMonth')?.addEventListener('change', (event) => handleMonthChange(event.target.value));
-    ['monthlyReportDate', 'monthlyReportSemester', 'monthlyReportAcademicYear', 'monthlyReportPreparedBy', 'monthlyReportPreparedTitle', 'monthlyReportNotedBy', 'monthlyReportNotedTitle']
+    ['monthlyReportDate', 'monthlyReportSemester', 'monthlyReportAcademicYear', 'monthlyReportPreparedBy', 'monthlyReportPreparedTitle', 'monthlyReportNotedBy', 'monthlyReportNotedTitle', 'monthlyReportApprovedBy', 'monthlyReportApprovedTitle']
       .forEach((id) => el(id)?.addEventListener('input', () => { updateReportFromFields(); queueSave(); if (['monthlyReportSemester', 'monthlyReportAcademicYear'].includes(id)) renderTraineeFile(); }));
 
     el('monthlyReportSaveButton')?.addEventListener('click', () => { updateReportFromFields(); saveState(); });
@@ -1360,6 +1384,8 @@
     download: downloadPdf,
     getState: () => JSON.parse(JSON.stringify(state)),
     getCurrentReport: () => JSON.parse(JSON.stringify(currentReport())),
+    getActiveReportKey: () => activeReportKey,
+    isFinalized: () => currentReport().workflowStatus === 'Finalized',
     _buildPdfBytes: buildPdfBytes
   };
 

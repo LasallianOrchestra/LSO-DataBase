@@ -148,6 +148,8 @@
       if (node.matches('button')) show(node, allowed);
       else enable(node, allowed, 'Administrator or Membership access is required.');
     });
+    applyWorkflowPermission(el('monthlyReportFinalizeButton'), can('finalizeMonthlyReport'));
+    applyWorkflowPermission(el('monthlyReportReopenButton'), can('reopenMonthlyReport'));
   }
 
   function applyDutyControls(root) {
@@ -205,8 +207,12 @@
     if (target.closest('#finalizeAttendanceButton')) return 'finalizeAttendance';
     if (target.closest('#unlockAttendanceButton')) return 'unlockAttendance';
     if (target.closest('#contractMakerForm, #previewContractButton, #downloadContractButton, #resetContractButton')) return 'generateContract';
+    if (target.closest('#monthlyReportFinalizeButton')) return 'finalizeMonthlyReport';
+    if (target.closest('#monthlyReportReopenButton')) return 'reopenMonthlyReport';
     if (target.closest('[data-monthly-edit], [data-monthly-write]')) return 'editMonthlyReport';
     if (target.closest('[data-duty-punch-review]')) return 'reviewDutyPunches';
+    if (target.closest('#applyDefaultDutyRequirements')) return 'manageDutyRequirements';
+    if (target.closest('#printDutyCertification')) return 'certifyDutyHours';
     if (target.closest('#dutyCommitmentForm, #dutyRenderedForm, #dutyIncentiveForm, [data-duty-delete]')) return 'manageDutyHours';
     return '';
   };

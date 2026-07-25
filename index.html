@@ -45,7 +45,7 @@
 <link rel="icon" href="favicon.ico?v=20260717-logos" sizes="any"/>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20260717-logos"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20260721-pwa-v1"/>
-<link rel="manifest" href="manifest.webmanifest?v=20260724-auth-structural-transition-v17"/>
+<link rel="manifest" href="manifest.webmanifest?v=20260725-enterprise-v23"/>
 <link href="styles.css?v=20260720-member-table-v2" rel="stylesheet"/>
 <link href="duty-roster-layout.css?v=20260717-1605" rel="stylesheet"/>
 <link href="access-control.css?v=20260721-role-approval-v2" rel="stylesheet"/>
@@ -65,6 +65,7 @@
 <link href="lso-modern-lasallian-emerald-v2.css?v=20260724-modern-emerald-v2" rel="stylesheet"/>
 <link href="lso-accessible-contrast-v4.css?v=20260724-accessible-contrast-v4" rel="stylesheet"/>
 <link href="lso-login-color-final-v6.css?v=20260724-login-color-final-v6" rel="stylesheet"/>
+<link href="system-enterprise-v1.css?v=20260725-enterprise-v23" rel="stylesheet"/>
 <style id="lso-login-color-critical-v6">
 .auth-card .auth-heading p:not(.eyebrow){color:#42584E!important;opacity:1!important;-webkit-text-fill-color:#42584E!important}.auth-card .auth-heading h2{color:#0B3D2E!important}.auth-card .field>span{color:#2F453B!important}.auth-card input::placeholder{color:#66736D!important;opacity:1!important}.auth-tab{color:#4F6259!important}.auth-tab.active{color:#0B3D2E!important}.auth-submit{color:#fff!important}
 </style>
@@ -225,7 +226,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 
 <button class="nav-item" data-view="alertsView">Action Center</button>
 <button class="nav-item admin-only" data-view="accountsView">Accounts <span class="nav-count hidden" id="pendingAccountCount">0</span></button>
-<button class="nav-item" data-view="dataView">Data &amp; Backup</button>
+<button class="nav-item admin-only" data-view="systemHealthView">System Health</button>
+<button class="nav-item admin-only" data-view="dataView">Data &amp; Recovery</button>
 </nav>
 <div class="sidebar-footer">
 <div class="account-panel">
@@ -239,6 +241,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="logout-button" id="logoutButton" type="button">Log Out</button>
 <p>One Symphony, One Spirit,<br/>One Lasallian Legacy.</p>
 <small>Shared online database</small>
+<small class="system-version-footer" id="systemVersionFooter">LSO System v3.0.0 • Database target 006</small>
 </div>
 </aside>
 <button aria-label="Close navigation" class="sidebar-overlay" id="sidebarOverlay" type="button"></button>
@@ -254,6 +257,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <span class="status-indicator" aria-hidden="true"></span>
 <div><strong id="systemStatusText">Connecting to shared database…</strong><small id="currentDateLabel">Loading date…</small></div>
 </div>
+<button class="icon-button accessibility-launcher" id="accessibilityButton" type="button" aria-label="Open accessibility and display controls" title="Accessibility &amp; Display">Aa</button>
 <div class="notification-center" id="notificationCenter">
 <button aria-expanded="false" aria-label="Open notifications" class="notification-button" id="notificationButton" type="button">
 <svg aria-hidden="true" class="notification-bell-icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
@@ -567,7 +571,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
     <div><strong>Print-ready PDF</strong><small>Letter portrait pages, repeated official template, automatic pagination, and direct download.</small></div>
   </div>
 
-  <div class="monthly-report-toolbar">
+  <div class="monthly-report-toolbar" id="monthlyReportWorkflowPanel">
     <div class="monthly-report-tabs" role="tablist" aria-label="Monthly report workspace">
       <button class="monthly-report-tab active" data-monthly-tab="setup" type="button">Setup &amp; Summary</button>
       <button class="monthly-report-tab" data-monthly-tab="manpower" type="button">Manpower Complement</button>
@@ -578,7 +582,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
     <div class="monthly-report-toolbar-actions">
       <div class="monthly-report-status" id="monthlyReportStatus" aria-live="polite">Loading report…</div>
       <div class="monthly-report-action-buttons">
+        <span class="badge badge-gold" id="monthlyReportWorkflowBadge">Draft</span>
         <button class="button button-secondary" id="monthlyReportSaveButton" data-monthly-write type="button">Save Draft</button>
+        <button class="button button-primary admin-only" id="monthlyReportFinalizeButton" type="button">Finalize Report</button>
+        <button class="button button-secondary admin-only hidden" id="monthlyReportReopenButton" type="button">Reopen for Correction</button>
+        <button class="button button-secondary" id="monthlyReportAuditButton" type="button">Audit History</button>
         <button class="button button-secondary" id="monthlyReportPreviewButton" type="button">Preview PDF</button>
         <button class="button button-primary" id="monthlyReportDownloadButton" type="button">Download Monthly Report PDF</button>
       </div>
@@ -598,6 +606,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
           <label class="field"><span>Prepared By Position</span><input id="monthlyReportPreparedTitle" data-monthly-edit placeholder="e.g., EVP for Membership"/></label>
           <label class="field"><span>Noted By *</span><input id="monthlyReportNotedBy" data-monthly-edit placeholder="Full name"/></label>
           <label class="field"><span>Noted By Position</span><input id="monthlyReportNotedTitle" data-monthly-edit placeholder="e.g., President"/></label>
+          <label class="field"><span>Approved By</span><input id="monthlyReportApprovedBy" data-monthly-edit placeholder="Administrator approval name"/></label>
+          <label class="field"><span>Approved By Position</span><input id="monthlyReportApprovedTitle" data-monthly-edit placeholder="e.g., President / Adviser"/></label>
         </div>
         <p class="monthly-report-help">The Trainer is permanently counted as <strong>1</strong> in the Comparative Manpower Complement. Member counts are read from the shared database.</p>
       </article>
@@ -796,6 +806,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div><span>Current Session</span><strong id="dutySelfCurrentSession">Not clocked in</strong></div>
 </div>
 <div class="form-grid two-columns">
+<label class="field"><span>Duty Category</span><select id="dutySelfCategory"><option>Office Hours</option><option>Rehearsal Preparation</option><option>Inventory</option><option>Event Assistance</option><option>Documentation</option><option>Other</option></select></label>
+<label class="field"><span>Current request</span><input value="Server-timestamped punch" disabled aria-label="Server-timestamped punch"/></label>
 <label class="field span-2"><span>Duty Assignment / Description <small>(optional)</small></span><input id="dutySelfDescription" maxlength="160" placeholder="e.g., Rehearsal setup, documentation, ushering..."/></label>
 <label class="field span-2"><span>Member/s Approved <small>(optional)</small></span><input id="dutySelfMemberApprovers" maxlength="200" placeholder="Type the member name/s who approved or witnessed your duty"/></label>
 </div>
@@ -816,6 +828,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Duty Hours Confirmation</p><h3>Separate Punch Approval Queue</h3><p class="panel-subtitle">Review every Time In and Time Out independently. Use Refresh Queue to immediately retrieve requests submitted from another device. Administrator and Membership accounts can review each punch.</p></div><div class="duty-header-actions"><button class="button button-secondary duty-refresh-button" id="dutyAdminRefreshButton" type="button">Refresh Queue</button><span class="badge badge-gold" id="dutyPendingApprovalCount">0 pending punches</span></div></div>
 <div class="duty-approval-rules"><div><strong>Time In approval</strong><span>Officially starts the individual session.</span></div><div><strong>Time Out approval</strong><span>Officially closes the session and credits the approved duration.</span></div><div><strong>Rejected request</strong><span>Does not alter the individual record or credited total.</span></div></div>
 <div class="duty-punch-review-list" id="dutyApprovalTableBody"></div>
+</article>
+
+<article class="panel duty-enhancement-panel duty-management-only" id="dutyEnhancementPanel">
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Duty Hours Intelligence</p><h3>Requirements, Progress &amp; Certification</h3><p class="panel-subtitle">Apply standard requirements, monitor approval totals, identify completed members, and generate certification records.</p></div><div class="inline-actions"><button class="button button-secondary" id="applyDefaultDutyRequirements" type="button">Apply Default Requirements</button><button class="button button-primary" id="printDutyCertification" type="button" disabled>Generate Certification</button></div></div>
+<div class="duty-enhancement-metrics" id="dutyEnhancementMetrics"></div>
+<div class="duty-completion-alerts" id="dutyCompletionAlerts"></div>
 </article>
 
 <div class="panel duty-print-center-panel duty-management-only">
@@ -897,7 +915,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="clock-duration-preview span-2" id="dutyRenderedDurationPreview" aria-live="polite">
 <span>Computed duration</span><strong>Select Time In and Time Out</strong><small>Example: 12:00 PM to 5:00 PM = 5 hrs</small>
 </div>
-<label class="field span-2"><span>Duty Assignment / Description</span><input id="dutyRenderedDescription" maxlength="160" placeholder="e.g., Rehearsal setup, documentation, ushering..."/></label>
+<label class="field"><span>Duty Category</span><select id="dutyRenderedCategory"><option>Office Hours</option><option>Rehearsal Preparation</option><option>Inventory</option><option>Event Assistance</option><option>Documentation</option><option>Other</option></select></label>
+<label class="field"><span>Manual Entry Reason *</span><input id="dutyRenderedManualReason" maxlength="200" required placeholder="Why is this being entered manually?"/></label>
+<label class="field span-2"><span>Duty Assignment / Description <small>(optional)</small></span><input id="dutyRenderedDescription" maxlength="160" placeholder="e.g., Rehearsal setup, documentation, ushering..."/></label>
 </div>
 <button class="button button-primary" type="submit">Add Render Time</button>
 </form>
@@ -973,7 +993,29 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </article>
 </section>
 
+<section class="view" id="systemHealthView">
+<div class="system-health-hero">
+<div><p class="eyebrow">Administrator Diagnostics</p><h3>System Health &amp; Version Center</h3><p>Verify the website, database schema, migrations, PWA cache, backups, permissions, and unresolved errors from one controlled workspace.</p></div>
+<div class="inline-actions"><button class="button button-secondary" id="copyHealthReportButton" type="button">Copy Health Report</button><button class="button button-primary" id="refreshSystemHealthButton" type="button">Run Health Check</button></div>
+</div>
+<div class="health-version-grid" id="healthVersionGrid"></div>
+<article class="panel permission-center-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Single Source of Truth</p><h3>Role &amp; Permission Center</h3><p class="panel-subtitle">The Accounts screen, navigation, forms, and action guards read from the same versioned permission manifest.</p></div><button class="button button-secondary" id="exportPermissionMatrixButton" type="button">Export Permission Matrix</button></div><div class="table-wrap permission-matrix-wrap"><table class="permission-matrix-table"><thead id="permissionMatrixHead"></thead><tbody id="permissionMatrixBody"></tbody></table></div></article>
+<div class="health-layout-grid">
+<article class="panel"><div class="panel-header"><div><p class="eyebrow">Compatibility</p><h3>System Checks</h3><p class="panel-subtitle">Every required table, column, function, and service is checked independently.</p></div></div><div id="systemHealthChecks" class="health-check-list"></div></article>
+<article class="panel"><div class="panel-header"><div><p class="eyebrow">Schema History</p><h3>Applied Migrations</h3><p class="panel-subtitle">The master installer records each immutable database migration.</p></div></div><div class="table-wrap"><table><thead><tr><th>Version</th><th>Migration</th><th>Applied</th><th>Checksum</th></tr></thead><tbody id="migrationHistoryBody"></tbody></table></div></article>
+</div>
+<div class="health-layout-grid">
+<article class="panel"><div class="panel-header"><div><p class="eyebrow">Database Snapshot</p><h3>Shared Record Counts</h3></div></div><div class="health-count-grid" id="healthCountGrid"></div></article>
+<article class="panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Error Reporting</p><h3>System Error Log</h3><p class="panel-subtitle">Friendly error codes are shown to users; Administrators can inspect and resolve technical records here.</p></div><button class="button button-secondary" id="exportSystemErrorsButton" type="button">Export CSV</button></div><div id="systemErrorLog" class="system-error-log"></div></article>
+</div>
+</section>
+
 <section class="view" id="dataView">
+<div class="recovery-center-grid">
+<article class="panel recovery-summary-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Automated Protection</p><h3>Backup &amp; Recovery Center</h3><p class="panel-subtitle">The system creates server recovery points before risky operations and one daily point when an Administrator signs in.</p></div><button class="button button-primary" id="createRecoveryPointButton" type="button">Create Recovery Point</button></div><div class="recovery-kpis" id="recoveryKpis"></div><div class="recovery-status-line" id="automaticRecoveryStatus">Checking recovery protection…</div></article>
+<article class="panel backup-validator-panel"><div class="panel-header"><div><p class="eyebrow">Backup Integrity</p><h3>Validate Before Restore</h3><p class="panel-subtitle">Inspect a JSON backup before it is allowed to replace shared records.</p></div></div><label class="button button-secondary file-button">Select Backup to Validate<input id="validateBackupFile" type="file" accept=".json,application/json"/></label><div id="backupValidationResult" class="backup-validation-result"></div></article>
+</div>
+<article class="panel recovery-list-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Restore Points</p><h3>Server Recovery History</h3><p class="panel-subtitle">Restoring automatically creates another point first, so the action can be reversed.</p></div><button class="button button-secondary" id="refreshRecoveryPointsButton" type="button">Refresh</button></div><div id="recoveryPointList" class="recovery-point-list"></div></article>
 <div class="data-grid">
 <article class="panel action-card featured-action-card">
 <div class="action-icon">ALL</div>
@@ -1187,29 +1229,50 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 
 <div aria-live="polite" class="toast-region" id="toastRegion"></div>
 
+<aside class="accessibility-drawer hidden" id="accessibilityDrawer" aria-hidden="true" aria-labelledby="accessibilityDrawerTitle">
+<div class="accessibility-drawer-header"><div><p class="eyebrow">Personal Display Settings</p><h2 id="accessibilityDrawerTitle">Accessibility &amp; Display</h2></div><button class="icon-button" id="closeAccessibilityButton" type="button" aria-label="Close accessibility controls">×</button></div>
+<div class="accessibility-control-grid">
+<label class="field"><span>Text Size</span><select id="accessibilityTextSize"><option value="normal">Normal</option><option value="large">Large</option><option value="extra">Extra Large</option></select></label>
+<label class="field"><span>Contrast</span><select id="accessibilityContrast"><option value="standard">Standard</option><option value="high">High Contrast</option></select></label>
+<label class="field"><span>Motion</span><select id="accessibilityMotion"><option value="system">Follow Device</option><option value="reduced">Reduce Motion</option><option value="full">Full Motion</option></select></label>
+<label class="field"><span>Layout Density</span><select id="accessibilityDensity"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
+<label class="field"><span>Tables on Small Screens</span><select id="accessibilityTables"><option value="auto">Automatic</option><option value="cards">Always Use Cards</option></select></label>
+<label class="toggle-setting"><input id="accessibilityFocus" type="checkbox" checked/><span><strong>Enhanced focus indicators</strong><small>Make keyboard focus easier to follow.</small></span></label>
+</div>
+<div class="accessibility-preview"><span>Preview</span><strong>Readable Lasallian interface</strong><small>Settings are saved only on this device.</small></div>
+<div class="modal-footer"><button class="button button-secondary" id="resetAccessibilityButton" type="button">Reset</button><button class="button button-primary" id="saveAccessibilityButton" type="button">Apply Settings</button></div>
+</aside>
+<div class="accessibility-overlay hidden" id="accessibilityOverlay"></div>
+
+<div class="system-error-dialog hidden" id="systemErrorDialog" role="dialog" aria-modal="true" aria-labelledby="systemErrorTitle">
+<div class="system-error-card"><div class="system-error-icon">!</div><div><p class="eyebrow">System Notice</p><h2 id="systemErrorTitle">The requested action could not be completed</h2><p id="systemErrorMessage">A safe error message will appear here.</p><div class="system-error-code"><span>Error Code</span><strong id="systemErrorCode">SYS-UNEXPECTED-999</strong></div><details id="systemErrorTechnicalDetails"><summary>Technical details</summary><pre id="systemErrorTechnicalText"></pre></details><div class="modal-footer"><button class="button button-secondary" id="copySystemErrorButton" type="button">Copy Details</button><button class="button button-secondary admin-only" id="openHealthFromErrorButton" type="button">Open System Health</button><button class="button button-primary" id="dismissSystemErrorButton" type="button">Dismiss</button></div></div></div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding.js?v=20260717-simplified-columns-v1"></script>
-<script src="role-access-v2.js?v=20260722-account-roles-v3"></script>
-<script src="cloud.js?v=20260722-account-roles-v3"></script>
+<script src="lso-system-core-v1.js?v=20260725-enterprise-v1"></script>
+<script src="role-access-v2.js?v=20260725-enterprise-v1"></script>
+<script src="cloud.js?v=20260725-enterprise-v23"></script>
 <script src="app-member-information-v5.js?v=20260724-member-information-v5"></script>
 <script src="auth-view-controller-v17.js?v=20260724-auth-structural-transition-v17"></script>
 <script src="auth.js?v=20260724-auth-structural-transition-v17"></script>
-<script src="management-attendance-member-info-v3.js?v=20260724-member-information-v3"></script>
+<script src="management-attendance-member-info-v3.js?v=20260725-enterprise-v23"></script>
 <script src="ui-enhancements.js?v=20260717-1605"></script>
-<script src="dashboard-enhancements.js?v=20260717-1605"></script>
+<script src="dashboard-enhancements.js?v=20260725-enterprise-v23"></script>
 <script src="workflow-attendance-month-v2.js?v=20260722-account-roles-v3"></script>
 <script src="attendance-governance.js?v=20260722-account-roles-v3"></script>
 <script src="duty-hours-member-info-v11.js?v=20260724-member-information-v11"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="monthly-report-template-data.js?v=20260719-monthly-report-v1"></script>
-<script src="monthly-report.js?v=20260725-editable-table5-v1"></script>
+<script src="monthly-report.js?v=20260725-enterprise-v23"></script>
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
 <script src="contract-maker-membership-v4.js?v=20260723-membership-contract-v4"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260724-member-information-v3"></script>
-<script src="permissions.js?v=20260722-account-roles-v3"></script>
+<script src="permissions.js?v=20260725-enterprise-v23"></script>
 <script src="dashboard-command-center-v4.js?v=20260722-account-roles-v3"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="pwa-monthly-table5-v22.js?v=20260725-monthly-table5-v22"></script>
+<script src="system-enterprise-v1.js?v=20260725-enterprise-v23"></script>
+<script src="pwa-enterprise-v23.js?v=20260725-enterprise-v23"></script>
 </body>
 </html>

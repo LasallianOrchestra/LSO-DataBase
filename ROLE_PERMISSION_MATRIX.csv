@@ -1,6 +1,36 @@
-Role,Dashboard,Members,Member Lookup,Contract,Monthly Report,Attendance,Duty Hours,Accounts,Attendance Scope,Finalize/Unlock,Approve Punches,Manual Duty Entry
-Administrator,Full,Full,Full,Full,Full,Full,Full,Full,All groups,Yes,Yes,Yes
-Membership,Full,Manage,View,Generate,Manage,Create activities and save drafts,Manage allowed functions,None,Trainee and Probationary only,No,Yes,Yes
-General Secretary,Full,None,None,None,None,Create activities and save drafts,None,None,All groups,No,No,No
-Staff Account,Read only,Read only,Read only,Read only,Read only,Read only,Read only,None,All groups,No,No,No
-Trainee/Probationary,None,None,None,None,None,None,Personal Duty Hours only,None,Own linked record only,No,No,Time In/Out submission only
+Category,Permission,Administrator,Staff Account,Membership,General Secretary,Trainee/Probationary
+Module,Dashboard,Allowed,Allowed,Allowed,Allowed,Not allowed
+Module,Members,Allowed,Allowed,Allowed,Not allowed,Not allowed
+Module,Member Lookup,Allowed,Allowed,Allowed,Not allowed,Not allowed
+Module,Contract,Allowed,Allowed,Allowed,Not allowed,Not allowed
+Module,Monthly Report,Allowed,Allowed,Allowed,Not allowed,Not allowed
+Module,Attendance,Allowed,Allowed,Allowed,Allowed,Not allowed
+Module,Duty Hours,Allowed,Allowed,Allowed,Not allowed,Allowed
+Module,Action Center,Allowed,Allowed,Not allowed,Not allowed,Not allowed
+Module,Accounts,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Module,System Health,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Module,Data & Recovery,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Manage accounts,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Manage member records,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Generate contracts,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Edit Monthly Reports,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Finalize Monthly Reports,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Reopen Monthly Reports,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Create/edit activities,Allowed,Not allowed,Allowed,Allowed,Not allowed
+Action,Delete activities,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Save draft attendance,Allowed,Not allowed,Allowed,Allowed,Not allowed
+Action,Finalize attendance,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Unlock attendance,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Approve/reject Duty punches,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Manually manage Duty Hours,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Set Duty requirements,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Generate Duty certification,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Manage system settings,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Manage inventory,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Import/export/clear data,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Manage recovery points,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,View System Health,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Resolve system errors,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
+Action,Write audit activity,Allowed,Not allowed,Allowed,Allowed,Not allowed
+Action,Submit personal Duty punches,Not allowed,Not allowed,Not allowed,Not allowed,Allowed
+Action,Use accessibility controls,Allowed,Allowed,Allowed,Allowed,Allowed
