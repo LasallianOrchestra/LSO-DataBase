@@ -1,0 +1,73 @@
+LASALLIAN SYMPHONY ORCHESTRA
+STAFF ACCOUNT MONITORING AND DUTY REVIEW UPDATE
+Website version: 3.1.0
+Database target: 007_staff_operations
+PWA cache: enterprise-v26
+
+NEW STAFF ACCOUNT ACCESS
+
+Staff Account can open only:
+1. Dashboard
+2. Members
+3. Attendance
+4. Duty Hours
+
+STAFF ACCOUNT ACTIONS
+
+Dashboard
+- View the full dashboard information that is permitted by the four assigned modules.
+- Open member monitoring, attendance monitoring, and pending Duty Hours punch records.
+
+Members
+- View, search, filter, print, and monitor member records.
+- Cannot add, edit, delete, or import member records.
+- Member Lookup remains hidden as requested.
+
+Attendance
+- View activities, monthly event records, attendance percentages, roster status, analytics, and finalized/draft state.
+- Cannot create, edit, or delete activities.
+- Cannot mark attendance, edit remarks, save drafts, finalize, or unlock attendance.
+
+Duty Hours
+- View the Duty Hours workspace and pending punch queue.
+- Approve or reject Trainee/Probationary Time In requests.
+- Approve or reject Trainee/Probationary Time Out requests.
+- Cannot manually add Duty Hours.
+- Cannot edit commitments, requirements, incentives, or ledger entries.
+- Cannot delete Duty Hours entries.
+
+INSTALLATION FOR AN EXISTING SUPABASE PROJECT
+
+1. Create a complete backup from Data & Recovery before updating.
+2. Open Supabase > SQL Editor > New query.
+3. Run the complete file:
+   LSO_STAFF_ROLE_MONITOR_DUTY_REVIEW_INSTALL.sql
+4. Wait until Supabase displays Success.
+5. Upload every website file from this package to the GitHub Pages publishing root.
+6. Confirm that index.html is replaced and these files exist:
+   - lso-system-core-v2.js
+   - role-access-v3.js
+   - permissions-staff-v2.js
+   - cloud-staff-v2.js
+   - duty-hours-member-info-v12.js
+   - dashboard-command-center-v5.js
+   - pwa-enterprise-v26.js
+   - service-worker-enterprise-v26.js
+7. Wait for GitHub Pages deployment to finish.
+8. Open refresh-staff-role-v26.html once on each device that previously installed the PWA.
+9. Close and reopen the website or installed application.
+10. Log in using a Staff Account and verify the four visible navigation modules.
+
+FRESH DATABASE INSTALLATION
+
+Use the included updated supabase-setup.sql. Do not run the standalone Staff installer after a fresh setup because the permission and Duty Punch review function are already included.
+
+SECURITY NOTES
+
+- The interface hides every module outside the Staff permission list.
+- Member and Attendance write actions have direct JavaScript permission guards in addition to disabled controls.
+- Separate Duty Punch approval is authorized by a dedicated Supabase function.
+- The Supabase function verifies the active session and checks that the reviewer role is Administrator, Membership, or Staff Account.
+- Manual Duty Hours management remains restricted to Administrator and Membership.
+- Legacy one-step Duty entry review remains restricted to Administrator and Membership.
+- Existing members, attendance, Duty Hours, accounts, and reports are preserved.

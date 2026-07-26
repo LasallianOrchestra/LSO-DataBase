@@ -1,0 +1,47 @@
+LSO STAFF ACCOUNT MONITORING AND DUTY REVIEW — VALIDATION REPORT
+Date: 2026-07-26
+Website: 3.1.0
+Database target: 007_staff_operations
+PWA cache: enterprise-v26
+
+PASS — JavaScript syntax — 37 files parsed
+PASS — HTML local asset references — 52 references found
+PASS — HTML duplicate IDs — 489 unique IDs
+PASS — PWA manifest version — enterprise-v26
+PASS — Service-worker asset list — 60 asset paths exist
+PASS — PWA cache isolation — v26 active cache and registration files
+PASS — Cache-safe active script references — lso-system-core-v2.js, role-access-v3.js, cloud-staff-v2.js, duty-hours-member-info-v12.js, permissions-staff-v2.js, dashboard-command-center-v5.js, pwa-enterprise-v26.js
+PASS — Central Staff permission manifest — staff permission VM PASS
+PASS — Staff module visibility — Dashboard, Members, Attendance, Duty Hours only
+PASS — Staff Duty punch approval — reviewDutyPunches allowed
+PASS — Staff denied: Member editing — Staff is not present in allowed roles
+PASS — Staff denied: Activity editing — Staff is not present in allowed roles
+PASS — Staff denied: Attendance draft editing — Staff is not present in allowed roles
+PASS — Staff denied: Manual Duty management — Staff is not present in allowed roles
+PASS — Attendance controls disabled for Staff — const saveDraft = can('saveDraftAttendance')
+PASS — Member controls disabled for Staff — const allowed = can('manageMembers')
+PASS — Duty approval panel uses review permission — show(el('dutyApprovalPanel'), review)
+PASS — Duty manual controls use management permission — show(el('dutyHoursAdminControls'), manage)
+PASS — Duty queue renderer uses review permission — panel.classList.toggle('hidden', !canReviewDutyPunches())
+PASS — Duty review action uses review permission — if (!canReviewDutyPunches() || !entryId
+PASS — Manual Duty action remains management-only — if (!member || !isAdmin()) return;
+PASS — Migration 007 registered — '007_staff_operations'
+PASS — Server permission manifest updated — ('Staff Account','manage','dutyReview',true)
+PASS — Server punch reviewer guard updated — v_reviewer_role not in ('Administrator', 'Membership', 'Staff Account')
+PASS — Punch function execution granted — grant execute on function public.lso_review_duty_punch
+PASS — Legacy Duty entry review unchanged — Standalone installer does not redefine it
+PASS — Existing shared records preserved — No system_state deletion or truncate statement
+PASS — SQL structural delimiters — Balanced transaction and function delimiters
+PASS — Fresh setup legacy review restriction — Administrator/Membership only
+PASS — Fresh setup separate punch review — Administrator/Membership/Staff
+PASS — System Health migration target — 007 / migration 7
+PASS — Permission matrix row — Module,Member Lookup,Allowed,Not allowed
+PASS — Permission matrix row — Action,Approve/reject Duty punches,Allowed,Allowed
+PASS — Permission matrix row — Action,Manually manage Duty Hours,Allowed,Not allowed
+PASS — GitHub file-count requirement — 90 files
+PASS — GitHub per-file size requirement — pdf-lib.min.js: 0.50 MB
+
+SUMMARY: 36 passed; 0 failed.
+
+LIMITATION:
+The private live Supabase project was not accessible from this environment. The SQL installer was structurally checked and the browser-side permission manifest was executed in a Node VM. A Chromium headless DOM test was attempted, but the local browser process timed out in this environment; final live confirmation requires the documented Staff login test after GitHub and Supabase deployment.

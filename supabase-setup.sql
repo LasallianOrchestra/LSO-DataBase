@@ -3798,8 +3798,8 @@ begin
   from public.lso_accounts
   where id = v_admin_id;
 
-  if v_reviewer_role not in ('Administrator', 'Membership') then
-    raise exception 'Administrator or Membership access is required to review Duty Hours punches.' using errcode = '42501';
+  if v_reviewer_role not in ('Administrator', 'Membership', 'Staff Account') then
+    raise exception 'Administrator, Membership, or Staff access is required to review Duty Hours punches.' using errcode = '42501';
   end if;
 
   if p_punch_type not in ('TimeIn', 'TimeOut') then
@@ -4062,7 +4062,8 @@ values
   ('003_separate_duty_punch_approval', 3, 'Separate Duty Hours punch approval', 'baseline-003', 'Independent Time In and Time Out review.'),
   ('004_attendance_governance', 4, 'Attendance governance', 'baseline-004', 'Draft, finalization, unlock, and audit workflow.'),
   ('005_monthly_report_workspace', 5, 'Monthly report workspace', 'baseline-005', 'Shared monthly reports and editable filing tables.'),
-  ('006_enterprise_operations', 6, 'Enterprise operations controls', 'enterprise-006-v2', 'Health center, recovery points, error log, permissions manifest, and version tracking.')
+  ('006_enterprise_operations', 6, 'Enterprise operations controls', 'enterprise-006-v2', 'Health center, recovery points, error log, permissions manifest, and version tracking.'),
+  ('007_staff_operations', 7, 'Staff monitoring and Duty review', 'staff-007-v1', 'Staff access is limited to Dashboard, Members, Attendance monitoring, and separate Duty punch review.')
 on conflict (migration_key) do update
 set title = excluded.title,
     checksum = excluded.checksum,
@@ -4104,12 +4105,17 @@ values
   ('General Secretary','write_column','events',true),
   ('General Secretary','write_column','attendance',true),
   ('General Secretary','write_column','activity_log',true),
+  ('Staff Account','view','dashboardView',true),
+  ('Staff Account','view','membersView',true),
+  ('Staff Account','view','attendanceView',true),
+  ('Staff Account','view','dutyHoursView',true),
   ('Administrator','view','systemHealthView',true),
   ('Administrator','manage','recovery',true),
   ('Administrator','manage','systemErrors',true),
   ('Administrator','manage','monthlyFinalization',true),
   ('Administrator','manage','attendanceFinalization',true),
   ('Membership','manage','dutyReview',true),
+  ('Staff Account','manage','dutyReview',true),
   ('Administrator','manage','dutyReview',true),
   ('Trainee/Probationary','self','dutyPunch',true)
 on conflict (role_name, permission_key, resource) do update
@@ -4236,8 +4242,8 @@ begin
 
   return jsonb_build_object(
     'ok', true,
-    'databaseVersion', '006_enterprise_operations',
-    'targetMigration', 6,
+    'databaseVersion', '007_staff_operations',
+    'targetMigration', 7,
     'serverTime', clock_timestamp(),
     'philippinesDate', to_char(clock_timestamp() at time zone 'Asia/Manila', 'YYYY-MM-DD'),
     'stateUpdatedAt', v_state.updated_at,

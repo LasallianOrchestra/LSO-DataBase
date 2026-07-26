@@ -1,0 +1,21 @@
+LSO SUPABASE CONFIGURATION RUNTIME FIX
+
+CAUSE
+The Supabase URL and publishable key were valid. The Staff cloud module failed during startup because its public API exported an undefined identifier named `canReviewDuty`. Since the module stopped before creating `window.LSOCloud`, the login screen displayed the generic “Supabase is not configured correctly” message.
+
+FIX
+- `cloud-staff-v2.js` is patched for older cached pages.
+- `cloud-staff-v3.js` is the new active cloud module.
+- The correct export is `canReviewDuty: canReviewDutyPunches`.
+- PWA cache version is advanced to enterprise-v27.
+- `refresh-supabase-runtime-v27.html` removes older service workers and caches.
+
+DEPLOYMENT
+1. Upload every file in this package to the GitHub Pages publishing root.
+2. Confirm that index.html, cloud-staff-v3.js, pwa-enterprise-v27.js, and service-worker-enterprise-v27.js are present.
+3. Wait for GitHub Pages deployment to finish.
+4. Open:
+   https://nicpeanut31.github.io/LSO-DataBase/refresh-supabase-runtime-v27.html
+5. Allow it to return to the login page, then log in again.
+
+No Supabase SQL update is required. Do not replace the publishable key with a service_role key.

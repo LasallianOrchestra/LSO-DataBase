@@ -1,0 +1,20 @@
+LSO SUPABASE RUNTIME FIX VALIDATION
+
+RESULT: PASS
+
+Checks completed:
+- Supabase project URL and publishable key are present.
+- cloud-staff-v3.js loads without a ReferenceError.
+- window.LSOCloud is created successfully.
+- LSOCloud.isConfigured() accepts the valid configuration.
+- canReviewDuty is correctly mapped to canReviewDutyPunches.
+- The patched cloud-staff-v2.js is retained for older cached pages.
+- index.html loads cloud-staff-v3.js and PWA enterprise-v27.
+- All local index references exist.
+- All service-worker core assets exist.
+- Every JavaScript file passed node --check.
+- No Supabase SQL update is required.
+- Package file count before validation documents: 96 (below 100).
+
+Root cause:
+The previous cloud module exported an undefined identifier named canReviewDuty. This stopped module initialization before window.LSOCloud was created. The login screen then displayed the generic Supabase configuration warning even though supabase-config.js was valid.

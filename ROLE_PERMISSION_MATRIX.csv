@@ -1,12 +1,12 @@
 Category,Permission,Administrator,Staff Account,Membership,General Secretary,Trainee/Probationary
 Module,Dashboard,Allowed,Allowed,Allowed,Allowed,Not allowed
 Module,Members,Allowed,Allowed,Allowed,Not allowed,Not allowed
-Module,Member Lookup,Allowed,Allowed,Allowed,Not allowed,Not allowed
-Module,Contract,Allowed,Allowed,Allowed,Not allowed,Not allowed
-Module,Monthly Report,Allowed,Allowed,Allowed,Not allowed,Not allowed
+Module,Member Lookup,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Module,Contract,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Module,Monthly Report,Allowed,Not allowed,Allowed,Not allowed,Not allowed
 Module,Attendance,Allowed,Allowed,Allowed,Allowed,Not allowed
 Module,Duty Hours,Allowed,Allowed,Allowed,Not allowed,Allowed
-Module,Action Center,Allowed,Allowed,Not allowed,Not allowed,Not allowed
+Module,Action Center,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Module,Accounts,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Module,System Health,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Module,Data & Recovery,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
@@ -21,7 +21,7 @@ Action,Delete activities,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Action,Save draft attendance,Allowed,Not allowed,Allowed,Allowed,Not allowed
 Action,Finalize attendance,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Action,Unlock attendance,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
-Action,Approve/reject Duty punches,Allowed,Not allowed,Allowed,Not allowed,Not allowed
+Action,Approve/reject Duty punches,Allowed,Allowed,Allowed,Not allowed,Not allowed
 Action,Manually manage Duty Hours,Allowed,Not allowed,Allowed,Not allowed,Not allowed
 Action,Set Duty requirements,Allowed,Not allowed,Allowed,Not allowed,Not allowed
 Action,Generate Duty certification,Allowed,Not allowed,Allowed,Not allowed,Not allowed

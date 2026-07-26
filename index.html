@@ -791,7 +791,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="duty-self-account-status" id="dutySelfAccountStatus"></div>
 <div class="duty-punch-workspace">
 <form class="duty-entry-card duty-form-card duty-punch-card" id="dutySelfEntryForm">
-<div class="duty-punch-heading"><div><p class="eyebrow">Secure Server Punch</p><h4 id="dutyPunchHeading">Ready to submit Time In</h4><small id="dutyPunchHelper">The database timestamps every request in Philippine time. Administrator approval is required before a punch is official.</small></div><span class="duty-punch-live-dot" aria-hidden="true"></span></div>
+<div class="duty-punch-heading"><div><p class="eyebrow">Secure Server Punch</p><h4 id="dutyPunchHeading">Ready to submit Time In</h4><small id="dutyPunchHelper">The database timestamps every request in Philippine time. Authorized review is required before a punch is official.</small></div><span class="duty-punch-live-dot" aria-hidden="true"></span></div>
 <div class="duty-approval-flow" aria-label="Duty Hours approval flow">
   <div><span>1</span><strong>Submit Time In</strong><small>Pending until reviewed</small></div>
   <i aria-hidden="true">→</i>
@@ -825,7 +825,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </article>
 
 <article class="panel hidden duty-approval-panel" id="dutyApprovalPanel">
-<div class="panel-header stack-mobile"><div><p class="eyebrow">Duty Hours Confirmation</p><h3>Separate Punch Approval Queue</h3><p class="panel-subtitle">Review every Time In and Time Out independently. Use Refresh Queue to immediately retrieve requests submitted from another device. Administrator and Membership accounts can review each punch.</p></div><div class="duty-header-actions"><button class="button button-secondary duty-refresh-button" id="dutyAdminRefreshButton" type="button">Refresh Queue</button><span class="badge badge-gold" id="dutyPendingApprovalCount">0 pending punches</span></div></div>
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Duty Hours Confirmation</p><h3>Separate Punch Approval Queue</h3><p class="panel-subtitle">Review every Time In and Time Out independently. Use Refresh Queue to immediately retrieve requests submitted from another device. Administrator, Membership, and Staff accounts can review each punch.</p></div><div class="duty-header-actions"><button class="button button-secondary duty-refresh-button" id="dutyAdminRefreshButton" type="button">Refresh Queue</button><span class="badge badge-gold" id="dutyPendingApprovalCount">0 pending punches</span></div></div>
 <div class="duty-approval-rules"><div><strong>Time In approval</strong><span>Officially starts the individual session.</span></div><div><strong>Time Out approval</strong><span>Officially closes the session and credits the approved duration.</span></div><div><strong>Rejected request</strong><span>Does not alter the individual record or credited total.</span></div></div>
 <div class="duty-punch-review-list" id="dutyApprovalTableBody"></div>
 </article>
@@ -988,7 +988,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <section class="view" id="accountsView">
 <article class="panel">
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review each registration, choose or change its role before approval, and assign its exact module permissions. Membership manages member operations, Trainee/Probationary draft attendance, reports, and Duty Hours. General Secretary manages activities and draft attendance. Trainee/Probationary accounts open Duty Hours only.</p></div></div>
-<div class="account-security-note"><strong>Approval workflow:</strong> Choose the role before clicking Approve. <b>Membership</b> = Dashboard, Members, Lookup, Contract, Monthly Report, Trainee/Probationary Attendance drafts, and Duty Hours approval/manual entry. <b>General Secretary</b> = Dashboard and Attendance activity/draft entry. <b>Staff Account</b> = read-only. <b>Trainee/Probationary</b> = personal Duty Hours only and requires a linked member.</div>
+<div class="account-security-note"><strong>Approval workflow:</strong> Choose the role before clicking Approve. <b>Membership</b> = Dashboard, Members, Lookup, Contract, Monthly Report, Trainee/Probationary Attendance drafts, and Duty Hours approval/manual entry. <b>General Secretary</b> = Dashboard and Attendance activity/draft entry. <b>Staff Account</b> = Dashboard, Members, Attendance monitoring, and Duty Hours Time In/Time Out approval only. <b>Trainee/Probationary</b> = personal Duty Hours only and requires a linked member.</div>
 <div class="table-wrap"><table><thead><tr><th>Account</th><th>Username / Optional Email</th><th>Role Before Approval</th><th>Linked Trainee/Probationary Member</th><th>Requested</th><th>Access Status</th><th>Approved</th><th class="actions-column">Actions</th></tr></thead><tbody id="accountsTableBody"></tbody></table></div>
 </article>
 </section>
@@ -1251,9 +1251,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding.js?v=20260717-simplified-columns-v1"></script>
-<script src="lso-system-core-v1.js?v=20260725-mobile-cache-v25"></script>
-<script src="role-access-v2.js?v=20260725-enterprise-v1"></script>
-<script src="cloud.js?v=20260725-render-runtime-v24"></script>
+<script src="lso-system-core-v2.js?v=20260726-staff-operations-v26"></script>
+<script src="role-access-v3.js?v=20260726-staff-operations-v26"></script>
+<script src="cloud-staff-v3.js?v=20260726-supabase-runtime-v27"></script>
 <script src="app-member-information-v5.js?v=20260724-member-information-v5"></script>
 <script src="auth-view-controller-v17.js?v=20260724-auth-structural-transition-v17"></script>
 <script src="auth.js?v=20260724-auth-structural-transition-v17"></script>
@@ -1263,17 +1263,17 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
 <script src="workflow-attendance-month-v4.js?v=20260725-mobile-cache-v25"></script>
 <script src="attendance-governance.js?v=20260722-account-roles-v3"></script>
-<script src="duty-hours-member-info-v11.js?v=20260724-member-information-v11"></script>
+<script src="duty-hours-member-info-v12.js?v=20260726-staff-operations-v26"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="monthly-report-template-data.js?v=20260719-monthly-report-v1"></script>
 <script src="monthly-report.js?v=20260725-render-runtime-v24"></script>
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
 <script src="contract-maker-membership-v4.js?v=20260723-membership-contract-v4"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260724-member-information-v3"></script>
-<script src="permissions.js?v=20260725-render-runtime-v24"></script>
-<script src="dashboard-command-center-v4.js?v=20260722-account-roles-v3"></script>
+<script src="permissions-staff-v2.js?v=20260726-staff-operations-v26"></script>
+<script src="dashboard-command-center-v5.js?v=20260726-staff-operations-v26"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
 <script src="system-enterprise-v1.js?v=20260725-mobile-cache-v25"></script>
-<script src="pwa-enterprise-v25.js?v=20260725-mobile-cache-v25"></script>
+<script src="pwa-enterprise-v27.js?v=20260726-supabase-runtime-v27"></script>
 </body>
 </html>
