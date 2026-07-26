@@ -1,0 +1,32 @@
+LSO STAFF DUTY ROSTER VISIBILITY FIX
+Build: 2026.07.26-staff-duty-roster.1
+
+PURPOSE
+The Staff Account can now see the current Trainee and Probationary member rosters inside Duty Hours. Staff can select a member and monitor the member's Duty Hours progress and ledger while retaining separate Time In and Time Out approval access.
+
+STAFF CAN
+- Open Dashboard, Members, Attendance, and Duty Hours.
+- See current Trainee and Probationary names in Duty Hours.
+- Search the visible Duty Hours rosters.
+- Select a member and view progress, approved/pending records, and the read-only ledger.
+- Approve or reject pending Time In and Time Out requests.
+
+STAFF CANNOT
+- Add manual Duty Hours.
+- Edit or delete Duty Hours entries.
+- Set commitments or required hours.
+- Add incentives.
+- Generate certifications or roster/monthly Duty Hours prints.
+- Open the Duty Archive control.
+
+SECURITY
+Trainee/Probationary self-service accounts cannot see the organization-wide rosters. Administrator and Membership permissions are unchanged.
+
+INSTALLATION
+1. Upload every file from this package to the GitHub Pages publishing root.
+2. Replace index.html.
+3. No Supabase SQL update is required.
+4. After GitHub Pages finishes deploying, open:
+   https://nicpeanut31.github.io/LSO-DataBase/refresh-lso.html
+5. Close and reopen the browser or installed PWA.
+6. Log in using a Staff Account, open Duty Hours, and confirm the two current rosters appear above the selected profile.

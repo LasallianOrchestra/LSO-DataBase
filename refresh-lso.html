@@ -13,17 +13,17 @@
 </style>
 </head>
 <body>
-<main><div class="spinner" aria-hidden="true"></div><h1>Repairing the LSO mobile app</h1><p id="status">Removing every older offline cache and attendance workflow…</p></main>
+<main><div class="spinner" aria-hidden="true"></div><h1>Repairing the LSO mobile app</h1><p id="status">Removing older cached permissions and loading the Staff Duty Hours roster fix…</p></main>
 <script>
 (async()=>{
  const status=document.getElementById('status');
  try{
    if('serviceWorker' in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()));}
    if('caches' in window){const keys=await caches.keys();await Promise.all(keys.map(k=>caches.delete(k)));}
-   try{sessionStorage.setItem('lso_emergency_refresh_v25',String(Date.now()));}catch{}
+   try{sessionStorage.setItem('lso_staff_duty_roster_refresh_v33',String(Date.now()));}catch{}
    status.textContent='Repair complete. Loading the corrected system…';
  }catch(error){status.textContent='Opening the corrected system…';}
- const target='./index.html?build=20260725-enterprise-v25&force='+Date.now();
+ const target='./index.html?build=20260726-staff-duty-roster-v33&force='+Date.now();
  setTimeout(()=>location.replace(target),350);
 })();
 </script>

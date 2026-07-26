@@ -22,6 +22,7 @@ Action,Save draft attendance,Allowed,Not allowed,Allowed,Allowed,Not allowed
 Action,Finalize attendance,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Action,Unlock attendance,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Action,Approve/reject Duty punches,Allowed,Allowed,Allowed,Not allowed,Not allowed
+Action,View Trainee/Probationary Duty rosters,Allowed,Allowed,Allowed,Not allowed,Not allowed
 Action,Manually manage Duty Hours,Allowed,Not allowed,Allowed,Not allowed,Not allowed
 Action,Set Duty requirements,Allowed,Not allowed,Allowed,Not allowed,Not allowed
 Action,Generate Duty certification,Allowed,Not allowed,Allowed,Not allowed,Not allowed

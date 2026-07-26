@@ -1,0 +1,21 @@
+LSO STAFF DUTY ROSTER VISIBILITY FIX — VALIDATION
+
+Build: 2026.07.26-staff-duty-roster.1
+Cache: lso-website-enterprise-v33
+
+PASSED CHECKS
+- Staff Account has Duty Hours module access.
+- Staff Account has centralized viewDutyRoster permission.
+- Administrator and Membership retain viewDutyRoster permission.
+- Trainee/Probationary does not have organization-wide roster permission.
+- Roster panel is separated from the manageDutyHours permission.
+- Staff can see and search current Trainee and Probationary rosters.
+- Roster printing and Archive controls remain management-only.
+- Manual commitments, rendered entries, incentives, deletion, requirements, and certification remain management-only.
+- Separate Time In and Time Out approval remains available to Staff.
+- All JavaScript files pass Node syntax validation.
+- All local HTML asset references exist.
+- No duplicate HTML IDs were found.
+- Supabase SQL installers and setup files are unchanged.
+- Active PWA cache advanced to v33.
+- Package remains below 100 files.

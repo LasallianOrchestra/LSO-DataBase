@@ -40,6 +40,7 @@ window.renderAll = renderAll;
       finalizeAttendance: [ROLES.ADMIN],
       unlockAttendance: [ROLES.ADMIN],
       reviewDutyPunches: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.STAFF],
+      viewDutyRoster: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.STAFF],
       manageDutyHours: [ROLES.ADMIN, ROLES.MEMBERSHIP],
       manageDutyRequirements: [ROLES.ADMIN, ROLES.MEMBERSHIP],
       certifyDutyHours: [ROLES.ADMIN, ROLES.MEMBERSHIP],
@@ -70,11 +71,11 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '3.1.0',
-    build: '2026.07.26-staff-operations.1',
+    app: '3.1.1',
+    build: '2026.07.26-staff-duty-roster.1',
     schemaTarget: '007_staff_operations',
-    cache: 'lso-enterprise-v26',
-    permissions: 'permissions-manifest-v2',
+    cache: 'lso-enterprise-v33',
+    permissions: 'permissions-manifest-v3',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });
 

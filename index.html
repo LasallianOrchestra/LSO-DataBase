@@ -843,12 +843,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="duty-print-center-help"><span>Current Semester</span><strong id="dutyPrintSemesterLabel">First Semester</strong><small>Change the Duty Semester above before printing.</small></div>
 </div>
 
-<div class="panel duty-roster-command-panel duty-management-only">
+<div class="panel duty-roster-command-panel duty-roster-view-only" id="dutyRosterCommandPanel">
 <div class="panel-header stack-mobile">
 <div><p class="eyebrow">Separated Rosters</p><h3>Trainee and Probationary Duty Records</h3><p class="panel-subtitle">Active records and completed-period archives are separated. No duty record is removed when a member progresses.</p></div>
 <div class="duty-roster-tools">
 <label class="field duty-global-search"><span>Search both rosters</span><input id="dutyMemberSearch" type="search" placeholder="Name, membership ID, or student number..." autocomplete="off"/></label>
-<div class="segmented-control duty-record-mode-toggle" id="dutyRecordModeToggle" aria-label="Duty record status">
+<div class="segmented-control duty-record-mode-toggle duty-management-only" id="dutyRecordModeToggle" aria-label="Duty record status">
 <button class="segment-button active" data-duty-record-mode="Active" type="button">Active Records</button>
 <button class="segment-button" data-duty-record-mode="Archive" type="button">Duty Archive</button>
 </div>
@@ -864,7 +864,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
   </div>
   <strong class="duty-roster-count" id="dutyTraineeCount" aria-label="Current trainee count">0</strong>
 </header>
-<div class="duty-roster-report-actions" aria-label="Trainee duty-hour reports">
+<div class="duty-roster-report-actions duty-management-only" aria-label="Trainee duty-hour reports">
   <button class="button button-secondary duty-period-print" id="printDutyTraineeMembers" type="button"><span>Print Current</span><strong>Trainees</strong></button>
   <button class="button button-secondary duty-period-print duty-monthly-print" id="printDutyTraineeMonthly" type="button"><span>Print Monthly</span><strong>Trainee Report</strong></button>
 </div>
@@ -878,7 +878,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
   </div>
   <strong class="duty-roster-count" id="dutyProbationaryCount" aria-label="Current probationary count">0</strong>
 </header>
-<div class="duty-roster-report-actions" aria-label="Probationary duty-hour reports">
+<div class="duty-roster-report-actions duty-management-only" aria-label="Probationary duty-hour reports">
   <button class="button button-secondary duty-period-print" id="printDutyProbationaryMembers" type="button"><span>Print Current</span><strong>Probationary</strong></button>
   <button class="button button-secondary duty-period-print duty-monthly-print" id="printDutyProbationaryMonthly" type="button"><span>Print Monthly</span><strong>Probationary Report</strong></button>
 </div>
@@ -1252,8 +1252,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v2.js?v=20260726-staff-operations-v26"></script>
-<script src="role-access-v3.js?v=20260726-staff-operations-v26"></script>
+<script src="lso-system-core-v2.js?v=20260726-staff-duty-roster-v33"></script>
+<script src="role-access-v3.js?v=20260726-staff-duty-roster-v33"></script>
 <script src="cloud-staff-v4.js?v=20260726-duty-mobile-v32"></script>
 <script src="app-member-information-v5.js?v=20260726-portrait-print-v30"></script>
 <script src="auth-view-controller-v18.js?v=20260726-duty-mobile-v32"></script>
@@ -1264,17 +1264,17 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
 <script src="workflow-attendance-month-v5.js?v=20260726-fullbleed-print-v31"></script>
 <script src="attendance-governance.js?v=20260722-account-roles-v3"></script>
-<script src="duty-hours-member-info-v13.js?v=20260726-duty-mobile-v32"></script>
+<script src="duty-hours-member-info-v13.js?v=20260726-staff-duty-roster-v33"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="monthly-report-template-data.js?v=20260726-portrait-print-v30"></script>
 <script src="monthly-report-print-v31.js?v=20260726-fullbleed-print-v31"></script>
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
 <script src="contract-maker-membership-v4.js?v=20260723-membership-contract-v4"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260724-member-information-v3"></script>
-<script src="permissions-staff-v2.js?v=20260726-staff-operations-v26"></script>
-<script src="dashboard-command-center-v5.js?v=20260726-staff-operations-v26"></script>
+<script src="permissions-staff-v3.js?v=20260726-staff-duty-roster-v33"></script>
+<script src="dashboard-command-center-v5.js?v=20260726-staff-duty-roster-v33"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
 <script src="system-enterprise-v1.js?v=20260726-portrait-print-v30"></script>
-<script src="pwa-enterprise-v32.js?v=20260726-duty-mobile-v32"></script>
+<script src="pwa-enterprise-v33.js?v=20260726-staff-duty-roster-v33"></script>
 </body>
 </html>
