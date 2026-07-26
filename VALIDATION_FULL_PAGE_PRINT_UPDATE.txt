@@ -1,0 +1,39 @@
+LSO FULL-PAGE PRINT UPDATE - VALIDATION REPORT
+
+RESULT: PASSED
+
+PACKAGE
+- Files: 92
+- GitHub requirement: fewer than 100 files
+- JavaScript files checked: 41
+
+REQUESTED PRINT CHANGES
+- A4 portrait remains the default for every generated print document.
+- Official LSO template is rendered at the full 210 mm x 297 mm page size.
+- Browser print page margin: 0.
+- Printable sheet margin and padding: 0.
+- Official template image is pinned edge-to-edge with object-fit: fill.
+- Printable Attendance heading "Risk Signals" changed to "Rate".
+- HTML print page-number badges removed.
+- Monthly Report PDF page-number drawing removed.
+
+COMPATIBILITY AND SAFETY
+- New cache-safe files: branding-print-fullbleed-v31.js, workflow-attendance-month-v5.js,
+  monthly-report-print-v31.js, pwa-enterprise-v31.js, and service-worker-enterprise-v31.js.
+- Legacy Attendance workflow filenames were patched for cache compatibility.
+- Service worker redirects cached v2-v4 Attendance workflow requests to corrected v5.
+- All local index.html references exist.
+- All service-worker core assets exist.
+- Unexpected changes to shared non-print files: None.
+- Supabase SQL, authentication, permissions, member data, Attendance data, Duty Hours data,
+  and non-print interface files were not changed.
+
+PDF VERIFICATION
+- A full-page A4 portrait verification PDF was rendered with the official LSO template.
+- Verified page size: 595.276 x 841.89 points (A4).
+- Template occupied the complete PDF canvas.
+- No page-number label was present.
+
+PHYSICAL PRINTER NOTE
+- The website requests zero margins. Edge-to-edge physical output also requires "Margins: None",
+  "Background graphics" enabled, and a printer that supports borderless A4 printing.

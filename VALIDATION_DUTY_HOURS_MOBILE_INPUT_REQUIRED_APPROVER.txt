@@ -1,0 +1,38 @@
+LSO DUTY HOURS MOBILE INPUT / REQUIRED APPROVER VALIDATION
+
+Files before this report: 98
+JavaScript files checked: 43
+HTML local references checked: 53
+PWA assets checked: 72
+
+PASS - Member/s Approved field exists
+PASS - Member/s Approved is required
+PASS - Description remains optional
+PASS - Active mobile CSS
+PASS - Active auth controller v18
+PASS - Active Duty Hours v13
+PASS - Active cloud client v4
+PASS - Active PWA v32
+PASS - All local HTML assets exist
+PASS - No duplicate HTML IDs
+PASS - Resize handler does not reset scroll
+PASS - Resize handler does not blur active input
+PASS - Authentication resets only on transition
+PASS - Visual viewport keyboard handler installed
+PASS - Time In validates approver
+PASS - Clear required validation message
+PASS - Focused field scroll target is centered
+PASS - Cloud validates Time In approver
+PASS - Cloud validates Time Out approver
+PASS - Migration 008 included
+PASS - Time In database function included
+PASS - Time Out database function included
+PASS - Exactly two server required messages
+PASS - Fresh setup has only intended validation insertions
+PASS - All PWA shell assets exist
+PASS - PWA cache version v32
+PASS - CSS braces balanced
+PASS - GitHub file count below 100 before report (98)
+
+LIMITATION
+The package was not executed against the private live Supabase project. Live confirmation requires running the included migration and testing on the affected phone after cache refresh.

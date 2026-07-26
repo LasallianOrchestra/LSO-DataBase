@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Refreshing LSO Full-Page Prints</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b3d2e;color:#fff;font:16px/1.5 Arial,sans-serif;text-align:center;padding:24px}
+    main{max-width:560px}.spinner{width:46px;height:46px;border:5px solid rgba(255,255,255,.25);border-top-color:#d4a017;border-radius:50%;margin:0 auto 20px;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body><main><div class="spinner"></div><h1>Applying full-page LSO print formatting</h1><p>Old print caches are being removed. The system will reopen automatically.</p></main>
+<script>
+(async()=>{
+  try{if('serviceWorker'in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()));}}catch{}
+  try{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('lso-website-')).map(k=>caches.delete(k)));}catch{}
+  try{localStorage.setItem('lso-print-template-version','v31-fullbleed');}catch{}
+  setTimeout(()=>location.replace('./index.html?print-template=v31-fullbleed&ts='+Date.now()),900);
+})();
+</script></body></html>

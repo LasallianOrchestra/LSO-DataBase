@@ -2630,6 +2630,9 @@ begin
   if p_semester not in ('First Semester', 'Second Semester') then
     raise exception 'Select a valid duty semester.' using errcode = '22023';
   end if;
+  if v_member_approvers = '' then
+    raise exception 'Member/s Approved is required before submitting Time In.' using errcode = '22023';
+  end if;
 
   v_local_timestamp := v_now at time zone 'Asia/Manila';
   v_duty_date := v_local_timestamp::date;
@@ -2907,6 +2910,9 @@ begin
 
   v_final_description := case when v_description <> '' then v_description else coalesce(v_target ->> 'description', '') end;
   v_final_member_approvers := case when v_member_approvers <> '' then v_member_approvers else coalesce(v_target ->> 'memberApprovers', '') end;
+  if nullif(btrim(coalesce(v_final_member_approvers, '')), '') is null then
+    raise exception 'Member/s Approved is required before submitting Time Out.' using errcode = '22023';
+  end if;
   v_in_status := coalesce(nullif(v_target ->> 'timeInApprovalStatus', ''), 'Pending');
   v_next_overall := case when v_in_status = 'Approved' then 'Active' else 'Pending' end;
 

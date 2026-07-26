@@ -1,0 +1,29 @@
+LSO DUTY HOURS MOBILE INPUT FIX — VERSION 32
+
+WHAT WAS FIXED
+1. On mobile, opening the keyboard triggered a window resize. The old authentication controller treated every resize like a new login and reset the page to the top. Version 32 changes resize handling so it updates only the responsive shell and never blurs or moves an active form field.
+2. Duty Assignment / Description remains optional.
+3. Member/s Approved is now required for both Time In and Time Out.
+4. The requirement is enforced in HTML, Duty Hours JavaScript, the cloud client, and Supabase functions.
+
+INSTALLATION
+1. Create a Complete System Backup.
+2. Open Supabase > SQL Editor > New query.
+3. Run LSO_DUTY_MOBILE_REQUIRED_APPROVER_INSTALL.sql and wait for Success.
+4. Upload every website file from this folder to the GitHub Pages root, including index.html.
+5. Open https://nicpeanut31.github.io/LSO-DataBase/refresh-duty-mobile-v32.html once on each affected phone.
+6. Close and reopen the browser or installed PWA, then test Time In and Time Out.
+
+IMPORTANT ACTIVE FILES
+- auth-view-controller-v18.js
+- duty-hours-member-info-v13.js
+- cloud-staff-v4.js
+- duty-mobile-input-v32.css
+- pwa-enterprise-v32.js
+- service-worker-enterprise-v32.js
+
+EXPECTED RESULT
+- Tapping Duty Assignment or Member/s Approved keeps the field focused while the keyboard opens.
+- The page may move only enough to keep the active field visible; it will not jump to the Dashboard or top of the Duty Hours page.
+- A blank Member/s Approved field blocks Time In and Time Out with a clear validation message.
+- Existing Duty Hours records remain unchanged.

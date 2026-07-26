@@ -1,0 +1,57 @@
+/* LSO Duty Hours mobile input compatibility v32.
+   Scope is limited to the Trainee/Probationary self-service form. */
+#dutyHoursView #dutySelfEntryForm input,
+#dutyHoursView #dutySelfEntryForm select,
+#dutyHoursView #dutySelfEntryForm textarea {
+  max-width: 100%;
+  min-width: 0;
+  scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 92px);
+  scroll-margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 180px);
+}
+
+#dutyHoursView #dutySelfMemberApprovers:required:invalid:not(:placeholder-shown) {
+  border-color: #b4232f;
+}
+
+#dutyHoursView .duty-required-note {
+  display: block;
+  margin-top: .35rem;
+  color: #5f6b65;
+  font-size: .78rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  #dutyHoursView #dutySelfEntryForm .form-grid.two-columns {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: .85rem;
+  }
+
+  #dutyHoursView #dutySelfEntryForm .field,
+  #dutyHoursView #dutySelfEntryForm .field.span-2 {
+    grid-column: 1 / -1 !important;
+    width: 100%;
+    min-width: 0;
+  }
+
+  #dutyHoursView #dutySelfEntryForm input:not([type='checkbox']):not([type='radio']),
+  #dutyHoursView #dutySelfEntryForm select,
+  #dutyHoursView #dutySelfEntryForm textarea {
+    width: 100% !important;
+    min-height: 50px;
+    padding: .78rem .9rem;
+    font-size: 16px !important;
+    line-height: 1.35;
+    touch-action: manipulation;
+  }
+
+  #dutyHoursView #dutySelfEntryForm {
+    overflow: visible !important;
+    contain: none !important;
+    transform: none !important;
+  }
+
+  body.duty-mobile-input-active #dutyHoursView .duty-punch-card {
+    scroll-snap-align: none;
+  }
+}

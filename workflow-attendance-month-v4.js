@@ -514,7 +514,7 @@
 
   function printableDocument({ title, subtitle, summaryHtml, tableHtml, footer = '' }) {
     return `<!doctype html><html><head><title>${safeText(title)}</title><style>
-      @page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17362d;margin:0}.header{display:flex;justify-content:space-between;border-bottom:4px solid #167055;padding-bottom:12px;margin-bottom:16px}.org{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:#167055;font-weight:700}h1{font-size:25px;margin:5px 0}.sub{font-size:12px;color:#60766e}.summary{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:15px 0}.summary>div{border:1px solid #d8e6df;padding:10px;border-radius:8px}.summary span{display:block;font-size:9px;text-transform:uppercase;color:#6b8078}.summary strong{font-size:20px}.report-section{margin:18px 0 8px;font-size:14px;color:#0b3b2e}.report-note{font-size:10px;color:#60766e;margin:0 0 8px}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border:1px solid #d8e6df;padding:7px;text-align:left}th{background:#eff8f3;text-transform:uppercase;font-size:9px}.sign{display:grid;grid-template-columns:1fr 1fr;gap:90px;margin-top:45px;text-align:center}.sign div{border-top:1px solid #333;padding-top:6px}.footer{font-size:9px;color:#6c8079;margin-top:15px;text-align:center}${window.LSOBrand?.printCss || ''}</style></head><body>
+      @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17211d;margin:0}.summary{display:grid}.report-section{margin:18px 0 8px}.sign{display:grid;grid-template-columns:1fr 1fr}.footer{font-size:9px;text-align:center}${window.LSOBrand?.printCss || ''}</style></head><body class="lso-print-portrait">
       ${window.LSOBrand.printHeader({ title, subtitle, meta: `Generated ${dateLabel(today())}` })}
       ${summaryHtml}${tableHtml}<div class="sign"><div>Prepared by</div><div>Authorized Officer</div></div><div class="footer">${safeText(footer || 'Generated from the LSO Orchestra Management System.')}</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
   }
@@ -610,7 +610,7 @@
       title: `${attendanceRosterModeLabel()} — ${attendanceGroupShortLabel()} — ${activeSemester()} Attendance Report`,
       subtitle: `${members.length} members • ${events.length} completed activities • ${records.length} recorded attendance statuses`,
       summaryHtml,
-      tableHtml: `${eventDetailReportTable(events)}<h2 class="report-section">${safeText(attendanceGroupShortLabel())} Semester Summary</h2><p class="report-note">Working Rate includes Draft and Finalized records. Verified Rate includes Finalized records only.</p><table><thead><tr><th>Member</th><th>Working Rate</th><th>Verified Rate</th><th>Risk Signals</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No member records.</td></tr>'}</tbody></table>`
+      tableHtml: `${eventDetailReportTable(events)}<h2 class="report-section">${safeText(attendanceGroupShortLabel())} Semester Summary</h2><p class="report-note">Working Rate includes Draft and Finalized records. Verified Rate includes Finalized records only.</p><table><thead><tr><th>Member</th><th>Working Rate</th><th>Verified Rate</th><th>Rate</th></tr></thead><tbody>${rows || '<tr><td colspan="4">No member records.</td></tr>'}</tbody></table>`
     }));
   }
 
