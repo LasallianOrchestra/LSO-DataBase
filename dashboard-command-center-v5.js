@@ -50,6 +50,9 @@
     return role() === 'Administrator';
   }
 
+  function isGeneralSecretaryFullDashboard() {
+    return role() === 'General Secretary';
+  }
 
   function canAction(action) {
     return window.LSORoleAccess?.can?.(action, currentAccount()) ?? isAdmin();
@@ -289,7 +292,10 @@
     const accounts = getAccounts();
     const duty = getDutyData();
     const settings = getSettings();
-    const analytics = attendanceAnalytics(members, events, attendance);
+    const ratingEvents = events.filter((event) => String(event.date || '').slice(0, 7) === selectedMonth);
+    const ratingEventIds = new Set(ratingEvents.map((event) => event.id));
+    const ratingAttendance = attendance.filter((record) => ratingEventIds.has(record.eventId));
+    const analytics = attendanceAnalytics(members, ratingEvents, ratingAttendance);
     const quality = dataQuality(members, accounts, events, attendance, duty);
     const threshold = Math.max(1, Math.min(100, Number(settings.attendanceThreshold) || 75));
     const pendingTimeIn = (duty.entries || []).filter((entry) => entry.entryType === 'Duty' && punchStatus(entry, 'TimeIn') === 'Pending');
@@ -305,12 +311,12 @@
 
   function actionCards(data) {
     const cards = [
-      { key: 'pending-accounts', icon: 'AC', label: 'Pending Accounts', value: data.accounts.filter((item) => item.approvalStatus === 'Pending').length, note: 'Choose a role and approve', tone: 'blue', visible: canView('accountsView') },
-      { key: 'pending-time-in', icon: 'IN', label: 'Pending Time In', value: data.pendingTimeIn.length, note: 'Separate punch approvals', tone: 'gold', visible: canAction('reviewDutyPunches') },
-      { key: 'pending-time-out', icon: 'OUT', label: 'Pending Time Out', value: data.pendingTimeOut.length, note: 'Review completed sessions', tone: 'gold', visible: canAction('reviewDutyPunches') },
-      { key: 'draft-attendance', icon: 'DR', label: 'Draft Attendance', value: data.draftEvents.length, note: canAction('finalizeAttendance') ? 'Save or finalize rosters' : 'Review and save draft rosters', tone: 'purple', visible: canView('attendanceView') },
-      { key: 'unlocked-attendance', icon: 'UL', label: 'Unlocked Attendance', value: data.unlockedEvents.length, note: 'Corrections need re-finalizing', tone: 'red', visible: canView('attendanceView') },
-      { key: 'incomplete-profiles', icon: 'ID', label: 'Incomplete Profiles', value: data.quality.incomplete.length, note: 'Below 90% completeness', tone: 'green', visible: canView('membersView') }
+      { key: 'pending-accounts', icon: 'AC', label: 'Pending Accounts', value: data.accounts.filter((item) => item.approvalStatus === 'Pending').length, note: 'Choose a role and approve', tone: 'blue', visible: isGeneralSecretaryFullDashboard() || canView('accountsView') },
+      { key: 'pending-time-in', icon: 'IN', label: 'Pending Time In', value: data.pendingTimeIn.length, note: 'Separate punch approvals', tone: 'gold', visible: isGeneralSecretaryFullDashboard() || canAction('reviewDutyPunches') },
+      { key: 'pending-time-out', icon: 'OUT', label: 'Pending Time Out', value: data.pendingTimeOut.length, note: 'Review completed sessions', tone: 'gold', visible: isGeneralSecretaryFullDashboard() || canAction('reviewDutyPunches') },
+      { key: 'draft-attendance', icon: 'DR', label: 'Draft Attendance', value: data.draftEvents.length, note: canAction('finalizeAttendance') ? 'Save or finalize rosters' : 'Review and save draft rosters', tone: 'purple', visible: isGeneralSecretaryFullDashboard() || canView('attendanceView') },
+      { key: 'unlocked-attendance', icon: 'UL', label: 'Unlocked Attendance', value: data.unlockedEvents.length, note: 'Corrections need re-finalizing', tone: 'red', visible: isGeneralSecretaryFullDashboard() || canView('attendanceView') },
+      { key: 'incomplete-profiles', icon: 'ID', label: 'Incomplete Profiles', value: data.quality.incomplete.length, note: 'Below 90% completeness', tone: 'green', visible: isGeneralSecretaryFullDashboard() || canView('membersView') }
     ];
     return cards.filter((card) => card.visible);
   }
@@ -319,8 +325,9 @@
     const account = currentAccount();
     const firstName = String(account.displayName || account.username || 'LSO team').trim().split(/\s+/)[0];
     const urgent = actionCards(data).filter((item) => item.value > 0).length;
+    const workspaceLabel = isGeneralSecretaryFullDashboard() ? 'Full Dashboard monitoring and Attendance operations' : `${role()} workspace`;
     return `<section class="dcc-hero">
-      <div class="dcc-hero-copy"><p class="dcc-kicker">Orchestra Command Center</p><h2>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${safe(firstName)}</h2><p>${safe(role())} workspace • ${urgent ? `${urgent} action group${urgent === 1 ? '' : 's'} require attention` : 'operations are currently clear'}.</p><div class="dcc-role-row"><span class="dcc-role-pill">${safe(role())}</span><span>${safe(dateLabel(localDate()))}</span><span>Attendance threshold: ${data.threshold}%</span></div></div>
+      <div class="dcc-hero-copy"><p class="dcc-kicker">Orchestra Command Center</p><h2>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${safe(firstName)}</h2><p>${safe(workspaceLabel)} • ${urgent ? `${urgent} action group${urgent === 1 ? '' : 's'} require attention` : 'operations are currently clear'}.</p><div class="dcc-role-row"><span class="dcc-role-pill">${safe(role())}</span><span>${safe(dateLabel(localDate()))}</span><span>Attendance threshold: ${data.threshold}%</span></div></div>
       <div class="dcc-hero-actions">${canAction('manageMembers') ? '<button class="button button-light" data-dcc-action="add-member" type="button">+ Add Member</button>' : '<button class="button button-light" data-dcc-action="attendance" type="button">Open Attendance</button>'}${canAction('manageEvents') ? '<button class="button dcc-ghost" data-dcc-action="create-activity" type="button">Create Activity</button>' : canView('monthlyReportView') ? '<button class="button dcc-ghost" data-dcc-action="monthly-report" type="button">View Reports</button>' : ''}</div>
     </section>`;
   }
@@ -373,8 +380,8 @@
     const overall = totalIncluded ? Math.round(totalAttended / totalIncluded * 100) : null;
     const atRisk = eligible.filter((item) => riskLabel(item, data.threshold)[0] !== 'Good Standing')
       .sort((a, b) => b.riskScore - a.riskScore || (a.rate ?? 101) - (b.rate ?? 101)).slice(0, 6);
-    return `<section class="dcc-panel"><div class="dcc-panel-heading"><div><p class="dcc-kicker">Attendance Health</p><h3>Participation and risk signals</h3><p>Excused and Not Required records do not lower the attendance rate.</p></div><button class="dcc-text-button" data-dcc-export="attendance" type="button">Export analytics CSV</button></div>
-      <div class="dcc-health-summary"><div class="dcc-rate-ring" style="--rate:${overall ?? 0}"><div><strong>${overall === null ? '—' : `${overall}%`}</strong><small>Overall rate</small></div></div><div class="dcc-health-kpis"><div><span>Below threshold</span><strong>${data.belowThreshold.length}</strong></div><div><span>Consecutive absences</span><strong>${data.consecutive.length}</strong></div><div><span>Frequent lateness</span><strong>${data.frequentLate.length}</strong></div><div><span>No attendance data</span><strong>${data.analytics.filter((item) => item.records === 0).length}</strong></div></div></div>
+    return `<section class="dcc-panel"><div class="dcc-panel-heading"><div><p class="dcc-kicker">Attendance Health</p><h3>Participation and risk signals</h3><p>${safe(monthLabel(selectedMonth))} only. Excused and Not Required records do not lower the monthly rate.</p></div><button class="dcc-text-button" data-dcc-export="attendance" type="button">Export analytics CSV</button></div>
+      <div class="dcc-health-summary"><div class="dcc-rate-ring" style="--rate:${overall ?? 0}"><div><strong>${overall === null ? '—' : `${overall}%`}</strong><small>Monthly rate</small></div></div><div class="dcc-health-kpis"><div><span>Below threshold</span><strong>${data.belowThreshold.length}</strong></div><div><span>Consecutive absences</span><strong>${data.consecutive.length}</strong></div><div><span>Frequent lateness</span><strong>${data.frequentLate.length}</strong></div><div><span>No attendance data</span><strong>${data.analytics.filter((item) => item.records === 0).length}</strong></div></div></div>
       <div class="dcc-risk-list">${atRisk.length ? atRisk.map((item) => { const [label, tone] = riskLabel(item, data.threshold); return `<button class="dcc-risk-row" data-dcc-member="${safe(item.member.id)}" type="button"><span class="dcc-avatar">${safe(String(item.member.fullName || '?').split(/\s+/).slice(0,2).map((part) => part[0]).join('').toUpperCase())}</span><span><strong>${safe(item.member.fullName || 'Unnamed member')}</strong><small>${safe(memberIdLabel(item.member))} • ${item.absent} absent • ${item.late} late${item.verifiedRate === null ? '' : ` • ${item.verifiedRate}% verified`}</small></span><span class="dcc-risk-rate"><strong>${item.rate === null ? '—' : `${item.rate}%`}</strong><em class="tone-${tone}">${label}</em></span></button>`; }).join('') : '<div class="dcc-empty compact"><span>✓</span><strong>No attendance risk detected</strong><p>Members with recorded attendance are within the configured threshold.</p></div>'}</div>
     </section>`;
   }
@@ -423,7 +430,10 @@
       ['Inactive / Archived', data.members.filter(isInactive).length, 'inactive'],
       ['Incomplete Profiles', data.quality.incomplete.length, 'incomplete']
     ];
-    return `<section class="dcc-panel"><div class="dcc-panel-heading"><div><p class="dcc-kicker">Member Overview</p><h3>Current organization records</h3><p>Select a statistic to open the corresponding roster or exact record list.</p></div><button class="dcc-text-button" data-dcc-action="members" type="button">Open directory →</button></div><div class="dcc-member-stat-grid">${stats.map(([label, value, key]) => `<button data-dcc-member-stat="${key}" type="button"><span>${safe(label)}</span><strong>${value}</strong><small>View records →</small></button>`).join('')}</div></section>`;
+    const directoryControl = canView('membersView')
+      ? '<button class="dcc-text-button" data-dcc-action="members" type="button">Open directory →</button>'
+      : '<span class="dcc-readonly-label">Dashboard monitoring</span>';
+    return `<section class="dcc-panel"><div class="dcc-panel-heading"><div><p class="dcc-kicker">Member Overview</p><h3>Current organization records</h3><p>Select a statistic to review its records inside the Dashboard.</p></div>${directoryControl}</div><div class="dcc-member-stat-grid">${stats.map(([label, value, key]) => `<button data-dcc-member-stat="${key}" type="button"><span>${safe(label)}</span><strong>${value}</strong><small>View records →</small></button>`).join('')}</div></section>`;
   }
 
   function activityIcon(category) {
@@ -506,6 +516,21 @@
   }
 
   function detailItems(key, data) {
+    if (String(key).startsWith('member-preview:')) {
+      const memberId = String(key).slice('member-preview:'.length);
+      const member = data.members.find((item) => item.id === memberId);
+      const analytics = data.analytics.find((item) => item.member.id === memberId);
+      if (!member) return { title: 'Member snapshot', module: '', items: [] };
+      const meta = [memberIdLabel(member), memberStage(member), memberStatus(member), analytics?.rate == null ? 'No attendance rate' : `${analytics.rate}% attendance`, `${analytics?.late || 0} late`, `${analytics?.absent || 0} absent`].join(' • ');
+      return { title: 'Member dashboard snapshot', module: '', items: [{ id: member.id, title: member.fullName || 'Unnamed member', meta, action: 'readonly' }] };
+    }
+    if (String(key).startsWith('duty-preview:')) {
+      const memberId = String(key).slice('duty-preview:'.length);
+      const row = dutyRows(data).find((item) => item.member.id === memberId);
+      if (!row) return { title: 'Duty Hours snapshot', module: '', items: [] };
+      const meta = [memberIdLabel(row.member), row.stage, `${durationLabel(row.credited)} credited`, `${durationLabel(row.committed)} required`, `${Math.max(0, row.balance) ? durationLabel(Math.max(0, row.balance)) + ' remaining' : 'Requirement complete'}`, `${row.pendingIn + row.pendingOut} pending punch(es)`].join(' • ');
+      return { title: 'Duty Hours dashboard snapshot', module: '', items: [{ id: row.member.id, title: row.member.fullName || 'Unnamed member', meta, action: 'readonly' }] };
+    }
     const memberItem = (member, meta) => ({ id: member.id, title: member.fullName || 'Unnamed member', meta: `${memberIdLabel(member)}${meta ? ` • ${meta}` : ''}`, action: 'member' });
     const eventItem = (event, meta) => ({ id: event.id, title: event.title || 'Untitled activity', meta: `${dateLabel(event.date)}${meta ? ` • ${meta}` : ''}`, action: 'event' });
     const accountItem = (account) => ({ id: account.id, title: account.displayName || account.username, meta: `${account.username} • ${account.role || 'Role not assigned'}`, action: 'accounts' });
@@ -529,6 +554,9 @@
       'inactive-link': { title: 'Duty accounts linked to inactive records', module: 'accounts', items: data.quality.inactiveLinked.map(accountItem) },
       'missing-timeout': { title: 'Open duty sessions without Time Out', module: 'duty-hours', items: data.quality.missingTimeOut.map((entry) => dutyItem(entry, 'TimeIn')) },
       'event-no-attendance': { title: 'Past activities without attendance', module: 'attendance', items: data.quality.eventWithoutRoster.map((event) => eventItem(event, 'No marked roster')) },
+      'members-current': { title: 'Current Official Members', module: 'members', items: data.members.filter((member) => memberStage(member) === 'Membership Period' && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
+      'members-trainee': { title: 'Current Trainee members', module: 'members', items: data.members.filter((member) => memberStage(member) === 'Trainee Period' && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
+      'members-probationary': { title: 'Current Probationary members', module: 'members', items: data.members.filter((member) => memberStage(member) === 'Probationary Period' && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
       'members-loa': { title: 'Members on leave of absence', module: 'members', items: data.members.filter(isLoa).map((member) => memberItem(member, memberStage(member))) },
       'members-inactive': { title: 'Inactive or archived members', module: 'members', items: data.members.filter(isInactive).map((member) => memberItem(member, memberStage(member))) }
     };
@@ -545,7 +573,12 @@
     const detail = detailItems(detailState, data);
     el('dccDetailTitle').textContent = detail.title;
     el('dccDetailSummary').textContent = `${detail.items.length} matching record${detail.items.length === 1 ? '' : 's'}`;
-    el('dccDetailList').innerHTML = detail.items.length ? detail.items.map((item) => `<button data-dcc-detail-item="${safe(item.action)}" data-id="${safe(item.id)}" type="button"><span><strong>${safe(item.title)}</strong><small>${safe(item.meta)}</small></span><b>Open →</b></button>`).join('') : '<div class="dcc-empty compact"><span>✓</span><strong>No matching records</strong><p>This action group is currently clear.</p></div>';
+    const actionViews = { member: 'membersView', event: 'attendanceView', accounts: 'accountsView', duty: 'dutyHoursView' };
+    el('dccDetailList').innerHTML = detail.items.length ? detail.items.map((item) => {
+      const targetView = actionViews[item.action] || '';
+      const interactive = item.action !== 'readonly' && (!targetView || canView(targetView));
+      return `<button data-dcc-detail-item="${safe(item.action)}" data-id="${safe(item.id)}" type="button"${interactive ? '' : ' disabled aria-disabled="true"'}><span><strong>${safe(item.title)}</strong><small>${safe(item.meta)}</small></span><b>${interactive ? 'Open →' : 'Dashboard view'}</b></button>`;
+    }).join('') : '<div class="dcc-empty compact"><span>✓</span><strong>No matching records</strong><p>This action group is currently clear.</p></div>';
     const moduleButton = el('dccOpenModuleButton');
     moduleButton.dataset.module = detail.module;
     const viewMap = { attendance: 'attendanceView', 'duty-hours': 'dutyHoursView', accounts: 'accountsView', alerts: 'alertsView', data: 'dataView', members: 'membersView', 'monthly-report': 'monthlyReportView' };
@@ -579,13 +612,21 @@
   }
 
   function openMember(memberId) {
-    if (!canView('membersView')) { window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Member records are not assigned to this role.', true); return; }
+    if (!canView('membersView')) {
+      if (isGeneralSecretaryFullDashboard()) { openDetail(`member-preview:${memberId}`); return; }
+      window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Member records are not assigned to this role.', true);
+      return;
+    }
     closeDetail();
     window.LSOApp?.openRecord?.(memberId);
   }
 
   function openDutyMember(memberId) {
-    if (!canView('dutyHoursView')) { window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Duty Hours are not assigned to this role.', true); return; }
+    if (!canView('dutyHoursView')) {
+      if (isGeneralSecretaryFullDashboard()) { openDetail(`duty-preview:${memberId}`); return; }
+      window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Duty Hours are not assigned to this role.', true);
+      return;
+    }
     openView('dutyHoursView');
     setTimeout(() => {
       const selector = `[data-duty-member="${window.CSS?.escape ? CSS.escape(memberId) : memberId}"]`;
@@ -623,7 +664,15 @@
   }
 
   function performMemberStat(key) {
-    if (!canView('membersView')) { window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Member records are not assigned to this role.', true); return; }
+    if (!canView('membersView')) {
+      if (isGeneralSecretaryFullDashboard()) {
+        const detailMap = { members: 'members-current', trainees: 'members-trainee', probationary: 'members-probationary', loa: 'members-loa', inactive: 'members-inactive', incomplete: 'incomplete-profiles' };
+        if (detailMap[key]) openDetail(detailMap[key]);
+        return;
+      }
+      window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Member records are not assigned to this role.', true);
+      return;
+    }
     if (key === 'members') window.LSOApp?.setMembershipDirectory?.('Membership Period');
     if (key === 'trainees') window.LSOApp?.setMembershipDirectory?.('Trainee Period');
     if (key === 'probationary') window.LSOApp?.setMembershipDirectory?.('Probationary Period');
@@ -707,7 +756,7 @@
     window.setInterval(() => {
       if (!el('appShell')?.classList.contains('hidden') && el('dashboardView')?.classList.contains('active')) render();
     }, 60000);
-    window.LSODashboardCommandCenter = { render, getData: dashboardData, setMonth(month) { if (/^\d{4}-\d{2}$/.test(month)) { selectedMonth = month; render(); } } };
+    window.LSODashboardCommandCenter = { render, getData: dashboardData, hasFullDashboardAccess: () => isAdmin() || isGeneralSecretaryFullDashboard(), setMonth(month) { if (/^\d{4}-\d{2}$/.test(month)) { selectedMonth = month; render(); } } };
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });

@@ -62,7 +62,6 @@
     if (value === ROLES.TRAINEE) return 'Trainee/Probationary access is limited to personal Duty Hours submission.';
     if (value === ROLES.STAFF) {
       if (action === 'reviewDutyPunches') return 'Staff Accounts may approve or reject pending Trainee/Probationary Time In and Time Out requests.';
-      if (action === 'viewDutyRoster') return 'Staff Accounts may view the current Trainee and Probationary Duty Hours rosters and individual progress records.';
       if (['manageEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance'].includes(action)) return 'Staff Attendance access is monitoring-only. Activity and attendance editing are disabled.';
       if (action === 'manageDutyHours') return 'Staff can review Time In and Time Out requests, but cannot manually add, edit, or delete Duty Hours.';
       return 'Staff access is limited to Dashboard, Members, Attendance monitoring, and Duty Hours punch approval.';

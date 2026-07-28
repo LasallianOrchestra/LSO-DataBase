@@ -1,0 +1,164 @@
+/* LSO Attendance + Duty Hours coordinated revision v35
+   Visual-only additions: independent calendars, month/semester finalization,
+   archive actions, staff current-roster view, and smoother scrolling. */
+
+:root { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 18px; }
+body, .app-shell, .main-content, .view, .modal-card, .table-wrap,
+.event-list, .duty-roster-list, .attendance-calendar-panel,
+.attendance-management-layout, .sidebar-nav {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.main-content, .view, .modal-card, .table-wrap, .event-list, .duty-roster-list,
+.sidebar-nav { scroll-behavior: smooth; }
+
+/* Month and semester finalization center */
+.attendance-period-center { margin: 18px 0; overflow: hidden; }
+.attendance-period-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .92fr) minmax(0, 1.35fr);
+  gap: 16px;
+}
+.attendance-period-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--lso-border, #d8e2dc);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff 0%, #f8fbf9 100%);
+  box-shadow: 0 12px 28px rgba(11, 61, 46, .07);
+}
+.attendance-period-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.attendance-period-card-header > div { min-width: 0; }
+.attendance-period-card-header span:not(.badge),
+.attendance-semester-rating-row span {
+  display: block;
+  margin-bottom: 4px;
+  color: #5f6b65;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.attendance-period-card-header strong { color: #0b3d2e; line-height: 1.25; }
+.attendance-period-card > p { margin: 0 0 15px; color: #44534c; line-height: 1.55; }
+.attendance-period-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.attendance-semester-rating-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .7fr) minmax(210px, 1fr);
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 15px;
+}
+.attendance-semester-rating-row > div {
+  padding: 13px 15px;
+  border-radius: 14px;
+  background: #e9f3ed;
+  border: 1px solid #c9ddd1;
+}
+.attendance-semester-rating-row > div strong {
+  display: block;
+  color: #0b3d2e;
+  font-size: clamp(1.75rem, 4vw, 2.4rem);
+  line-height: 1;
+}
+.attendance-semester-rating-row > div small { display: block; margin-top: 7px; color: #56645e; line-height: 1.4; }
+.attendance-semester-rates-table { margin-top: 16px; }
+.attendance-semester-rates-table th,
+.attendance-semester-rates-table td { vertical-align: middle; }
+
+/* Make the selected stage calendar visibly independent. */
+.attendance-group-control-panel { position: relative; overflow: hidden; }
+.attendance-group-control-panel::after {
+  content: "Independent calendar";
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  color: rgba(11, 61, 46, .13);
+  font-weight: 900;
+  font-size: clamp(1rem, 2.2vw, 1.8rem);
+  letter-spacing: .03em;
+  pointer-events: none;
+}
+.attendance-calendar-panel[data-attendance-calendar="Trainee Members"] { border-top: 4px solid #146c43; }
+.attendance-calendar-panel[data-attendance-calendar="Probationary Members"] { border-top: 4px solid #d4a017; }
+.attendance-calendar-panel[data-attendance-calendar="Official Members"] { border-top: 4px solid #0b3d2e; }
+
+/* Duty archive cards and deletion action */
+.duty-roster-person-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 4px;
+  border-radius: 15px;
+}
+.duty-roster-person-shell.active { background: rgba(20, 108, 67, .08); }
+.duty-roster-person-shell .duty-roster-person { width: 100%; }
+.duty-archive-delete-button {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid #d8a6a1;
+  border-radius: 10px;
+  background: #fff7f6;
+  color: #8f201b;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.duty-archive-delete-button:hover,
+.duty-archive-delete-button:focus-visible { background: #fde4e2; border-color: #b73b33; transform: translateY(-1px); }
+
+/* Staff sees current Trainee/Probationary members only. */
+body.duty-staff-view #dutyRecordModeToggle,
+body.duty-staff-view #dutyArchiveNotice,
+body.duty-staff-view .duty-roster-report-actions { display: none !important; }
+body.duty-staff-view .duty-roster-command-panel .panel-subtitle::after {
+  content: " Staff monitoring is limited to current Trainee and Probationary members.";
+  font-weight: 700;
+}
+body.duty-staff-view .duty-manager-action,
+body.duty-staff-view [data-duty-delete] { display: none !important; }
+
+/* Required approver input and mobile keyboard safety. */
+#dutySelfMemberApprovers:required { border-left: 4px solid #d4a017; }
+#dutySelfMemberApprovers:focus {
+  border-color: #146c43;
+  box-shadow: 0 0 0 4px rgba(20, 108, 67, .15);
+}
+.duty-punch-card input,
+.duty-punch-card select,
+.duty-punch-card textarea { scroll-margin: 28vh 0 24vh; }
+
+@media (max-width: 900px) {
+  .attendance-period-grid { grid-template-columns: 1fr; }
+  .attendance-semester-rating-row { grid-template-columns: 1fr; }
+  .attendance-period-card { padding: 15px; }
+  .attendance-group-control-panel::after { display: none; }
+  .duty-punch-card .form-grid.two-columns { grid-template-columns: 1fr !important; }
+  .duty-punch-card .span-2 { grid-column: 1 !important; }
+}
+
+@media (max-width: 520px) {
+  .attendance-period-center { margin-inline: 0; }
+  .attendance-period-card-header { align-items: center; }
+  .attendance-period-actions .button { width: 100%; }
+  .attendance-semester-rates-table table { min-width: 560px; }
+  .duty-roster-person { grid-template-columns: auto minmax(0, 1fr); }
+  .duty-roster-balance { grid-column: 2; justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html, .main-content, .view, .modal-card, .table-wrap, .event-list,
+  .duty-roster-list, .sidebar-nav { scroll-behavior: auto !important; }
+  .duty-archive-delete-button { transition: none; }
+}

@@ -3,22 +3,17 @@
 
   const get = (id) => document.getElementById(id);
   let transitionTimer = 0;
-  let unlocked = false;
+  let wasAuthenticated = false;
 
   function setImportant(node, property, value) {
     if (node) node.style.setProperty(property, value, 'important');
   }
 
-  function activeEditableControl() {
-    const node = document.activeElement;
-    return node instanceof HTMLElement && node.matches('input:not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, select, [contenteditable="true"]');
-  }
-
-  function resetToTop() {
+  function resetToTop({ blur = false } = {}) {
     const shell = get('appShell');
     const main = document.querySelector('.main-content');
     const active = document.querySelector('.view.active');
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (blur && document.activeElement instanceof HTMLElement) document.activeElement.blur();
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
@@ -27,30 +22,12 @@
     if (active) active.scrollTop = 0;
   }
 
-  function applyShellLayout() {
-    const shell = get('appShell');
-    if (!shell || !unlocked) return;
-    setImportant(shell, 'display', matchMedia('(max-width: 920px)').matches ? 'block' : 'grid');
-    setImportant(shell, 'visibility', 'visible');
-    setImportant(shell, 'pointer-events', 'auto');
-    setImportant(shell, 'position', 'relative');
-    setImportant(shell, 'inset', 'auto');
-    setImportant(shell, 'width', '100%');
-    setImportant(shell, 'height', 'auto');
-    setImportant(shell, 'min-height', '100dvh');
-    setImportant(shell, 'max-width', 'none');
-    setImportant(shell, 'max-height', 'none');
-    setImportant(shell, 'overflow', 'visible');
-    setImportant(shell, 'opacity', '1');
-    setImportant(shell, 'content-visibility', 'visible');
-  }
-
   function lock() {
     const auth = get('authScreen');
     const shell = get('appShell');
-    unlocked = false;
     document.documentElement.classList.add('lso-auth-locked');
     if (document.body) delete document.body.dataset.authenticated;
+    wasAuthenticated = false;
 
     if (shell) {
       shell.classList.add('hidden', 'auth-locked');
@@ -73,7 +50,7 @@
     }
   }
 
-  function unlock({ resetViewport = false } = {}) {
+  function unlock({ transition = false } = {}) {
     const authenticated = document.body?.dataset.authenticated === 'true' && Boolean(window.LSOCurrentAccount);
     if (!authenticated) {
       lock();
@@ -107,37 +84,40 @@
     shell.removeAttribute('hidden');
     shell.removeAttribute('inert');
     shell.setAttribute('aria-hidden', 'false');
-    unlocked = true;
-    applyShellLayout();
+    setImportant(shell, 'display', matchMedia('(max-width: 920px)').matches ? 'block' : 'grid');
+    setImportant(shell, 'visibility', 'visible');
+    setImportant(shell, 'pointer-events', 'auto');
+    setImportant(shell, 'position', 'relative');
+    setImportant(shell, 'inset', 'auto');
+    setImportant(shell, 'width', '100%');
+    setImportant(shell, 'height', 'auto');
+    setImportant(shell, 'min-height', '100dvh');
+    setImportant(shell, 'max-width', 'none');
+    setImportant(shell, 'max-height', 'none');
+    setImportant(shell, 'overflow', 'visible');
+    setImportant(shell, 'opacity', '1');
+    setImportant(shell, 'content-visibility', 'visible');
     document.documentElement.classList.remove('lso-auth-locked');
 
-    // Reset only once when authentication transitions from locked to unlocked.
-    // Mobile keyboards fire resize events; those must never blur fields or move
-    // the Duty Hours page back to the top while a member is typing.
-    if (resetViewport) {
+    // Only reset the viewport during an actual authentication transition.
+    // Mobile keyboard open/close events resize the viewport and must never blur
+    // a Duty Hours input or scroll the page away from the active field.
+    if (transition) {
       clearTimeout(transitionTimer);
-      resetToTop();
+      resetToTop({ blur: true });
       requestAnimationFrame(() => {
         resetToTop();
-        requestAnimationFrame(resetToTop);
+        requestAnimationFrame(() => resetToTop());
       });
-      transitionTimer = window.setTimeout(resetToTop, 350);
+      transitionTimer = window.setTimeout(() => resetToTop(), 350);
     }
+    wasAuthenticated = true;
   }
 
   function synchronize() {
     const authenticated = document.body?.dataset.authenticated === 'true' && Boolean(window.LSOCurrentAccount);
-    if (authenticated) unlock({ resetViewport: !unlocked });
+    if (authenticated) unlock({ transition: !wasAuthenticated });
     else lock();
-  }
-
-  function handleViewportResize() {
-    // Keep the responsive shell layout current without calling unlock(),
-    // blurring the active input, or resetting any scroll position.
-    if (document.body?.dataset.authenticated === 'true' && window.LSOCurrentAccount) {
-      applyShellLayout();
-      document.documentElement.classList.toggle('lso-mobile-keyboard-active', activeEditableControl());
-    }
   }
 
   function initialize() {
@@ -146,10 +126,9 @@
     new MutationObserver(synchronize).observe(body, { attributes: true, attributeFilter: ['data-authenticated'] });
     window.addEventListener('lso:auth-changed', () => requestAnimationFrame(synchronize));
     window.addEventListener('pageshow', synchronize);
-    window.addEventListener('resize', handleViewportResize, { passive: true });
-    window.visualViewport?.addEventListener('resize', handleViewportResize, { passive: true });
-    document.addEventListener('focusin', handleViewportResize);
-    document.addEventListener('focusout', () => window.setTimeout(handleViewportResize, 80));
+    // Deliberately do not re-run unlock on resize. Phone keyboards resize the
+    // visual viewport; treating that as login navigation caused inputs to lose focus.
+    window.addEventListener('orientationchange', () => window.setTimeout(synchronize, 150));
     synchronize();
   }
 

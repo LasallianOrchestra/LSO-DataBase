@@ -156,6 +156,9 @@
     const manage = can('manageDutyHours');
     const review = can('reviewDutyPunches');
     qsa('.duty-management-only', root).forEach((node) => show(node, manage));
+    qsa('.duty-roster-monitor-panel', root).forEach((node) => show(node, manage || review));
+    qsa('.duty-roster-report-actions', root).forEach((node) => show(node, manage));
+    show(el('dutyRecordModeToggle'), manage);
     show(el('dutyApprovalPanel'), review);
     show(el('dutyHoursAdminControls'), manage);
     qsa('[data-duty-delete]', root).forEach((node) => show(node, manage));

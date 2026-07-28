@@ -1,0 +1,44 @@
+LSO ATTENDANCE / DUTY HOURS REVISION V35 - VALIDATION REPORT
+
+Result: 27/27 checks passed
+
+01. PASS - All JavaScript files pass syntax checking
+    27 files; zero syntax failures
+02. PASS - No duplicate HTML IDs
+    none
+03. PASS - All local HTML assets exist
+    53 unique references; missing: []
+04. PASS - All new Attendance and Duty Hours controls exist
+    all present
+05. PASS - Activities are assigned to one Attendance Calendar
+06. PASS - Calendar month/date state is stored per group and semester
+07. PASS - Monthly finalization stores fixed snapshots
+08. PASS - Semester End Date and semestral arithmetic mean are implemented
+09. PASS - Official monthly and semester printouts require finalized ratings
+10. PASS - Dashboard Attendance Health is scoped to the selected month
+11. PASS - Duty archive removal is implemented and reason-audited
+12. PASS - Staff Duty roster is current-stage only
+13. PASS - Staff cannot switch to Duty Archive
+14. PASS - Member/s Approved is required in HTML, client, cloud, and SQL
+15. PASS - Mobile keyboard resize no longer triggers login scroll reset
+16. PASS - Smooth scrolling and reduced-motion fallback are included
+17. PASS - General Secretary full Dashboard patch is included
+18. PASS - System health schema target is migration 008
+19. PASS - All service-worker application-shell assets exist
+    63 references; missing: []
+20. PASS - PWA uses the new cache and worker
+21. PASS - Old Attendance and Duty scripts are redirected to current versions
+22. PASS - Master installer includes migrations 007 and 008
+23. PASS - Fresh Supabase setup includes migration 008
+24. PASS - Coordinated installer is transaction-complete
+    begin=2, commit=2
+25. PASS - Attendance and Duty Hours unit scenarios pass
+    Attendance month/group/semester logic OK
+Duty Staff roster and archive deletion logic OK
+26. PASS - GitHub package stays below 100 files
+    74 files
+27. PASS - No file approaches GitHub 100 MB limit
+    pdf-lib.min.js: 0.50 MB
+
+LIMITATION
+A live authentication/write test against the private Supabase project could not be executed in this environment. The database result must be confirmed after the SQL Editor reports Success and one controlled monthly finalization / Duty Hours test is completed on the deployed site.

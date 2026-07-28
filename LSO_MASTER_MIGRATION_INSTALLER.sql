@@ -1,6 +1,6 @@
 -- Lasallian Symphony Orchestra
 -- Master Database Migration Installer
--- Target schema: 008_duty_mobile_required_approver
+-- Target schema: 007_staff_operations
 -- Safe to run repeatedly. Existing system records are preserved.
 
 begin;
@@ -976,7 +976,7 @@ commit;
 notify pgrst, 'reload schema';
 
 
--- Migration 008: Duty Hours mobile input and required Member/s Approved.
+-- Integrated migration 008: required Duty Hours approver and mobile-safe punch workflow
 -- Lasallian Symphony Orchestra
 -- Duty Hours mobile input and required Member/s Approved update
 -- Migration: 008_duty_mobile_required_approver
@@ -1395,3 +1395,4 @@ set title = excluded.title,
 
 commit;
 notify pgrst, 'reload schema';
+

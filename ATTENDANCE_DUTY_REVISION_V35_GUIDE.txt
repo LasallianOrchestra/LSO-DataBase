@@ -1,0 +1,64 @@
+LASALLIAN SYMPHONY ORCHESTRA
+Attendance, Duty Hours, Staff Roster, and Interface Revision v35
+
+INSTALLATION
+1. Create a Complete System Backup before replacing the website.
+2. In Supabase > SQL Editor, run LSO_REVISION_V35_DATABASE_INSTALL.sql once.
+   - The script is safe to rerun.
+   - It preserves existing members, events, attendance, Duty Hours, accounts, and reports.
+   - It confirms Staff Duty punch review and makes Member/s Approved mandatory for Time In/Time Out.
+3. Upload every file in this package to the GitHub Pages publishing root.
+4. Replace index.html and do not rename any files.
+5. After GitHub Pages finishes deploying, open:
+   https://nicpeanut31.github.io/LSO-DataBase/refresh-attendance-revision-v35.html
+6. Close and reopen the installed PWA or browser tab, then log in again.
+
+ATTENDANCE: MONTHLY FINALIZATION
+- Official Members, Trainees, and Probationary Members now have independent calendars.
+- Each activity belongs to one Attendance Calendar selected in the activity form.
+- Switching calendar group restores that group's own displayed month and selected date.
+- Activities from one calendar do not appear in either of the other calendars.
+- Legacy activities that do not contain an Attendance Calendar are treated as Official Member activities unless their existing attendance records clearly identify a different group.
+
+Monthly rating rules:
+- Present and Late count as attended.
+- Absent counts in the denominator.
+- Excused and Not Required do not lower the rate.
+- Member monthly rate = (Present + Late) / (Present + Late + Absent) x 100.
+- Group monthly rating = arithmetic mean of the members' monthly rates.
+- Finalizing a month records unmarked roster entries as Absent, locks all activities in that selected calendar month, and stores a fixed monthly snapshot.
+- A finalized monthly rating never joins or changes the rating of the next month.
+- Reopening a finalized month requires an Administrator reason and invalidates any previously finalized semester snapshot.
+
+SEMESTRAL ATTENDANCE
+- Enter and save the Semester End Date.
+- The end date must be today or earlier before semester finalization.
+- Every activity month up to the end date must be finalized first.
+- Semestral rating = arithmetic mean of the finalized monthly ratings included up to the Semester End Date.
+- Member semestral rates are also calculated as the arithmetic mean of that member's finalized monthly rates.
+- The official monthly and semester print buttons require a finalized rating.
+
+DUTY HOURS ARCHIVE
+- Administrator and Membership users may open Duty Archive and use Remove from Archive.
+- The action removes only the selected Trainee or Probationary Duty Hours period, its commitments, and its Duty Hours ledger entries.
+- The member profile and the other Duty Hours period remain unchanged.
+- A clear removal reason is required and is added to the activity log.
+
+STAFF ACCOUNT
+Staff can see only current, active members whose present Period Group is:
+- Trainee Period, or
+- Probationary Period.
+
+Official Members, inactive members, LOA members, and archived Duty Hours periods are excluded from the Staff roster. Staff may still approve or reject pending Time In and Time Out requests. Staff cannot manually add, edit, delete, print, certify, or change Duty Hours requirements.
+
+GENERAL SECRETARY
+The General Secretary retains full Dashboard visibility and Attendance operational access. Restricted Dashboard information remains read-only and does not grant access to Members, Duty Hours, Accounts, Contract, Monthly Reports, System Health, or Data & Recovery modules.
+
+MOBILE AND DISPLAY IMPROVEMENTS
+- Mobile keyboard resize no longer blurs Duty Hours inputs or scrolls the page to the top.
+- Member/s Approved is required before either Time In or Time Out can be submitted.
+- Smooth scrolling and momentum scrolling are enabled across views, tables, rosters, event lists, side navigation, and modals.
+- Reduced-motion device preferences disable animated scrolling automatically.
+
+DATABASE NOTES
+Attendance calendar separation, monthly snapshots, Semester End Dates, and semestral snapshots use the existing shared settings JSON. They do not require new database columns. Duty archive exclusions are stored inside the existing Duty Hours JSON. The installer updates only current role/punch database functions and migration records.

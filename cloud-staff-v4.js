@@ -583,8 +583,7 @@
 
   async function timeInDuty({ semester, description = '', memberApprovers = '' }) {
     if (!isTraineeAccount()) throw new Error('Only a Trainee/Probationary account can record Duty Hours.');
-    memberApprovers = String(memberApprovers || '').trim();
-    if (!memberApprovers) throw new Error('Member/s Approved is required before submitting Time In.');
+    if (!String(memberApprovers || '').trim()) throw new Error('Member/s Approved is required before submitting Time In.');
     const nextState = await rpc('lso_duty_time_in', {
       p_token: sessionToken,
       p_semester: semester,
@@ -599,8 +598,7 @@
 
   async function timeOutDuty({ description = '', memberApprovers = '' } = {}) {
     if (!isTraineeAccount()) throw new Error('Only a Trainee/Probationary account can record Duty Hours.');
-    memberApprovers = String(memberApprovers || '').trim();
-    if (!memberApprovers) throw new Error('Member/s Approved is required before submitting Time Out.');
+    if (!String(memberApprovers || '').trim()) throw new Error('Member/s Approved is required before submitting Time Out.');
     const nextState = await rpc('lso_duty_time_out', {
       p_token: sessionToken,
       p_description: description || '',
