@@ -1,9 +1,9 @@
 {
-  "id": "./?lso-enterprise-v26",
+  "id": "./?lso-mobile-scroll-v36",
   "name": "LSO Orchestra Management System",
   "short_name": "LSO System",
   "description": "Lasallian Symphony Orchestra enterprise membership, attendance, Duty Hours, reporting, recovery, health, and administration portal.",
-  "start_url": "./index.html?build=enterprise-v26",
+  "start_url": "./index.html?build=mobile-scroll-v36",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

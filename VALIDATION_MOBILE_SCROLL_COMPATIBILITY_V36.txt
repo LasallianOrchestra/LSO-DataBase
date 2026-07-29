@@ -1,0 +1,65 @@
+LSO MOBILE SCROLL COMPATIBILITY V36 — VALIDATION REPORT
+=======================================================
+
+RESULT: PASS
+
+STATIC AND STRUCTURAL CHECKS
+----------------------------
+PASS — 30 JavaScript files passed Node syntax validation.
+PASS — 22 CSS files parsed without stylesheet syntax errors.
+PASS — 55 local HTML asset references resolved.
+PASS — 506 HTML IDs were checked with no duplicate IDs.
+PASS — 72 service-worker shell assets resolved.
+PASS — Mobile compatibility CSS is loaded after all previous website styles.
+PASS — Mobile scroll controller loads before PWA registration.
+PASS — PWA manifest and service worker use enterprise-v36.
+PASS — Package contains 80 website files before this report and guide; total remains below 100.
+
+DATABASE AND FUNCTION ISOLATION
+-------------------------------
+PASS — LSO_MASTER_MIGRATION_INSTALLER.sql unchanged.
+PASS — LSO_REVISION_V35_DATABASE_INSTALL.sql unchanged.
+PASS — supabase-setup.sql unchanged.
+PASS — supabase-config.js unchanged.
+PASS — No Attendance, Duty Hours, Accounts, permissions, printing, or report calculation function was modified.
+
+HEADLESS MOBILE SCROLL SIMULATION
+---------------------------------
+Chromium touch-device simulations used representative long Duty Hours rosters and mobile card tables.
+
+360 × 780 viewport
+- Document height: 7,464 px
+- Maximum reachable scroll: 6,684 px
+- Actual bottom scroll reached: 6,684 px
+- Horizontal page overflow: 0 px
+- Duty roster max-height: none
+- Duty roster vertical overflow: visible
+
+390 × 844 viewport
+- Document height: 7,464 px
+- Maximum reachable scroll: 6,620 px
+- Actual bottom scroll reached: 6,620 px
+- Horizontal page overflow: 0 px
+- Duty roster max-height: none
+- Duty roster vertical overflow: visible
+
+768 × 1,024 viewport
+- Document height: 5,768 px
+- Maximum reachable scroll: 4,744 px
+- Actual bottom scroll reached: 4,744 px
+- Horizontal page overflow: 0 px
+- Duty roster max-height: none
+- Duty roster vertical overflow: visible
+
+RUNTIME SCROLL-LOCK TESTS
+-------------------------
+PASS — A stale body overflow:hidden value was removed when no overlay was open.
+PASS — Body scroll remained locked while a real modal was open.
+PASS — Body scroll was restored after the modal closed.
+PASS — Resizing the mobile viewport preserved the current scroll position.
+PASS — Focused form inputs remained active and were brought into view when necessary.
+PASS — Browser simulation produced no JavaScript page errors in the scroll test fixture.
+
+LIMITATION
+----------
+The tests used an isolated browser fixture because this environment blocks direct browser navigation to local websites. Final confirmation should be performed on the deployed GitHub Pages website using the affected phone.

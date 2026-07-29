@@ -1,0 +1,288 @@
+/* LSO mobile scroll compatibility v36
+   Keeps the document as the primary vertical scroll surface on phones.
+   Nested panes expand on small screens, while true overlays retain their own scroll. */
+
+:root {
+  --lso-mobile-vh: 100dvh;
+  --lso-mobile-scroll-offset: 86px;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Touch movement should never be blocked by a broad container rule. */
+body,
+#appShell,
+.main-content,
+.view,
+.panel,
+.hero-card,
+.attendance-management-layout,
+.attendance-calendar-panel,
+.duty-workspace-grid,
+.duty-hours-individual-panel,
+.duty-insight-stack {
+  touch-action: pan-y pinch-zoom;
+}
+
+/* Horizontal data regions still allow both gestures so a diagonal swipe does not freeze. */
+.table-wrap,
+.period-table-wrap,
+.permission-matrix-wrap,
+.calendar-controls,
+.segment-control,
+.attendance-group-toggle,
+.attendance-roster-mode-toggle {
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+input,
+select,
+textarea,
+button,
+[tabindex] {
+  scroll-margin-top: var(--lso-mobile-scroll-offset);
+  scroll-margin-bottom: 28vh;
+}
+
+@media (max-width: 920px) {
+  html {
+    width: 100%;
+    min-height: 100%;
+    height: auto;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
+    scroll-behavior: auto !important;
+    scrollbar-gutter: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body {
+    width: 100%;
+    min-height: var(--lso-mobile-vh);
+    height: auto;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
+    scroll-behavior: auto !important;
+    scrollbar-gutter: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body[data-authenticated="true"] #appShell:not([hidden]) {
+    display: block !important;
+    width: 100% !important;
+    min-height: var(--lso-mobile-vh) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+    scroll-behavior: auto !important;
+  }
+
+  .main-content,
+  .view,
+  .view.active,
+  .page-view,
+  .content-view {
+    width: 100%;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* A sticky analytics/search panel can trap the page under the phone toolbar. */
+  .lookup-search-panel,
+  .individual-attendance-panel,
+  .attendance-individual-panel,
+  .duty-insight-stack,
+  .duty-hours-summary-panel {
+    position: static !important;
+    top: auto !important;
+  }
+
+  /* Let the page own vertical scrolling. These are useful internal panes on desktop,
+     but they create nested-scroll dead zones on touch devices. */
+  .lookup-results,
+  .event-list,
+  .activity-list,
+  .duty-roster-list,
+  .duty-roster-card > .duty-roster-list,
+  .compact-report-table,
+  .individual-attendance-history,
+  .system-error-log,
+  .recovery-point-list,
+  .contract-member-list,
+  .attendance-event-list,
+  .attendance-history-list,
+  .monthly-report-list,
+  .duty-ledger-table,
+  .duty-overall-table {
+    max-height: none !important;
+    height: auto !important;
+    overflow-y: visible !important;
+    overscroll-behavior: auto !important;
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Table wrappers may scroll sideways, but must not capture or cap vertical movement. */
+  .table-wrap,
+  .period-table-wrap,
+  .permission-matrix-wrap {
+    max-height: none !important;
+    height: auto !important;
+    overflow-y: visible !important;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto !important;
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Mobile card tables already fit the page; do not leave a hidden scroll viewport. */
+  .table-wrap:not(.permission-matrix-wrap),
+  .period-table-wrap {
+    overflow-x: visible;
+  }
+
+  /* Wide tables that deliberately stay tabular remain horizontally reachable. */
+  .permission-matrix-wrap,
+  .attendance-semester-rates-table,
+  .monthly-comparative-table {
+    overflow-x: auto !important;
+  }
+
+  .attendance-period-center,
+  .attendance-group-control-panel,
+  .attendance-calendar-panel,
+  .duty-hours-individual-panel,
+  .duty-hours-overall-panel,
+  .duty-review-card,
+  .duty-today-session,
+  .panel,
+  .hero-card {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+
+  /* Preserve deliberate horizontal clipping only where it is decorative. */
+  .attendance-calendar-panel,
+  .attendance-group-control-panel,
+  .hero-card,
+  .duty-today-session,
+  .duty-review-card {
+    overflow-x: hidden !important;
+  }
+
+  /* The navigation drawer is a true independent viewport. */
+  .sidebar {
+    height: var(--lso-mobile-vh) !important;
+    max-height: var(--lso-mobile-vh) !important;
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .sidebar .nav-list,
+  .sidebar-nav {
+    min-height: 0;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* True dialogs keep their own scroll without leaking a permanent body lock. */
+  .modal-backdrop,
+  .dcc-modal,
+  .monthly-report-audit-panel,
+  .system-error-dialog,
+  .accessibility-overlay {
+    overscroll-behavior: contain;
+    touch-action: none;
+  }
+
+  .modal-card,
+  .compact-modal,
+  .dcc-modal-card,
+  .dcc-detail-list,
+  .monthly-report-audit-card,
+  .system-error-card,
+  .accessibility-drawer {
+    max-height: calc(var(--lso-mobile-vh) - env(safe-area-inset-top) - 8px) !important;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    scroll-behavior: auto !important;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-card form,
+  .modal-card .form-section,
+  .accessibility-control-grid {
+    overflow: visible !important;
+  }
+
+  /* Avoid large animated transforms while a finger is scrolling. */
+  .view.active {
+    animation: none !important;
+  }
+
+  .button:hover,
+  .nav-item:hover,
+  .duty-roster-person:hover,
+  .quick-action-card:hover,
+  .dcc-action-card:hover {
+    transform: none;
+  }
+
+  /* Keep the last controls above browser/PWA bottom bars. */
+  .view.active,
+  .main-content {
+    padding-bottom: max(34px, calc(env(safe-area-inset-bottom) + 22px));
+  }
+}
+
+@media (max-width: 680px) {
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  .modal-footer {
+    position: static !important;
+  }
+
+  .duty-roster-card,
+  .duty-roster-list,
+  .event-list,
+  .activity-list,
+  .lookup-results,
+  .individual-attendance-history {
+    min-height: 0 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body,
+  #appShell,
+  .main-content,
+  .view,
+  .table-wrap,
+  .event-list,
+  .duty-roster-list,
+  .sidebar-nav {
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,55 @@
+LSO MOBILE SCROLL COMPATIBILITY UPDATE V36
+=========================================
+
+PURPOSE
+-------
+This update fixes mobile pages that stop scrolling, trap the user's finger inside a nested panel, hide information below an internal scroll area, or remain locked after a modal/sidebar closes.
+
+WHAT CHANGED
+------------
+1. The phone document is now the primary vertical scroll surface.
+2. Duty rosters, event lists, activity lists, member lookup results, attendance history, compact reports, system error logs, and recovery lists expand naturally on phones instead of creating nested vertical scroll boxes.
+3. Wide tables retain horizontal swiping without blocking vertical page movement.
+4. Stale body scroll locks are removed automatically after dialogs and the mobile sidebar close.
+5. Real modals, drawers, and dialogs still keep a safe internal scroll area.
+6. Mobile keyboard resize no longer resets the page position.
+7. Focused inputs are kept visible only when the keyboard would cover them.
+8. Smooth scrolling remains available on larger screens, while phone scrolling uses native touch momentum for stability.
+9. The PWA cache was advanced to enterprise-v36 so earlier mobile CSS and scripts are removed.
+
+DATABASE IMPACT
+---------------
+No Supabase SQL update is required.
+The database installers, Supabase configuration, records, roles, attendance logic, and Duty Hours logic were not changed.
+
+GITHUB DEPLOYMENT
+-----------------
+1. Extract the ZIP.
+2. Upload every file inside the extracted folder to the GitHub Pages publishing root.
+3. Replace index.html.
+4. Confirm these new files exist in GitHub:
+   - mobile-scroll-compat-v36.css
+   - mobile-scroll-controller-v36.js
+   - pwa-enterprise-v36.js
+   - service-worker-enterprise-v36.js
+   - refresh-mobile-scroll-v36.html
+5. Wait until GitHub Pages finishes deployment.
+6. On every affected phone, open this page once:
+   https://nicpeanut31.github.io/LSO-DataBase/refresh-mobile-scroll-v36.html
+7. Allow the page to return to the login screen, then close and reopen the browser or installed LSO app.
+
+PHONE TEST CHECKLIST
+--------------------
+- Open Dashboard and scroll to the final section.
+- Open Members and scroll through all displayed member cards.
+- Open Attendance and reach the bottom of the calendar, roster, analytics, and semester sections.
+- Open Duty Hours and scroll through the full current Trainee/Probationary roster and ledger.
+- Tap text inputs while the phone keyboard is open and confirm the page does not jump to the top.
+- Open and close the sidebar and a modal, then confirm the page still scrolls.
+- Swipe horizontally on a wide table and vertically on the same area.
+
+VERSION
+-------
+Website: 3.2.1
+Build: 2026.07.29-mobile-scroll-compatibility.1
+PWA Cache: lso-enterprise-v36
