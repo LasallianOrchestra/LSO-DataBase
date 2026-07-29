@@ -1,0 +1,57 @@
+LSO DYNAMIC ROLE & PERMISSION CENTER V38
+VALIDATION REPORT
+
+Result: 43/43 checks passed
+
+01. PASS — All local HTML assets exist
+02. PASS — No duplicate HTML IDs
+03. PASS — Role Center element rolePermissionEditor
+04. PASS — Role Center element permissionRoleSelect
+05. PASS — Role Center element permissionLandingViewSelect
+06. PASS — Role Center element permissionModuleOptions
+07. PASS — Role Center element permissionActionOptions
+08. PASS — Role Center element permissionAttendanceOptions
+09. PASS — Role Center element saveRolePermissionsButton
+10. PASS — Role Center element resetRolePermissionsButton
+11. PASS — HTML loads lso-system-core-v4.js
+12. PASS — HTML loads role-access-v4.js
+13. PASS — HTML loads cloud-staff-v5.js
+14. PASS — HTML loads permissions-dynamic-v38.js
+15. PASS — HTML loads system-enterprise-v2.js
+16. PASS — HTML loads role-permission-center-v38.js
+17. PASS — HTML loads pwa-enterprise-v38.js
+18. PASS — All service-worker shell assets exist
+19. PASS — Service worker cache is V38
+20. PASS — Old role modules redirect to V38
+21. PASS — Permissions load before authenticated landing
+22. PASS — Dynamic landing-page resolver exists
+23. PASS — Active permission polling exists
+24. PASS — Cloud permission RPC methods exported
+25. PASS — Administrator role is UI protected
+26. PASS — Protected system modules cannot be delegated
+27. PASS — Landing page must be assigned
+28. PASS — SQL contains lso_role_profiles
+29. PASS — SQL contains lso_get_permission_center
+30. PASS — SQL contains lso_save_role_permissions
+31. PASS — SQL contains lso_reset_role_permissions
+32. PASS — SQL contains 009_dynamic_role_permissions
+33. PASS — SQL changes require Administrator
+34. PASS — SQL protects Administrator role
+35. PASS — SQL validates assigned landing page
+36. PASS — Server write permissions are derived
+37. PASS — Duty review uses dynamic server permission
+38. PASS — System Health target updated
+39. PASS — LSO_MASTER_MIGRATION_INSTALLER.sql includes migration 009
+40. PASS — supabase-setup.sql includes migration 009
+41. PASS — GitHub package contains fewer than 100 files — 92
+42. PASS — CSS braces are balanced
+43. PASS — PWA manifest updated to V38
+
+Additional tests:
+- All JavaScript files passed Node.js syntax validation.
+- Dynamic role access logic passed a Node VM test for landing page, module removal, action access, Attendance-group access, and protected Administrator access.
+- Headless browser navigation to local URLs was blocked by the execution environment administrator policy, so final live Supabase and GitHub Pages testing must be completed after deployment.
+
+Live-data limitation:
+- The SQL installer was not executed against the private Supabase project in this environment.
+- Existing member, Attendance, Duty Hours, Monthly Report, and account records are not deleted by migration 009. Only role-permission rows for the selected role are replaced when the Administrator clicks Save or Reset.

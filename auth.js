@@ -624,6 +624,7 @@
 
     try {
       await window.LSOCloud.loadSharedState();
+      await window.LSORoleAccess?.refreshFromServer?.({ quiet: true, force: true });
       const migrated = await window.LSOCloud.migrateLegacyIfNeeded(normalized.role === 'Administrator');
       if (!saveSession(token, normalized)) {
         throw new Error('This browser blocked session storage. Allow browser storage and try again.');

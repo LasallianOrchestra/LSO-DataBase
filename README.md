@@ -1,3 +1,5 @@
-# LSO Mobile Scroll Compatibility V36
+# LSO Dynamic Role & Permission Center V38
 
-GitHub-ready Lasallian Symphony Orchestra system with stable phone scrolling, nested-scroll removal, mobile keyboard handling, stale scroll-lock recovery, and PWA cache v36. No Supabase migration is required.
+Administrator-controlled role landing pages, module visibility, action permissions, Attendance calendar access, and server-derived write permissions.
+
+Run `LSO_DYNAMIC_ROLE_PERMISSION_CENTER_INSTALL.sql` once in Supabase before deploying the website files.

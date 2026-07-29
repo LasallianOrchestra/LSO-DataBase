@@ -1,0 +1,37 @@
+LASALLIAN SYMPHONY ORCHESTRA
+DYNAMIC ROLE & PERMISSION CENTER V38
+
+PURPOSE
+The Administrator can now change a role's landing page, visible modules, action permissions, and Attendance calendar access from System Health > Role & Permission Center.
+
+INSTALLATION
+1. Create a Complete System Backup.
+2. In Supabase SQL Editor, run the complete file:
+   LSO_DYNAMIC_ROLE_PERMISSION_CENTER_INSTALL.sql
+3. Wait for Supabase to display Success.
+4. Upload all website files from the V38 package to the GitHub Pages publishing root.
+5. Open refresh-role-permissions-v38.html once on each device or installed PWA.
+6. Log in as Administrator and open System Health > Role & Permission Center.
+
+USAGE
+1. Select an Account Role from the dropdown.
+2. Check the modules that should appear in that role's navigation.
+3. Select one checked module as the Landing Page After Login.
+4. Check the allowed actions.
+5. Select the Attendance calendars the role may open.
+6. Click Save Role Permissions.
+
+IMPORTANT SAFETY RULES
+- Administrator full access is locked to prevent system lockout.
+- Accounts, System Health, Data & Recovery, database administration, recovery, and system-error administration remain Administrator-only.
+- Personal Duty punches remain exclusive to Trainee/Probationary accounts.
+- Separate Duty punch approval can be assigned to Membership or Staff Account and can also be removed from either role.
+- The landing page must be one of the assigned modules.
+- At least one visible module is required.
+- Server write-column permissions are derived automatically from the selected actions.
+
+LIVE UPDATES
+An active user receives permission changes automatically within approximately 60 seconds. The user can also sign out and sign in again to apply the new landing page immediately.
+
+RESET
+Use Reset Role Default to restore the selected non-Administrator role to the official LSO default permission set.

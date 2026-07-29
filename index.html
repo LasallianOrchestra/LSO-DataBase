@@ -45,7 +45,7 @@
 <link rel="icon" href="favicon.ico?v=20260717-logos" sizes="any"/>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20260717-logos"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20260721-pwa-v1"/>
-<link rel="manifest" href="manifest.webmanifest?v=20260729-mobile-shell-v37"/>
+<link rel="manifest" href="manifest.webmanifest?v=20260729-role-permission-v38"/>
 <link href="styles.css?v=20260720-member-table-v2" rel="stylesheet"/>
 <link href="duty-roster-layout.css?v=20260717-1605" rel="stylesheet"/>
 <link href="access-control.css?v=20260721-role-approval-v2" rel="stylesheet"/>
@@ -66,6 +66,7 @@
 <link href="lso-accessible-contrast-v4.css?v=20260724-accessible-contrast-v4" rel="stylesheet"/>
 <link href="lso-login-color-final-v6.css?v=20260724-login-color-final-v6" rel="stylesheet"/>
 <link href="system-enterprise-v1.css?v=20260725-render-runtime-v24" rel="stylesheet"/>
+<link href="role-permission-center-v38.css?v=20260729-role-permission-v38" rel="stylesheet"/>
 <style id="lso-login-color-critical-v6">
 .auth-card .auth-heading p:not(.eyebrow){color:#42584E!important;opacity:1!important;-webkit-text-fill-color:#42584E!important}.auth-card .auth-heading h2{color:#0B3D2E!important}.auth-card .field>span{color:#2F453B!important}.auth-card input::placeholder{color:#66736D!important;opacity:1!important}.auth-tab{color:#4F6259!important}.auth-tab.active{color:#0B3D2E!important}.auth-submit{color:#fff!important}
 </style>
@@ -243,7 +244,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="logout-button" id="logoutButton" type="button">Log Out</button>
 <p>One Symphony, One Spirit,<br/>One Lasallian Legacy.</p>
 <small>Shared online database</small>
-<small class="system-version-footer" id="systemVersionFooter">LSO System v3.2.2 • Database target 008</small>
+<small class="system-version-footer" id="systemVersionFooter">LSO System v3.0.0 • Database target 006</small>
 </div>
 </aside>
 <button aria-label="Close navigation" class="sidebar-overlay" id="sidebarOverlay" type="button"></button>
@@ -1005,8 +1006,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 
 <section class="view" id="accountsView">
 <article class="panel">
-<div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review each registration, choose or change its role before approval, and assign its exact module permissions. Membership manages member operations, Trainee/Probationary draft attendance, reports, and Duty Hours. General Secretary manages activities and draft attendance. Trainee/Probationary accounts open Duty Hours only.</p></div></div>
-<div class="account-security-note"><strong>Approval workflow:</strong> Choose the role before clicking Approve. <b>Membership</b> = Dashboard, Members, Lookup, Contract, Monthly Report, Trainee/Probationary Attendance drafts, and Duty Hours approval/manual entry. <b>General Secretary</b> = Dashboard and Attendance activity/draft entry. <b>Staff Account</b> = Dashboard, Members, Attendance monitoring, and Duty Hours Time In/Time Out approval only. <b>Trainee/Probationary</b> = personal Duty Hours only and requires a linked member.</div>
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review registrations and choose each account role before approval. The Administrator can customize every non-Administrator role's landing page, visible modules, Attendance calendars, and action permissions in System Health → Role & Permission Center.</p></div></div>
+<div class="account-security-note"><strong>Approval workflow:</strong> Choose the account role before clicking Approve. Role access is controlled centrally in <b>System Health → Role & Permission Center</b>. Trainee/Probationary accounts still require a linked current member before approval.</div>
 <div class="table-wrap"><table><thead><tr><th>Account</th><th>Username / Optional Email</th><th>Role Before Approval</th><th>Linked Trainee/Probationary Member</th><th>Requested</th><th>Access Status</th><th>Approved</th><th class="actions-column">Actions</th></tr></thead><tbody id="accountsTableBody"></tbody></table></div>
 </article>
 </section>
@@ -1017,7 +1018,23 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="inline-actions"><button class="button button-secondary" id="copyHealthReportButton" type="button">Copy Health Report</button><button class="button button-primary" id="refreshSystemHealthButton" type="button">Run Health Check</button></div>
 </div>
 <div class="health-version-grid" id="healthVersionGrid"></div>
-<article class="panel permission-center-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Single Source of Truth</p><h3>Role &amp; Permission Center</h3><p class="panel-subtitle">The Accounts screen, navigation, forms, and action guards read from the same versioned permission manifest.</p></div><button class="button button-secondary" id="exportPermissionMatrixButton" type="button">Export Permission Matrix</button></div><div class="table-wrap permission-matrix-wrap"><table class="permission-matrix-table"><thead id="permissionMatrixHead"></thead><tbody id="permissionMatrixBody"></tbody></table></div></article>
+<article class="panel permission-center-panel">
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Access Control</p><h3>Role &amp; Permission Center</h3><p class="panel-subtitle">Choose a role, assign the modules and actions it can use, and select the page that opens immediately after login.</p></div><div class="inline-actions"><button class="button button-secondary" id="refreshRolePermissionsButton" type="button">Refresh Permissions</button><button class="button button-secondary" id="exportPermissionMatrixButton" type="button">Export Permission Matrix</button></div></div>
+<div class="role-permission-editor" id="rolePermissionEditor">
+<div class="role-permission-toolbar">
+<label class="field"><span>Account Role</span><select id="permissionRoleSelect"></select></label>
+<label class="field"><span>Landing Page After Login</span><select id="permissionLandingViewSelect"></select></label>
+<div class="inline-actions"><button class="button button-secondary" id="resetRolePermissionsButton" type="button">Reset Role Default</button><button class="button button-primary" id="saveRolePermissionsButton" type="button">Save Role Permissions</button></div>
+</div>
+<p class="permission-editor-status" id="permissionEditorStatus" role="status">Select a role to review its access.</p>
+<div class="permission-editor-note" id="permissionEditorProtectionNote"></div>
+<div class="permission-role-summary" id="permissionRoleSummary"></div>
+<section class="permission-editor-section"><h4>Visible Modules</h4><p>Checked modules appear in the navigation and can be selected as the landing page.</p><div class="permission-toggle-grid" id="permissionModuleOptions"></div></section>
+<section class="permission-editor-section"><h4>Action Permissions</h4><p>These controls determine which create, edit, approve, finalize, print, and management actions are enabled.</p><div class="permission-toggle-grid" id="permissionActionOptions"></div></section>
+<section class="permission-editor-section"><h4>Attendance Calendar Access</h4><p>Choose which Official, Trainee, and Probationary calendars the role can open.</p><div class="permission-toggle-grid" id="permissionAttendanceOptions"></div></section>
+</div>
+<div class="table-wrap permission-matrix-wrap"><table class="permission-matrix-table"><thead id="permissionMatrixHead"></thead><tbody id="permissionMatrixBody"></tbody></table></div>
+</article>
 <div class="health-layout-grid">
 <article class="panel"><div class="panel-header"><div><p class="eyebrow">Compatibility</p><h3>System Checks</h3><p class="panel-subtitle">Every required table, column, function, and service is checked independently.</p></div></div><div id="systemHealthChecks" class="health-check-list"></div></article>
 <article class="panel"><div class="panel-header"><div><p class="eyebrow">Schema History</p><h3>Applied Migrations</h3><p class="panel-subtitle">The master installer records each immutable database migration.</p></div></div><div class="table-wrap"><table><thead><tr><th>Version</th><th>Migration</th><th>Applied</th><th>Checksum</th></tr></thead><tbody id="migrationHistoryBody"></tbody></table></div></article>
@@ -1270,9 +1287,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v3.js?v=20260728-attendance-duty-v35"></script>
-<script src="role-access-v3.js?v=20260726-staff-operations-v26"></script>
-<script src="cloud-staff-v4.js?v=20260728-attendance-duty-v35"></script>
+<script src="lso-system-core-v4.js?v=20260729-role-permission-v38"></script>
+<script src="role-access-v4.js?v=20260729-role-permission-v38"></script>
+<script src="cloud-staff-v5.js?v=20260729-role-permission-v38"></script>
 <script src="app-member-information-v5.js?v=20260726-portrait-print-v30"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
 <script src="auth.js?v=20260724-auth-structural-transition-v17"></script>
@@ -1289,11 +1306,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
 <script src="contract-maker-membership-v4.js?v=20260723-membership-contract-v4"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260724-member-information-v3"></script>
-<script src="permissions-staff-v2.js?v=20260726-staff-operations-v26"></script>
+<script src="permissions-dynamic-v38.js?v=20260729-role-permission-v38"></script>
 <script src="dashboard-command-center-v5.js?v=20260728-general-secretary-dashboard-v34"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v1.js?v=20260726-portrait-print-v30"></script>
+<script src="system-enterprise-v2.js?v=20260729-role-permission-v38"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
-<script src="pwa-enterprise-v37.js?v=20260729-mobile-shell-v37"></script>
+<script src="role-permission-center-v38.js?v=20260729-role-permission-v38"></script>
+<script src="pwa-enterprise-v38.js?v=20260729-role-permission-v38"></script>
 </body>
 </html>
