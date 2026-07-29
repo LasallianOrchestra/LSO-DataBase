@@ -1,0 +1,29 @@
+LSO MOBILE NAVIGATION & SCROLL REPAIR V37
+
+WHAT WAS FIXED
+1. The mobile top bar no longer sits above the open navigation drawer.
+2. The LSO logo, orchestra name, close button, account panel, and logout button remain fully visible.
+3. The complete drawer scrolls as one continuous surface; the menu and footer no longer compete for separate scroll areas.
+4. The main application uses one vertical page scroll on phones. Attendance, Duty Hours, Members, Dashboard, reports, and other long pages remain reachable to the bottom.
+5. Wide tables can still be swiped horizontally without trapping vertical page movement.
+6. Opening and closing the navigation drawer preserves the user's previous page position.
+7. The mobile keyboard and visual viewport resize do not force the page to the top.
+8. Real dialogs retain their own controlled scrolling.
+
+DEPLOYMENT
+1. Extract the ZIP.
+2. Upload every file inside the extracted folder to the GitHub Pages publishing root.
+3. Replace index.html.
+4. Confirm these files exist online:
+   - mobile-shell-scroll-v37.css
+   - mobile-shell-controller-v37.js
+   - pwa-enterprise-v37.js
+   - service-worker-enterprise-v37.js
+   - refresh-mobile-shell-v37.html
+5. Wait for GitHub Pages deployment to complete.
+6. On each affected phone, open:
+   https://nicpeanut31.github.io/LSO-DataBase/refresh-mobile-shell-v37.html
+7. Allow the page to return to the login screen, then close and reopen the browser or installed application.
+
+NO DATABASE INSTALLATION
+No Supabase SQL update is required. This release changes only the mobile application shell, navigation drawer, touch scrolling, and PWA cache version.

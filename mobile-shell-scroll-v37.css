@@ -1,0 +1,308 @@
+/* LSO Mobile Shell & Scroll Repair v37
+   Loaded last. This file changes mobile layout/scroll behavior only. */
+
+:root {
+  --lso-mobile-viewport: 100dvh;
+  --lso-mobile-drawer-width: min(88vw, 330px);
+  --lso-mobile-header-z: 80;
+  --lso-mobile-overlay-z: 900;
+  --lso-mobile-drawer-z: 910;
+}
+
+@supports (height: 100svh) {
+  :root { --lso-mobile-viewport: 100svh; }
+}
+
+@media (max-width: 920px), (pointer: coarse) {
+  html {
+    width: 100%;
+    min-width: 320px;
+    min-height: 100%;
+    height: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
+    scroll-behavior: auto !important;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    width: 100%;
+    min-height: var(--lso-mobile-viewport) !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: auto;
+    scroll-behavior: auto !important;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+
+
+  body[data-authenticated="true"] #appShell:not([hidden]) {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    min-height: var(--lso-mobile-viewport) !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .main-content,
+  .view,
+  .view.active,
+  .page-view,
+  .content-view {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main-content,
+  .view.active {
+    padding-bottom: max(42px, calc(env(safe-area-inset-bottom) + 26px));
+  }
+
+  .topbar {
+    position: sticky !important;
+    top: 0;
+    z-index: var(--lso-mobile-header-z) !important;
+    min-height: 76px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: rgba(246, 248, 245, .985) !important;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+
+  /* A single vertical page owns scrolling. Desktop inner panes expand on phones. */
+  .lookup-results,
+  .event-list,
+  .activity-list,
+  .attendance-event-list,
+  .attendance-history-list,
+  .individual-attendance-history,
+  .duty-roster-list,
+  .duty-ledger-table,
+  .duty-overall-table,
+  .compact-report-table,
+  .monthly-report-list,
+  .contract-member-list,
+  .recovery-point-list,
+  .system-error-log {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+    overscroll-behavior-y: auto !important;
+    scroll-behavior: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lookup-search-panel,
+  .individual-attendance-panel,
+  .attendance-individual-panel,
+  .duty-insight-stack,
+  .duty-hours-summary-panel {
+    position: static !important;
+    inset: auto !important;
+  }
+
+  /* Tables can move sideways but never become a second vertical scroll page. */
+  .table-wrap,
+  .period-table-wrap,
+  .permission-matrix-wrap {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto !important;
+    touch-action: pan-x pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel,
+  .hero-card,
+  .attendance-period-center,
+  .attendance-group-control-panel,
+  .attendance-calendar-panel,
+  .duty-hours-individual-panel,
+  .duty-hours-overall-panel,
+  .duty-review-card,
+  .duty-today-session {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+
+  /* Navigation drawer: it covers the top bar and scrolls as one complete surface. */
+  .sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    z-index: var(--lso-mobile-drawer-z) !important;
+    width: var(--lso-mobile-drawer-width) !important;
+    max-width: 330px !important;
+    height: var(--lso-mobile-viewport) !important;
+    max-height: var(--lso-mobile-viewport) !important;
+    padding:
+      max(18px, calc(env(safe-area-inset-top) + 12px))
+      18px
+      max(24px, calc(env(safe-area-inset-bottom) + 18px)) !important;
+    display: flex !important;
+    flex-direction: column;
+    transform: translate3d(-105%, 0, 0) !important;
+    transition: transform .22s ease !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 20px 0 56px rgba(3, 34, 25, .34) !important;
+  }
+
+  .sidebar.open {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  .sidebar-close {
+    display: grid !important;
+    position: sticky !important;
+    top: 0 !important;
+    align-self: flex-end;
+    z-index: 4;
+    width: 44px;
+    height: 44px;
+    margin: 0 0 -44px 0;
+    place-items: center;
+    border-radius: 14px;
+    background: rgba(255,255,255,.14) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,.16);
+  }
+
+  .sidebar .brand {
+    flex: 0 0 auto;
+    min-height: 86px;
+    padding: 4px 50px 22px 2px !important;
+    align-items: center;
+  }
+
+  .sidebar .brand-logo,
+  .sidebar .brand-mark {
+    flex: 0 0 54px;
+    width: 54px !important;
+    height: 54px !important;
+  }
+
+  .sidebar .brand h1 {
+    font-size: 15px !important;
+    line-height: 1.25 !important;
+  }
+
+  .sidebar .brand p {
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+  }
+
+  .sidebar .nav-list,
+  .sidebar-nav {
+    flex: 0 0 auto;
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    min-height: 0;
+    margin: 18px 0 0 !important;
+    overflow: visible !important;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .sidebar .nav-item {
+    min-height: 48px;
+    padding: 12px 14px;
+    flex: 0 0 auto;
+  }
+
+  .sidebar .sidebar-footer {
+    flex: 0 0 auto;
+    margin-top: 22px !important;
+    padding: 0 2px max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .sidebar-overlay {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: var(--lso-mobile-overlay-z) !important;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    border: 0;
+    background: rgba(2, 24, 18, .58) !important;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    transition: opacity .18s ease, visibility .18s ease;
+    touch-action: manipulation;
+  }
+
+  body.sidebar-open .sidebar-overlay {
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Dialogs remain independently scrollable. */
+  .modal-backdrop,
+  .dcc-modal,
+  .monthly-report-audit-panel,
+  .system-error-dialog,
+  .accessibility-overlay {
+    overscroll-behavior: contain;
+  }
+
+  .modal-card,
+  .compact-modal,
+  .dcc-modal-card,
+  .dcc-detail-list,
+  .monthly-report-audit-card,
+  .system-error-card,
+  .accessibility-drawer {
+    max-height: calc(var(--lso-mobile-viewport) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 12px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .view.active { animation: none !important; }
+  .button:hover,
+  .nav-item:hover,
+  .duty-roster-person:hover,
+  .quick-action-card:hover,
+  .dcc-action-card:hover { transform: none !important; }
+}
+
+@media (max-width: 520px) {
+  .sidebar { width: min(91vw, 324px) !important; }
+  .topbar { padding-inline: 12px !important; }
+  .topbar h2 { max-width: 180px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none !important; }
+  html, body, #appShell, .main-content, .view, .table-wrap, .sidebar {
+    scroll-behavior: auto !important;
+  }
+}

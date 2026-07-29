@@ -1,0 +1,57 @@
+LSO MOBILE NAVIGATION & SCROLL REPAIR V37 - VALIDATION REPORT
+
+Passed: 51
+Failed: 0
+Files in package root: 79
+
+PASS - CSS parse: duty-punch-organized-v10.css | []
+PASS - CSS parse: login-page.css | []
+PASS - CSS parse: duty-punch-state-sync-display.css | []
+PASS - CSS parse: access-control.css | []
+PASS - CSS parse: lso-original-color-contrast-v1.css | []
+PASS - CSS parse: duty-roster-layout.css | []
+PASS - CSS parse: contract-maker-v3.css | []
+PASS - CSS parse: login-mobile-compat-v3.css | []
+PASS - CSS parse: styles.css | []
+PASS - CSS parse: monthly-report.css | []
+PASS - CSS parse: website-enhancements.css | []
+PASS - CSS parse: attendance-month-workspace-v2.css | []
+PASS - CSS parse: attendance-duty-revision-v35.css | []
+PASS - CSS parse: system-enterprise-v1.css | []
+PASS - CSS parse: dashboard-v2.css | []
+PASS - CSS parse: lso-login-color-final-v6.css | []
+PASS - CSS parse: mobile-shell-scroll-v37.css | []
+PASS - CSS parse: dashboard-command-center-v4.css | []
+PASS - CSS parse: lso-modern-lasallian-emerald-v2.css | []
+PASS - CSS parse: branding.css | []
+PASS - CSS parse: lso-accessible-contrast-v4.css | []
+PASS - CSS parse: login-logo-3d-v1.css | []
+PASS - All local index assets exist
+PASS - No duplicate HTML IDs
+PASS - Index references mobile-shell-scroll-v37.css
+PASS - Index references mobile-shell-controller-v37.js
+PASS - Index references pwa-enterprise-v37.js
+PASS - Mobile CSS marker: --lso-mobile-drawer-z: 910
+PASS - Mobile CSS marker: overflow-y: auto !important
+PASS - Mobile CSS marker: z-index: var(--lso-mobile-drawer-z)
+PASS - Mobile CSS marker: body.sidebar-open .sidebar-overlay
+PASS - Mobile CSS marker: touch-action: pan-x pan-y pinch-zoom
+PASS - Sidebar z-index exceeds topbar
+PASS - Drawer scrolls as one surface
+PASS - Mobile controller marker: lockDocumentForDrawer
+PASS - Mobile controller marker: unlockDocumentFromDrawer
+PASS - Mobile controller marker: lockedScrollY
+PASS - Mobile controller marker: window.scrollTo
+PASS - Mobile controller marker: visualViewport
+PASS - Mobile controller marker: MutationObserver
+PASS - No focus scrollIntoView jump
+PASS - No global body mutation observer
+PASS - All service-worker shell files exist
+PASS - Service worker cache version v37
+PASS - PWA registers v37 worker
+PASS - Manifest points to v37
+PASS - Unchanged database/config file: supabase-setup.sql
+PASS - Unchanged database/config file: LSO_MASTER_MIGRATION_INSTALLER.sql
+PASS - Unchanged database/config file: LSO_REVISION_V35_DATABASE_INSTALL.sql
+PASS - Unchanged database/config file: supabase-config.js
+PASS - GitHub file count below 100 | 79
