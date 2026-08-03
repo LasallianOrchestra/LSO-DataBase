@@ -2,7 +2,6 @@
   'use strict';
 
   const SESSION_KEY = 'lso_shared_session_v1';
-  const DEFAULT_USERNAME = 'SNA1161';
   const LOGIN_SECURITY_KEY = 'lso_login_security_v1';
   const ACTIVITY_KEY = 'lso_last_activity_v1';
   const MAX_FAILED_ATTEMPTS = 5;
@@ -580,7 +579,6 @@
   function registrationMessageForCode(code) {
     const messages = {
       invalid_username: 'Username must be 4–30 characters and may contain letters, numbers, periods, underscores, or hyphens.',
-      reserved_username: `${DEFAULT_USERNAME} is reserved for the default administrator.`,
       invalid_display_name: 'Enter a valid display name.',
       weak_password: 'Password must contain at least 6 characters.',
       invalid_email: 'Enter a valid email address or leave it blank.',
@@ -715,10 +713,6 @@
     }
     if (!/^[A-Za-z0-9._-]{4,30}$/.test(username)) {
       setMessage('registerMessage', registrationMessageForCode('invalid_username'));
-      return;
-    }
-    if (normalizeUsername(username) === normalizeUsername(DEFAULT_USERNAME)) {
-      setMessage('registerMessage', registrationMessageForCode('reserved_username'));
       return;
     }
     if (password.length < 6) {
@@ -861,7 +855,6 @@
 
     try {
       await window.LSOCloud.checkConnection();
-      await window.LSOCloud.bootstrapDefaultAdmin();
       const stored = readSession();
       if (stored?.token) {
         await refreshActiveAccount();

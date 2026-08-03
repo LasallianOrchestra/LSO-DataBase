@@ -1,0 +1,17 @@
+LSO SECURITY HARDENING 1 — 2026-08-03
+
+Changes made without changing the orchestra-management workflows:
+- Removed the fixed SNA1161 username/password bootstrap from the database installer.
+- Removed the automatic anonymous bootstrap call from the login page.
+- Removed the bootstrap RPC wrapper from both cloud client versions.
+- Removed the fixed reserved-username assumption from registration validation.
+- Added LSO_SECURE_ADMIN_SETUP.sql, which creates or rotates the protected
+  administrator with cryptographically random one-time credentials.
+- The secure setup drops the legacy bootstrap function and invalidates old
+  administrator sessions on an existing deployment.
+- Updated the PWA cache marker so installed clients replace vulnerable cached JS.
+
+Deployment order:
+1. Run LSO_SECURE_ADMIN_SETUP.sql in Supabase and save its one-time result.
+2. Deploy all patched website files.
+3. Log in using the generated credentials.

@@ -522,9 +522,6 @@
     status('offline', 'Signed out from the shared database');
   }
 
-  async function bootstrapDefaultAdmin() {
-    return rpc('lso_bootstrap_default_admin');
-  }
 
   async function registerAccount({ username, password, displayName, email }) {
     return rpc('lso_register_account', {
@@ -719,7 +716,6 @@
     setItem: storageSetItem,
     removeItem: storageRemoveItem,
     checkConnection,
-    bootstrapDefaultAdmin,
     registerAccount,
     login,
     resumeSession,

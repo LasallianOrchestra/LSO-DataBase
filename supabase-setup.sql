@@ -171,59 +171,11 @@ as $$
   where account.id = p_account_id;
 $$;
 
--- Creates the fixed administrator only when it does not exist.
-create or replace function public.lso_bootstrap_default_admin()
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, extensions, pg_temp
-as $$
-declare
-  v_id uuid;
-  v_created boolean := false;
-begin
-  select id into v_id
-  from public.lso_accounts
-  where lower(username) = 'sna1161'
-  limit 1;
-
-  if v_id is null then
-    insert into public.lso_accounts (
-      username,
-      contact_email,
-      display_name,
-      password_hash,
-      role,
-      approval_status,
-      disabled,
-      is_default,
-      requested_at,
-      approved_at,
-      approved_by
-    ) values (
-      'SNA1161',
-      null,
-      'LSO Administrator',
-      crypt('SNA1161', gen_salt('bf', 12)),
-      'Administrator',
-      'Approved',
-      false,
-      true,
-      now(),
-      now(),
-      'SNA1161'
-    )
-    returning id into v_id;
-    v_created := true;
-  end if;
-
-  return jsonb_build_object(
-    'ok', true,
-    'created', v_created,
-    'account', public.lso_account_json(v_id)
-  );
-end;
-$$;
+-- Administrator credentials are intentionally not created by this public
+-- website installer. After this file finishes, run LSO_SECURE_ADMIN_SETUP.sql
+-- privately in the Supabase SQL Editor. It creates or rotates the protected
+-- administrator with one-time random credentials and removes the legacy
+-- browser-callable bootstrap function if it exists.
 
 create or replace function public.lso_register_account(
   p_username text,
@@ -246,9 +198,6 @@ begin
     return jsonb_build_object('ok', false, 'code', 'invalid_username');
   end if;
 
-  if lower(v_username) = 'sna1161' then
-    return jsonb_build_object('ok', false, 'code', 'reserved_username');
-  end if;
 
   if char_length(v_display_name) < 2 or char_length(v_display_name) > 60 then
     return jsonb_build_object('ok', false, 'code', 'invalid_display_name');
@@ -694,7 +643,6 @@ revoke all on table public.system_state from anon, authenticated;
 revoke all on function public.lso_session_account_id(text, boolean) from public, anon, authenticated;
 revoke all on function public.lso_account_json(uuid) from public, anon, authenticated;
 
-revoke all on function public.lso_bootstrap_default_admin() from public;
 revoke all on function public.lso_register_account(text, text, text, text) from public;
 revoke all on function public.lso_login(text, text) from public;
 revoke all on function public.lso_resume_session(text) from public;
@@ -707,7 +655,6 @@ revoke all on function public.lso_save_accounts(text, jsonb) from public;
 revoke all on function public.lso_delete_account(text, uuid) from public;
 revoke all on function public.lso_ping() from public;
 
-grant execute on function public.lso_bootstrap_default_admin() to anon, authenticated;
 grant execute on function public.lso_register_account(text, text, text, text) to anon, authenticated;
 grant execute on function public.lso_login(text, text) to anon, authenticated;
 grant execute on function public.lso_resume_session(text) to anon, authenticated;
@@ -723,10 +670,11 @@ grant execute on function public.lso_ping() to anon, authenticated;
 commit;
 
 -- AFTER RUNNING THIS FILE:
--- 1. Upload all website files to the GitHub Pages repository.
--- 2. Open the website and log in with SNA1161 / SNA1161.
--- 3. Other registrations remain Pending until approved from Accounts.
--- 4. No email-confirmation setting is required because this version does not
+-- 1. Run LSO_SECURE_ADMIN_SETUP.sql privately in the Supabase SQL Editor.
+-- 2. Copy the one-time administrator username and password from its result.
+-- 3. Upload the website files to the GitHub Pages repository.
+-- 4. Other registrations remain Pending until approved from Accounts.
+-- 5. No email-confirmation setting is required because this version does not
 --    use Supabase Auth email accounts.
 
 -- Monthly Report compatibility migration and PostgREST cache refresh.
