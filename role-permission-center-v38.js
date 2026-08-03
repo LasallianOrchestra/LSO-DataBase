@@ -60,6 +60,11 @@
   let payload = null;
   let activeRole = 'Membership';
   let busy = false;
+  let loadPromise = null;
+  let suppressPermissionEventRender = false;
+  let renderFrame = 0;
+  let matrixSignature = '';
+  let responsiveSectionsInitialized = false;
 
   function isAdmin() { return (window.LSOCurrentAccount?.role || '') === ADMIN; }
   function roleRow(roleName = activeRole) { return (payload?.roles || []).find((row) => row.roleName === roleName) || null; }
@@ -72,6 +77,34 @@
   function setBusy(value) {
     busy = Boolean(value);
     ['permissionRoleSelect','permissionLandingViewSelect','saveRolePermissionsButton','resetRolePermissionsButton'].forEach((id) => { if (el(id)) el(id).disabled = busy; });
+    el('rolePermissionEditor')?.setAttribute('aria-busy', String(busy));
+  }
+
+  function replaceHtml(node, html) {
+    if (node && node.innerHTML !== html) node.innerHTML = html;
+  }
+
+  function applyPayload(nextPayload) {
+    payload = nextPayload;
+    suppressPermissionEventRender = true;
+    try { window.LSORoleAccess?.applyServerPayload?.(nextPayload); }
+    finally { suppressPermissionEventRender = false; }
+  }
+
+  function scheduleRender({ editor = true, matrix = true } = {}) {
+    if (renderFrame) cancelAnimationFrame(renderFrame);
+    renderFrame = requestAnimationFrame(() => {
+      renderFrame = 0;
+      if (editor) renderEditor();
+      if (matrix) renderMatrix();
+    });
+  }
+
+  function configureResponsiveSections() {
+    if (responsiveSectionsInitialized || !window.matchMedia?.('(max-width: 820px)').matches) return;
+    const sections = [...document.querySelectorAll('#rolePermissionEditor details.permission-editor-section')];
+    sections.forEach((section, index) => { section.open = index === 0; });
+    responsiveSectionsInitialized = true;
   }
 
   function protectedFor(roleName, type, key) {
@@ -85,7 +118,9 @@
 
   function renderRoleOptions() {
     const select = el('permissionRoleSelect'); if (!select) return;
-    select.innerHTML = ROLES.map((roleName) => `<option value="${safe(roleName)}">${safe(roleName)}${roleName === ADMIN ? ' (protected)' : ''}</option>`).join('');
+    if (select.options.length !== ROLES.length) {
+      select.innerHTML = ROLES.map((roleName) => `<option value="${safe(roleName)}">${safe(roleName)}${roleName === ADMIN ? ' (protected)' : ''}</option>`).join('');
+    }
     if (!ROLES.includes(activeRole)) activeRole = 'Membership';
     select.value = activeRole;
   }
@@ -117,9 +152,10 @@
       landing.disabled = !editable || !allowedViews.length;
     }
 
-    if (el('permissionModuleOptions')) el('permissionModuleOptions').innerHTML = VIEW_DEFS.map(([key,label,description]) => toggleCard('view',key,label,description,views.has(key),roleName)).join('');
-    if (el('permissionActionOptions')) el('permissionActionOptions').innerHTML = ACTION_DEFS.map(([key,label,description]) => toggleCard('action',key,label,description,actions.has(key),roleName)).join('');
-    if (el('permissionAttendanceOptions')) el('permissionAttendanceOptions').innerHTML = GROUP_DEFS.map(([key,label]) => toggleCard('attendance',key,label,'Allow this Attendance calendar and its records.',groups.has(key),roleName)).join('');
+    replaceHtml(el('permissionModuleOptions'), VIEW_DEFS.map(([key,label,description]) => toggleCard('view',key,label,description,views.has(key),roleName)).join(''));
+    replaceHtml(el('permissionActionOptions'), ACTION_DEFS.map(([key,label,description]) => toggleCard('action',key,label,description,actions.has(key),roleName)).join(''));
+    replaceHtml(el('permissionAttendanceOptions'), GROUP_DEFS.map(([key,label]) => toggleCard('attendance',key,label,'Allow this Attendance calendar and its records.',groups.has(key),roleName)).join(''));
+    configureResponsiveSections();
 
     document.querySelectorAll('#rolePermissionEditor input[type="checkbox"]').forEach((input) => {
       if (!editable) input.disabled = true;
@@ -150,35 +186,68 @@
     const views = checked('#permissionModuleOptions input:checked');
     const actions = checked('#permissionActionOptions input:checked');
     const landing = el('permissionLandingViewSelect')?.value || '';
-    container.innerHTML = `<span>${views.length} module${views.length === 1 ? '' : 's'}</span><span>${actions.length} action permission${actions.length === 1 ? '' : 's'}</span><span>Landing: ${safe(viewLabel(landing) || 'Not selected')}</span>`;
+    replaceHtml(container, `<span>${views.length} module${views.length === 1 ? '' : 's'}</span><span>${actions.length} action permission${actions.length === 1 ? '' : 's'}</span><span>Landing: ${safe(viewLabel(landing) || 'Not selected')}</span>`);
+  }
+
+  function setActiveMatrixColumn() {
+    const table = document.querySelector('.permission-matrix-table');
+    if (!table) return;
+    table.dataset.activeRole = activeRole;
+    table.querySelectorAll('.permission-role-column').forEach((cell) => {
+      cell.classList.toggle('is-active-role-column', cell.dataset.role === activeRole);
+    });
   }
 
   function renderMatrix() {
     const head = el('permissionMatrixHead'); const body = el('permissionMatrixBody'); if (!head || !body) return;
     const manifest = window.LSORoleAccess?.permissionManifest?.() || {};
     const landings = window.LSORoleAccess?.landingManifest?.() || {};
-    head.innerHTML = `<tr><th scope="col">Permission</th>${ROLES.map((roleName) => `<th scope="col">${safe(roleName)}</th>`).join('')}</tr>`;
+    const signature = JSON.stringify({ manifest, landings });
+    if (signature === matrixSignature && head.children.length && body.children.length) {
+      setActiveMatrixColumn();
+      return;
+    }
+    matrixSignature = signature;
+    head.innerHTML = `<tr><th scope="col">Permission</th>${ROLES.map((roleName) => `<th scope="col" class="permission-role-column${roleName === activeRole ? ' is-active-role-column' : ''}" data-role="${safe(roleName)}">${safe(roleName)}</th>`).join('')}</tr>`;
     const rows = [];
     rows.push(`<tr class="permission-category-row"><th colspan="${ROLES.length+1}">Module access and landing page</th></tr>`);
-    VIEW_DEFS.forEach(([viewId,label]) => rows.push(`<tr><th scope="row">${safe(label)}</th>${ROLES.map((roleName) => { const granted=(manifest.views?.[roleName]||[]).includes(viewId); const landing=landings[roleName]===viewId; return `<td><span class="${granted?'permission-granted':'permission-denied'}">${granted?'Yes':'—'}</span>${landing?'<span class="permission-current-landing">Landing</span>':''}</td>`; }).join('')}</tr>`));
+    VIEW_DEFS.forEach(([viewId,label]) => rows.push(`<tr><th scope="row">${safe(label)}</th>${ROLES.map((roleName) => { const granted=(manifest.views?.[roleName]||[]).includes(viewId); const landing=landings[roleName]===viewId; return `<td class="permission-role-column${roleName === activeRole ? ' is-active-role-column' : ''}" data-role="${safe(roleName)}" data-label="${safe(roleName)}"><span class="${granted?'permission-granted':'permission-denied'}">${granted?'Yes':'—'}</span>${landing?'<span class="permission-current-landing">Landing</span>':''}</td>`; }).join('')}</tr>`));
     rows.push(`<tr class="permission-category-row"><th colspan="${ROLES.length+1}">Action permissions</th></tr>`);
-    ACTION_DEFS.forEach(([action,label]) => rows.push(`<tr><th scope="row">${safe(label)}</th>${ROLES.map((roleName) => { const granted=(manifest.actions?.[action]||[]).includes(roleName); return `<td><span class="${granted?'permission-granted':'permission-denied'}">${granted?'Yes':'—'}</span></td>`; }).join('')}</tr>`));
+    ACTION_DEFS.forEach(([action,label]) => rows.push(`<tr><th scope="row">${safe(label)}</th>${ROLES.map((roleName) => { const granted=(manifest.actions?.[action]||[]).includes(roleName); return `<td class="permission-role-column${roleName === activeRole ? ' is-active-role-column' : ''}" data-role="${safe(roleName)}" data-label="${safe(roleName)}"><span class="${granted?'permission-granted':'permission-denied'}">${granted?'Yes':'—'}</span></td>`; }).join('')}</tr>`));
     body.innerHTML = rows.join('');
+    setActiveMatrixColumn();
   }
 
-  async function load({ quiet = false } = {}) {
-    if (!isAdmin()) return;
-    status('Loading role permissions…');
-    try {
-      if (!window.LSOCloud?.getRolePermissionCenter) throw new Error('The permission connector is unavailable. Upload the complete V38 package.');
-      payload = await window.LSOCloud.getRolePermissionCenter();
-      window.LSORoleAccess?.applyServerPayload?.(payload);
-      renderEditor(); renderMatrix();
-      status(`Permissions loaded${payload?.updatedAt ? ` • Last updated ${new Date(payload.updatedAt).toLocaleString('en-PH')}` : ''}.`, 'success');
-    } catch (error) {
-      status(error.message || 'Role permissions could not be loaded.', 'error');
-      if (!quiet) window.LSOApp?.showToast?.(error.message || 'Role permissions could not be loaded.', true);
-    }
+  async function load({ quiet = false, force = false } = {}) {
+    if (!isAdmin()) return null;
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
+      status('Loading role permissions…');
+      try {
+        if (!window.LSOCloud?.getRolePermissionCenter) throw new Error('The permission connector is unavailable. Upload the complete V38 package.');
+        const nextPayload = await window.LSOCloud.getRolePermissionCenter();
+        applyPayload(nextPayload);
+        renderEditor(); renderMatrix();
+        status(`Permissions loaded${payload?.updatedAt ? ` • Last updated ${new Date(payload.updatedAt).toLocaleString('en-PH')}` : ''}.`, 'success');
+        return payload;
+      } catch (error) {
+        status(error.message || 'Role permissions could not be loaded.', 'error');
+        if (!quiet) window.LSOApp?.showToast?.(error.message || 'Role permissions could not be loaded.', true);
+        return null;
+      } finally {
+        loadPromise = null;
+      }
+    })();
+    return loadPromise;
+  }
+
+  function hydrateFromRuntime() {
+    const runtimePayload = window.LSORoleAccess?.serverConfiguration?.();
+    if (!runtimePayload?.roles?.length) return false;
+    payload = runtimePayload;
+    renderEditor(); renderMatrix();
+    status(`Permissions ready${payload?.updatedAt ? ` • Last updated ${new Date(payload.updatedAt).toLocaleString('en-PH')}` : ''}.`, 'success');
+    return true;
   }
 
   async function save() {
@@ -191,9 +260,9 @@
     if (!views.includes(landingView)) return status('The landing page must be one of the assigned modules.', 'error');
     setBusy(true); status('Saving role permissions…');
     try {
-      payload = await window.LSOCloud.saveRolePermissionCenter({ roleName: activeRole, landingView, views, actions, attendanceGroups });
-      window.LSORoleAccess?.applyServerPayload?.(payload);
-      renderEditor(); renderMatrix();
+      const nextPayload = await window.LSOCloud.saveRolePermissionCenter({ roleName: activeRole, landingView, views, actions, attendanceGroups });
+      applyPayload(nextPayload);
+      renderMatrix();
       window.LSOPermissions?.apply?.();
       status(`${activeRole} permissions were saved. Active users receive the update automatically.`, 'success');
       window.LSOApp?.showToast?.(`${activeRole} permissions updated.`);
@@ -208,9 +277,9 @@
     if (!window.confirm(`Reset ${activeRole} to the official LSO default permissions?`)) return;
     setBusy(true); status('Resetting role permissions…');
     try {
-      payload = await window.LSOCloud.resetRolePermissionCenter(activeRole);
-      window.LSORoleAccess?.applyServerPayload?.(payload);
-      renderEditor(); renderMatrix();
+      const nextPayload = await window.LSOCloud.resetRolePermissionCenter(activeRole);
+      applyPayload(nextPayload);
+      renderMatrix();
       status(`${activeRole} was restored to its default access.`, 'success');
       window.LSOApp?.showToast?.(`${activeRole} permissions reset.`);
     } catch (error) {
@@ -219,23 +288,34 @@
   }
 
   function wire() {
-    el('permissionRoleSelect')?.addEventListener('change', (event) => { activeRole = event.target.value; renderEditor(); status('Review the selected role, then save any changes.'); });
+    el('permissionRoleSelect')?.addEventListener('change', (event) => { activeRole = event.target.value; renderEditor(); setActiveMatrixColumn(); status('Review the selected role, then save any changes.'); });
     el('permissionModuleOptions')?.addEventListener('change', updateLandingOptions);
     el('permissionActionOptions')?.addEventListener('change', updateSummary);
     el('permissionAttendanceOptions')?.addEventListener('change', updateSummary);
     el('permissionLandingViewSelect')?.addEventListener('change', updateSummary);
     el('saveRolePermissionsButton')?.addEventListener('click', save);
     el('resetRolePermissionsButton')?.addEventListener('click', reset);
-    el('refreshRolePermissionsButton')?.addEventListener('click', () => load());
+    el('refreshRolePermissionsButton')?.addEventListener('click', () => load({ force: true }));
+    document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click', () => {
+      requestAnimationFrame(() => { if (!hydrateFromRuntime()) load({ quiet: true }); });
+    });
   }
 
   function initialize() {
     wire();
-    if (isAdmin()) load({ quiet: true });
+    configureResponsiveSections();
+    if (isAdmin()) hydrateFromRuntime();
   }
 
-  window.addEventListener('lso:auth-changed', (event) => { if (event.detail?.role === ADMIN) window.setTimeout(() => load({ quiet: true }), 250); });
-  window.addEventListener('lso:permissions-changed', () => { renderMatrix(); if (isAdmin() && payload) renderEditor(); });
+  window.addEventListener('lso:auth-changed', (event) => {
+    if (event.detail?.role !== ADMIN) return;
+    window.setTimeout(() => { if (!hydrateFromRuntime()) load({ quiet: true }); }, 420);
+  });
+  window.addEventListener('lso:permissions-changed', (event) => {
+    if (suppressPermissionEventRender) return;
+    if (event.detail?.payload?.roles?.length) payload = clone(event.detail.payload);
+    scheduleRender({ editor: isAdmin() && Boolean(payload), matrix: true });
+  });
   window.LSORolePermissionCenter = { load, render: () => { renderEditor(); renderMatrix(); }, getPayload: () => clone(payload) };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });

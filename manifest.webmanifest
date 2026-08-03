@@ -1,9 +1,9 @@
 {
-  "id": "./?lso-role-permissions-v38",
+  "id": "./?lso-role-permissions-v39",
   "name": "LSO Orchestra Management System",
   "short_name": "LSO System",
   "description": "Lasallian Symphony Orchestra enterprise membership, attendance, Duty Hours, reporting, recovery, health, and administration portal.",
-  "start_url": "./index.html?build=role-permissions-v38",
+  "start_url": "./index.html?build=role-permissions-v39",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v38.js';
-  const ACTIVE_CACHE_MARKER = 'enterprise-v38-security1';
+  const ACTIVE_CACHE_MARKER = 'enterprise-v39-role-scroll1';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;
@@ -78,7 +78,7 @@
         if (!worker) return;
         worker.addEventListener('statechange', () => {
           if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-            banner('A Role & Permission Center update is ready. Applying it now…', 'online');
+            banner('A performance and responsive-layout update is ready. Applying it now…', 'online');
             worker.postMessage({ type: 'SKIP_WAITING' });
           }
         });

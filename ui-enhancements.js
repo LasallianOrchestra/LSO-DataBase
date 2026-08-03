@@ -44,10 +44,15 @@
       new MutationObserver(syncSidebarState).observe(sidebar, { attributes: true, attributeFilter: ['class'] });
     }
 
+    let resizeFrame = 0;
     window.addEventListener('resize', () => {
-      if (window.innerWidth > 920) closeSidebar();
-      refreshTableHints();
-    });
+      if (resizeFrame) return;
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        if (window.innerWidth > 920) closeSidebar();
+        refreshTableHints();
+      });
+    }, { passive: true });
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && sidebar?.classList.contains('open')) closeSidebar();
@@ -83,8 +88,8 @@
     }
   }
 
-  function refreshTableHints() {
-    qsa('.table-wrap, .period-table-wrap').forEach((wrapper) => {
+  function refreshTableHints(wrappers = qsa('.table-wrap, .period-table-wrap')) {
+    wrappers.forEach((wrapper) => {
       const hint = wrapper.nextElementSibling?.classList.contains('table-scroll-hint') ? wrapper.nextElementSibling : null;
       if (!hint) return;
       const needsHorizontalScroll = window.innerWidth > 760 && wrapper.scrollWidth > wrapper.clientWidth + 2;
@@ -92,25 +97,50 @@
     });
   }
 
-  let tableRefreshQueued = false;
-  function enhanceTables() {
-    if (tableRefreshQueued) return;
-    tableRefreshQueued = true;
-    requestAnimationFrame(() => {
-      tableRefreshQueued = false;
-      qsa('table').forEach(applyCellLabels);
-      qsa('.table-wrap, .period-table-wrap').forEach(addTableAccessibility);
-      refreshTableHints();
+  const pendingTables = new Set();
+  const pendingWrappers = new Set();
+  let tableRefreshFrame = 0;
+
+  function collectTableTargets(root = document) {
+    if (root === document) {
+      qsa('table').forEach((table) => pendingTables.add(table));
+      qsa('.table-wrap, .period-table-wrap').forEach((wrapper) => pendingWrappers.add(wrapper));
+      return;
+    }
+    if (!(root instanceof Element)) return;
+    if (root.matches('table')) pendingTables.add(root);
+    root.closest('table') && pendingTables.add(root.closest('table'));
+    qsa('table', root).forEach((table) => pendingTables.add(table));
+    if (root.matches('.table-wrap, .period-table-wrap')) pendingWrappers.add(root);
+    root.closest('.table-wrap, .period-table-wrap') && pendingWrappers.add(root.closest('.table-wrap, .period-table-wrap'));
+    qsa('.table-wrap, .period-table-wrap', root).forEach((wrapper) => pendingWrappers.add(wrapper));
+  }
+
+  function enhanceTables(root = document) {
+    collectTableTargets(root);
+    if (tableRefreshFrame) return;
+    tableRefreshFrame = requestAnimationFrame(() => {
+      tableRefreshFrame = 0;
+      const tables = [...pendingTables].filter((table) => table.isConnected);
+      const wrappers = [...pendingWrappers].filter((wrapper) => wrapper.isConnected);
+      pendingTables.clear();
+      pendingWrappers.clear();
+      tables.forEach(applyCellLabels);
+      wrappers.forEach((wrapper, index) => addTableAccessibility(wrapper, index));
+      refreshTableHints(wrappers);
     });
   }
 
   function wireTableEnhancement() {
-    enhanceTables();
+    enhanceTables(document);
     if (!window.MutationObserver) return;
     const observer = new MutationObserver((mutations) => {
-      if (mutations.some((mutation) => mutation.type === 'childList' && (mutation.addedNodes.length || mutation.removedNodes.length))) {
-        enhanceTables();
-      }
+      mutations.forEach((mutation) => {
+        if (mutation.type !== 'childList') return;
+        collectTableTargets(mutation.target);
+        mutation.addedNodes.forEach((node) => collectTableTargets(node));
+      });
+      if (pendingTables.size || pendingWrappers.size) enhanceTables();
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
@@ -131,8 +161,11 @@
     window.addEventListener('lso:auth-changed', updatePendingAccountBadge);
   }
 
-  function enhanceButtons() {
-    qsa('.table-action').forEach((button) => {
+  function enhanceButtons(root = document) {
+    const buttons = [];
+    if (root instanceof Element && root.matches('.table-action')) buttons.push(root);
+    qsa('.table-action', root).forEach((button) => buttons.push(button));
+    buttons.forEach((button) => {
       if (!button.getAttribute('aria-label')) {
         const label = button.title || button.textContent.trim() || 'Record action';
         button.setAttribute('aria-label', label);
@@ -143,7 +176,11 @@
   function wireDynamicButtonEnhancement() {
     enhanceButtons();
     if (!window.MutationObserver) return;
-    new MutationObserver(enhanceButtons).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) enhanceButtons(node);
+      }));
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   function initialize() {

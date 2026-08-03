@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v38-security1';
+const CACHE_VERSION = 'lso-website-enterprise-v39-role-scroll1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -35,6 +35,7 @@ const CORE_PATHS = [
   './role-permission-center-v38.css',
   './attendance-duty-revision-v35.css',
   './mobile-shell-scroll-v37.css',
+  './ui-performance-responsive-v39.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',

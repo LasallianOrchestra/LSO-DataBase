@@ -5,6 +5,18 @@
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
   let observer = null;
   let applying = false;
+  let applyFrame = 0;
+
+  const PERMISSION_RELEVANT_SELECTOR = [
+    '.nav-item', '.admin-only', '[data-account-action]', '.account-role-select', '.account-member-select',
+    '#memberForm', '[data-action="edit"]', '[data-action="delete"]', '#addMemberTop', '#addMemberHero', '#addMemberMembers', '#editRecordButton',
+    '#addEventButton', '#createEventOnSelectedDate', '#editEventButton', '#deleteEventButton', '#markAllPresent', '#saveAttendanceButton',
+    '#finalizeAttendanceButton', '#unlockAttendanceButton', '.attendance-status', '.attendance-remarks', '[data-attendance-group]',
+    '#contractAdminWorkspace', '#contractReadOnlyNotice', '#contractMakerForm', '[data-monthly-edit]', '[data-monthly-write]',
+    '#monthlyReportFinalizeButton', '#monthlyReportReopenButton', '.duty-management-only', '.duty-roster-monitor-panel',
+    '.duty-roster-report-actions', '#dutyRecordModeToggle', '#dutyApprovalPanel', '#dutyHoursAdminControls', '[data-duty-delete]',
+    '[data-duty-punch-review]', '#dutyCommitmentForm', '#dutyRenderedForm', '#dutyIncentiveForm'
+  ].join(',');
 
   function account() {
     return window.LSOAuth?.getActiveAccount?.() || window.LSOCurrentAccount || null;
@@ -179,6 +191,24 @@
     });
   }
 
+  function scheduleApply() {
+    if (applyFrame) return;
+    applyFrame = window.requestAnimationFrame(() => {
+      applyFrame = 0;
+      apply(document);
+    });
+  }
+
+  function mutationNeedsApply(mutation) {
+    const nodes = [...mutation.addedNodes].filter((node) => node.nodeType === Node.ELEMENT_NODE);
+    if (!nodes.length) return false;
+    return nodes.some((node) => {
+      const element = /** @type {Element} */ (node);
+      if (element.closest?.('#rolePermissionEditor, .permission-matrix-wrap')) return false;
+      return element.matches?.(PERMISSION_RELEVANT_SELECTOR) || Boolean(element.querySelector?.(PERMISSION_RELEVANT_SELECTOR));
+    });
+  }
+
   function apply(root = document) {
     if (applying) return;
     applying = true;
@@ -234,7 +264,7 @@
   document.addEventListener('change', blockIfDenied, true);
 
   ['lso:auth-changed', 'lso:cloud-state-changed', 'lso:members-changed', 'lso:operations-changed', 'lso:attendance-group-changed', 'lso:attendance-governance-changed']
-    .forEach((name) => window.addEventListener(name, () => setTimeout(() => apply(document), 20)));
+    .forEach((name) => window.addEventListener(name, scheduleApply));
   window.addEventListener('lso:permission-denied', (event) => notify('', event.detail?.message));
 
   function initialize() {
@@ -242,8 +272,7 @@
     if (window.MutationObserver) {
       observer = new MutationObserver((mutations) => {
         if (applying) return;
-        const hasElements = mutations.some((mutation) => [...mutation.addedNodes].some((node) => node.nodeType === Node.ELEMENT_NODE));
-        if (hasElements) setTimeout(() => apply(document), 0);
+        if (mutations.some(mutationNeedsApply)) scheduleApply();
       });
       observer.observe(document.body, { childList: true, subtree: true });
     }

@@ -1,0 +1,31 @@
+/* LSO V39 — system-wide scrolling, responsiveness, and rendering refinements. */
+html{scroll-behavior:auto!important;scrollbar-gutter:stable}body{overflow-anchor:auto}.main-content,.view{min-width:0}.view{overflow-x:clip}
+button,.button,.small-button,.table-action,.icon-button,.nav-item,summary,label{touch-action:manipulation}
+.table-wrap,.period-table-wrap,.permission-matrix-wrap,.modal-card,.accessibility-drawer{scrollbar-gutter:stable}
+.panel,.hero-card,.metric-card,.permission-toggle-card{backface-visibility:hidden}
+@media(min-width:921px){.main-content{overflow:clip}.view{padding-bottom:36px}.panel{scroll-margin-top:100px}.form-grid.two-columns,.filter-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}.form-grid .span-2{grid-column:1/-1}}
+@media(max-width:1180px) and (min-width:761px){table:not(.permission-matrix-table){min-width:860px}.panel{padding:clamp(16px,1.8vw,22px)}.view{padding-inline:clamp(14px,2vw,24px)}}
+@media(max-width:920px){html,body{overscroll-behavior-x:none}.topbar{contain:layout paint}.view{padding-bottom:max(32px,env(safe-area-inset-bottom))}.panel,.hero-card{margin-bottom:12px}.form-grid.two-columns,.filter-grid,.settings-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr))}.span-2{grid-column:1/-1}}
+@media(max-width:760px){.panel{padding:15px}.panel-header{margin-bottom:13px}.metric-grid,.attendance-kpi-grid,.health-count-grid,.health-version-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.button,.small-button,.table-action{min-height:42px}.modal-backdrop{padding:8px}.modal-card{max-height:calc(100dvh - 16px)}}
+@media(max-width:420px){.metric-grid,.attendance-kpi-grid,.health-count-grid,.health-version-grid{grid-template-columns:1fr}.view{padding-inline:10px}.panel{border-radius:15px}.topbar{padding-inline:10px!important}}
+@media(hover:none),(pointer:coarse){.panel,.metric-card,.hero-card,.permission-toggle-card,.quick-action-card,.dcc-action-card,.nav-item,.button,.small-button,.table-action{transition:none!important}.panel:hover,.metric-card:hover,.hero-card:hover,.permission-toggle-card:hover,.quick-action-card:hover,.dcc-action-card:hover,.nav-item:hover,.button:hover,.small-button:hover,.table-action:hover{transform:none!important;box-shadow:var(--shadow-soft,0 8px 22px rgba(7,50,38,.06))}.sidebar-overlay,.topbar{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
+@media print{html{scrollbar-gutter:auto}.view{overflow:visible}.permission-matrix-wrap{max-height:none!important;overflow:visible!important}.permission-matrix-table .permission-role-column{display:table-cell!important}}
+
+/* Role matrix must remain a real table after the generic phone card conversion. */
+@media(max-width:1100px){
+  .permission-matrix-wrap{max-height:min(54dvh,540px)!important;overflow:auto!important}
+  .permission-matrix-wrap .permission-matrix-table{display:table!important;width:100%!important;min-width:0!important;table-layout:fixed!important}
+  .permission-matrix-wrap .permission-matrix-table thead{display:table-header-group!important}
+  .permission-matrix-wrap .permission-matrix-table tbody{display:table-row-group!important}
+  .permission-matrix-wrap .permission-matrix-table tr{display:table-row!important;width:auto!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
+  .permission-matrix-wrap .permission-matrix-table th,.permission-matrix-wrap .permission-matrix-table td{display:table-cell!important;width:auto;max-width:none;text-align:left}
+  .permission-matrix-wrap .permission-matrix-table td{text-align:center!important}
+  .permission-matrix-wrap .permission-matrix-table td::before{display:none!important;content:none!important}
+  .permission-matrix-wrap .permission-matrix-table th:first-child{width:64%!important}
+  .permission-matrix-wrap .permission-matrix-table .permission-role-column{display:none!important}
+  .permission-matrix-wrap .permission-matrix-table .permission-role-column.is-active-role-column{display:table-cell!important;width:36%!important}
+  .permission-matrix-wrap .permission-category-row th{display:table-cell!important;width:auto!important}
+}
+@media(max-width:820px){.permission-editor-section>summary{position:static!important}.permission-matrix-wrap{max-height:min(50dvh,480px)!important}}
+@media(max-width:560px){.permission-matrix-wrap .permission-matrix-table th:first-child{width:60%!important}.permission-matrix-wrap .permission-matrix-table .permission-role-column.is-active-role-column{width:40%!important}}
