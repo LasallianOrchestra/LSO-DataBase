@@ -80,7 +80,7 @@
   function canReviewDutyPunches() {
     if (!sessionAccount) return false;
     if (window.LSORoleAccess?.can) return window.LSORoleAccess.can('reviewDutyPunches', sessionAccount);
-    return ['Administrator', 'Membership', 'Staff Account'].includes(sessionAccount.role);
+    return ['Administrator', 'Membership', 'General Secretary', 'Staff Account'].includes(sessionAccount.role);
   }
 
   function canManageDutyHours() {
@@ -100,9 +100,9 @@
       : role === 'Membership'
         ? 'Membership access cannot save this system area.'
         : role === 'General Secretary'
-          ? 'General Secretary access can save only activities, attendance drafts, and the related audit log.'
+          ? 'General Secretary access follows the permissions assigned by the Administrator.'
           : role === 'Staff Account'
-            ? 'Staff access can monitor Dashboard, Members, and Attendance, and can review Duty Hours punches only.'
+            ? 'Staff access follows the permissions assigned by the Administrator.'
             : 'This account has read-only access.';
     emit('lso:permission-denied', { message, column });
   }
@@ -608,7 +608,7 @@
   }
 
   async function reviewDutyEntry(entryId, decision) {
-    if (!canManageDutyHours()) throw new Error('Administrator or Membership access is required to review legacy duty entries.');
+    if (!canManageDutyHours()) throw new Error('This role is not assigned to manually manage legacy Duty Hours entries.');
     const nextState = await rpc('lso_review_duty_entry', {
       p_token: sessionToken,
       p_entry_id: entryId,
@@ -621,7 +621,7 @@
   }
 
   async function reviewDutyPunch(entryId, punchType, decision) {
-    if (!canReviewDutyPunches()) throw new Error('Administrator, Membership, or Staff access is required to review Duty Hours punches.');
+    if (!canReviewDutyPunches()) throw new Error('This role is not assigned to review Duty Hours punches.');
     if (!['TimeIn', 'TimeOut'].includes(punchType)) throw new Error('Select a valid Time In or Time Out request.');
     const nextState = await rpc('lso_review_duty_punch', {
       p_token: sessionToken,

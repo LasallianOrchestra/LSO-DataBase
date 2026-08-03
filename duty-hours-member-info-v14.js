@@ -52,7 +52,7 @@
   }
 
   function canReviewDutyPunches() {
-    return window.LSORoleAccess?.can?.('reviewDutyPunches') ?? ['Administrator', 'Membership', 'Staff Account'].includes(currentAccount()?.role);
+    return window.LSORoleAccess?.can?.('reviewDutyPunches') ?? ['Administrator', 'Membership', 'General Secretary', 'Staff Account'].includes(currentAccount()?.role);
   }
 
   // Kept as an internal compatibility alias for management-only controls.
@@ -718,7 +718,7 @@
           </div>
           <span class="duty-session-overall ${safeText(display.className)}">${safeText(display.label)}</span>
         </header>
-        ${isOpen ? '<div class="duty-open-request-notice"><strong>This request is already saved.</strong><span>Submit Time Out when your duty ends. The Administrator, Membership, or Staff reviews Time In and Time Out separately.</span></div>' : ''}
+        ${isOpen ? '<div class="duty-open-request-notice"><strong>This request is already saved.</strong><span>Submit Time Out when your duty ends. An assigned Duty Hours reviewer approves or rejects Time In and Time Out separately.</span></div>' : ''}
         <section class="duty-session-approval-section" aria-label="Punch approval status">
           <span class="duty-session-section-label">Approval status</span>
           <div class="duty-punch-status-row">${punchBadge(punchStatus(entry, 'TimeIn'), 'Time In')}${punchBadge(punchStatus(entry, 'TimeOut'), 'Time Out')}</div>
@@ -728,7 +728,7 @@
           <div><span>Member/s Approved</span><strong>${safeText(entry.memberApprovers || 'Not provided')}</strong></div>
         </div>
       </article>`;
-    }).join('') : '<div class="empty-state compact-empty duty-session-empty"><h4>No duty request has been submitted today</h4><p>Press Submit Time In once. The saved request will immediately appear here while it waits for Administrator, Membership, or Staff review.</p></div>';
+    }).join('') : '<div class="empty-state compact-empty duty-session-empty"><h4>No duty request has been submitted today</h4><p>Press Submit Time In once. The saved request will immediately appear here while it waits for an assigned Duty Hours reviewer.</p></div>';
   }
 
   function renderSelfService() {
@@ -770,13 +770,13 @@
     if (approvers) approvers.disabled = !accountEnabled;
 
     if (openEntry) {
-      if (heading) heading.textContent = openInStatus === 'Approved' ? 'Time In approved — submit Time Out when finished' : 'Time In awaiting Administrator, Membership, or Staff approval';
+      if (heading) heading.textContent = openInStatus === 'Approved' ? 'Time In approved — submit Time Out when finished' : 'Time In awaiting an assigned Duty Hours reviewer';
       if (helper) helper.textContent = 'You may still submit your Time Out when you finish. Time Out will be reviewed separately and will not become official automatically.';
       if (description && !description.matches(':focus') && !description.value) description.value = openEntry.description || '';
       if (approvers && !approvers.matches(':focus') && !approvers.value) approvers.value = openEntry.memberApprovers || '';
     } else {
       if (heading) heading.textContent = 'Ready to submit Time In';
-      if (helper) helper.textContent = 'Pressing the button creates a Time In request. It becomes official only after Administrator, Membership, or Staff approval.';
+      if (helper) helper.textContent = 'Pressing the button creates a Time In request. It becomes official only after a role assigned to review Duty Hours punches approves it.';
     }
 
     renderTodaySessions(data, member);
@@ -857,7 +857,7 @@
         ${dependencyBlocked ? '<div class="duty-review-dependency"><strong>Approve Time In first.</strong><span>This Time Out request can be rejected now, but it cannot be approved until the linked Time In has been approved.</span></div>' : ''}
         <footer class="duty-review-card-actions"><button class="button button-primary" data-duty-punch-review="Approved" data-punch-type="${safeText(punchType)}" data-entry-id="${safeText(entry.id)}" type="button" ${dependencyBlocked ? 'disabled title="Approve the Time In request first"' : ''}>Approve ${safeText(punchLabel)}</button><button class="button button-danger" data-duty-punch-review="Rejected" data-punch-type="${safeText(punchType)}" data-entry-id="${safeText(entry.id)}" type="button">Reject ${safeText(punchLabel)}</button></footer>
       </article>`;
-    }).join('') : '<div class="empty-state compact-empty duty-review-empty"><h4>No pending punch requests</h4><p>Separate Time In and Time Out requests will appear here for Administrator, Membership, or Staff review.</p></div>';
+    }).join('') : '<div class="empty-state compact-empty duty-review-empty"><h4>No pending punch requests</h4><p>Separate Time In and Time Out requests will appear here for roles assigned to review Duty Hours punches.</p></div>';
   }
 
   function renderSelectedMember() {
@@ -939,7 +939,7 @@
       const effect = isIncentive
         ? minutes > 0 ? `Reduces remaining by ${durationLabel(minutes)}` : `Adds ${durationLabel(Math.abs(minutes))} to remaining`
         : `Adds ${durationLabel(minutes)} rendered`;
-      const countedEffect = entry.approvalStatus === 'Approved' ? effect : entry.approvalStatus === 'Active' ? 'Time In approved; Time Out not yet approved' : entry.approvalStatus === 'Pending' ? 'No punch applied until Administrator, Membership, or Staff approval' : 'Rejected — not credited';
+      const countedEffect = entry.approvalStatus === 'Approved' ? effect : entry.approvalStatus === 'Active' ? 'Time In approved; Time Out not yet approved' : entry.approvalStatus === 'Pending' ? 'No punch applied until an assigned reviewer approves it' : 'Rejected — not credited';
       const punchDisplay = isIncentive
         ? approvalBadge(entry.approvalStatus)
         : `<div class="ledger-punch-statuses">${punchBadge(punchStatus(entry, 'TimeIn'), 'In')}${punchBadge(punchStatus(entry, 'TimeOut'), 'Out')}</div>`;
@@ -1120,7 +1120,7 @@
       if (openEntry) {
         const inStatus = punchStatus(openEntry, 'TimeIn');
         const message = inStatus === 'Pending'
-          ? `Your Time In request for ${dateLabel(openEntry.date)} at ${formatClockTime(openEntry.timeIn)} is already saved and waiting for Administrator, Membership, or Staff approval.`
+          ? `Your Time In request for ${dateLabel(openEntry.date)} at ${formatClockTime(openEntry.timeIn)} is already saved and waiting for an assigned Duty Hours reviewer.`
           : `Your approved Time In for ${dateLabel(openEntry.date)} at ${formatClockTime(openEntry.timeIn)} is still open.`;
         window.LSOApp?.showToast?.(`${message} Submit Time Out when your duty ends.`, false);
         renderAll();
@@ -1140,7 +1140,7 @@
       renderAll();
       const saved = activePunchEntry(loadData(), member.id);
       if (!saved) throw new Error('The database accepted the request but the updated record was not returned. Press Refresh Requests and try again.');
-      window.LSOApp?.showToast?.(`Time In at ${formatClockTime(saved.timeIn)} was submitted and is waiting for Administrator, Membership, or Staff approval.`);
+      window.LSOApp?.showToast?.(`Time In at ${formatClockTime(saved.timeIn)} was submitted and is waiting for an assigned Duty Hours reviewer.`);
       document.querySelector(`[data-duty-session-id="${CSS.escape(saved.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (error) {
       window.LSOApp?.showToast?.(error.message || 'Time In could not be submitted.', true);
@@ -1188,7 +1188,7 @@ This will record the secure server time for the session that started on ${dateLa
       if (el('dutySelfDescription')) el('dutySelfDescription').value = '';
       if (el('dutySelfMemberApprovers')) el('dutySelfMemberApprovers').value = '';
       renderAll();
-      window.LSOApp?.showToast?.('Time Out was submitted for separate Administrator, Membership, or Staff approval. No minutes are credited until both punches are approved.');
+      window.LSOApp?.showToast?.('Time Out was submitted for separate review. No minutes are credited until an assigned Duty Hours reviewer approves both punches.');
     } catch (error) {
       window.LSOApp?.showToast?.(error.message || 'Time Out could not be submitted.', true);
       await refreshDutyState({ announce: false });

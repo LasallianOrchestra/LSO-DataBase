@@ -15,9 +15,9 @@
     ['attendanceView','Attendance','Activities, calendars, rosters, ratings, and reports.'],
     ['dutyHoursView','Duty Hours','Trainee/Probationary hours, approvals, and progress.'],
     ['alertsView','Action Center','System-generated operational notices and follow-up items.'],
-    ['accountsView','Accounts','Protected Administrator-only account management.'],
-    ['systemHealthView','System Health','Protected diagnostics, permissions, migrations, and errors.'],
-    ['dataView','Data & Recovery','Protected backups, imports, restores, and settings.']
+    ['accountsView','Accounts','Administrator account management and approvals.'],
+    ['systemHealthView','System Health','Diagnostics, permissions, migrations, and errors.'],
+    ['dataView','Data & Recovery','Backups, imports, restores, and system settings.']
   ];
   const ACTION_DEFS = [
     ['manageMembers','Manage member records','Add, edit, and update member profiles.'],
@@ -37,13 +37,13 @@
     ['writeActivityLog','Write audit activity','Record changes in the system activity log.'],
     ['manageAccessibility','Use accessibility controls','Use text, contrast, motion, density, and table settings.'],
     ['selfDutyPunch','Submit personal Duty punches','Use Time In and Time Out for the linked member account.'],
-    ['manageAccounts','Manage accounts','Protected Administrator-only function.'],
-    ['manageSettings','Manage system settings','Protected Administrator-only function.'],
-    ['manageInventory','Manage inventory','Protected Administrator-only function.'],
-    ['manageData','Import/export/clear data','Protected Administrator-only function.'],
-    ['manageRecovery','Manage recovery points','Protected Administrator-only function.'],
-    ['viewSystemHealth','View System Health','Protected Administrator-only function.'],
-    ['manageSystemErrors','Resolve system errors','Protected Administrator-only function.']
+    ['manageAccounts','Manage accounts','Approve, assign, disable, and maintain accounts.'],
+    ['manageSettings','Manage system settings','Change organization-wide system settings.'],
+    ['manageInventory','Manage inventory','Maintain instrument and inventory records.'],
+    ['manageData','Import/export/clear data','Run data import, export, and controlled clearing tools.'],
+    ['manageRecovery','Manage recovery points','Create, review, and restore recovery points.'],
+    ['viewSystemHealth','View System Health','Open diagnostics and system status information.'],
+    ['manageSystemErrors','Resolve system errors','Review and resolve recorded system errors.']
   ];
   const GROUP_DEFS = [
     ['Official Members','Official Members Calendar'],
@@ -53,7 +53,8 @@
   const PROTECTED_VIEWS = new Set(['accountsView','systemHealthView','dataView']);
   const PROTECTED_ACTIONS = new Set(['manageAccounts','manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth','manageSystemErrors']);
   const ROLE_RESTRICTED_ACTIONS = {
-    reviewDutyPunches: new Set(['Membership','Staff Account']),
+    // Self-service Duty punches require a linked Trainee/Probationary account.
+    // All other operational permissions are assigned by the Administrator.
     selfDutyPunch: new Set(['Trainee/Probationary'])
   };
 
@@ -111,7 +112,7 @@
     if (roleName === ADMIN) return true;
     if (type === 'view' && PROTECTED_VIEWS.has(key)) return true;
     if (type === 'action' && PROTECTED_ACTIONS.has(key)) return true;
-    if (type === 'action' && ['manageAccessibility','selfDutyPunch'].includes(key)) return true;
+    if (type === 'action' && key === 'selfDutyPunch' && roleName !== 'Trainee/Probationary') return true;
     const compatible = ROLE_RESTRICTED_ACTIONS[key];
     return Boolean(type === 'action' && compatible && !compatible.has(roleName));
   }
@@ -165,7 +166,7 @@
     if (el('permissionEditorProtectionNote')) {
       el('permissionEditorProtectionNote').innerHTML = roleName === ADMIN
         ? '<strong>Administrator is protected.</strong> Full access and Dashboard landing cannot be removed, preventing system lockout.'
-        : '<strong>Safety controls:</strong> Accounts, System Health, Data & Recovery, database administration, and unsupported workflow actions remain Administrator-only.';
+        : '<strong>Administrator-controlled access:</strong> Assign the modules, attendance calendars, and operational actions this role needs. Security-critical Administrator areas and linked-member self-service remain protected.';
     }
     updateSummary();
   }

@@ -1,3 +1,10 @@
+
+## V45 administrator-controlled Duty Hours review
+
+The General Secretary now receives the Duty Hours module and **Approve/reject Duty punches** permission by default. The permission is no longer restricted to a hard-coded role list: an Administrator can assign or remove it for any editable role through System Health → Role & Permission Center. The Administrator role itself, security-critical system administration areas, and linked-member self-service Duty punching remain protected to prevent lockout or identity conflicts.
+
+Run the private `LSO_V45_GENERAL_SECRETARY_DUTY_PERMISSION.sql` patch once in Supabase SQL Editor so the live database accepts and applies the updated permission model.
+
 # LSO Orchestra Management System — V43 Professional Interface
 
 This GitHub-ready release refines the visual presentation into a cleaner, more formal, and consistent administrative interface. It preserves all V42 workflows, roles, permissions, database calls, attendance behavior, monthly reporting functions, and security hardening.

@@ -1,9 +1,9 @@
 {
-  "id": "./?lso-cross-device-v44",
+  "id": "./?lso-role-control-v45",
   "name": "LSO Orchestra Management System",
   "short_name": "LSO System",
   "description": "Lasallian Symphony Orchestra enterprise membership, attendance, Duty Hours, reporting, recovery, health, and administration portal.",
-  "start_url": "./index.html?build=cross-device-v44",
+  "start_url": "./index.html?build=role-control-v45",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

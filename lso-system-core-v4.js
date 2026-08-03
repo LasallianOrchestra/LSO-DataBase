@@ -24,7 +24,7 @@ window.renderAll = renderAll;
       [ROLES.ADMIN]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'accountsView', 'systemHealthView', 'dataView'],
       [ROLES.STAFF]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
       [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView'],
-      [ROLES.SECRETARY]: ['dashboardView', 'attendanceView'],
+      [ROLES.SECRETARY]: ['dashboardView', 'attendanceView', 'dutyHoursView'],
       [ROLES.TRAINEE]: ['dutyHoursView']
     }),
     actions: Object.freeze({
@@ -39,7 +39,7 @@ window.renderAll = renderAll;
       saveDraftAttendance: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.SECRETARY],
       finalizeAttendance: [ROLES.ADMIN],
       unlockAttendance: [ROLES.ADMIN],
-      reviewDutyPunches: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.STAFF],
+      reviewDutyPunches: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.SECRETARY, ROLES.STAFF],
       manageDutyHours: [ROLES.ADMIN, ROLES.MEMBERSHIP],
       manageDutyRequirements: [ROLES.ADMIN, ROLES.MEMBERSHIP],
       certifyDutyHours: [ROLES.ADMIN, ROLES.MEMBERSHIP],
@@ -70,10 +70,10 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '4.1.0',
-    build: '2026.08.04-workflow-accessibility.1',
+    app: '4.5.0',
+    build: '2026.08.04-role-control.1',
     schemaTarget: '009_dynamic_role_permissions',
-    cache: 'lso-enterprise-v41',
+    cache: 'lso-enterprise-v45',
     permissions: 'permissions-manifest-v4-dynamic',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });

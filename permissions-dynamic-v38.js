@@ -94,7 +94,7 @@
     const allowed = can('manageMembers');
     ['addMemberTop', 'addMemberHero', 'addMemberMembers', 'editRecordButton'].forEach((id) => show(el(id), allowed));
     qsa('[data-action="edit"], [data-action="delete"]', root).forEach((node) => show(node, allowed));
-    qsa('#memberForm input, #memberForm select, #memberForm textarea, #memberForm button[type="submit"]', root).forEach((node) => enable(node, allowed, 'Administrator or Membership access is required.'));
+    qsa('#memberForm input, #memberForm select, #memberForm textarea, #memberForm button[type="submit"]', root).forEach((node) => enable(node, allowed, 'This role is not assigned to perform this action.'));
   }
 
   function attendanceGroupAllowed() {
@@ -151,14 +151,14 @@
         ? 'Staff Accounts may view system records, but contract generation is assigned to the Administrator and Membership role.'
         : 'Your role does not include the Contract workspace.';
     }
-    qsa('#contractMakerForm input, #contractMakerForm textarea, #contractMakerForm button', root).forEach((node) => enable(node, allowed, 'Administrator or Membership access is required.'));
+    qsa('#contractMakerForm input, #contractMakerForm textarea, #contractMakerForm button', root).forEach((node) => enable(node, allowed, 'This role is not assigned to perform this action.'));
   }
 
   function applyMonthlyControls(root) {
     const allowed = can('editMonthlyReport');
     qsa('[data-monthly-edit], [data-monthly-write]', root).forEach((node) => {
       if (node.matches('button')) show(node, allowed);
-      else enable(node, allowed, 'Administrator or Membership access is required.');
+      else enable(node, allowed, 'This role is not assigned to perform this action.');
     });
     applyWorkflowPermission(el('monthlyReportFinalizeButton'), can('finalizeMonthlyReport'));
     applyWorkflowPermission(el('monthlyReportReopenButton'), can('reopenMonthlyReport'));
@@ -175,8 +175,8 @@
     show(el('dutyHoursAdminControls'), manage);
     qsa('[data-duty-delete]', root).forEach((node) => show(node, manage));
     qsa('#dutyCommitmentForm input, #dutyCommitmentForm select, #dutyCommitmentForm button, #dutyRenderedForm input, #dutyRenderedForm select, #dutyRenderedForm button, #dutyIncentiveForm input, #dutyIncentiveForm select, #dutyIncentiveForm button', root)
-      .forEach((node) => enable(node, manage, 'Administrator or Membership access is required.'));
-    qsa('[data-duty-punch-review]', root).forEach((node) => enable(node, review, 'Administrator or Membership access is required.'));
+      .forEach((node) => enable(node, manage, 'This role is not assigned to perform this action.'));
+    qsa('[data-duty-punch-review]', root).forEach((node) => enable(node, review, 'This role is not assigned to perform this action.'));
   }
 
   function applyAdministratorControls(root) {
