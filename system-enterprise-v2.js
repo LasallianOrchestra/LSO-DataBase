@@ -9,6 +9,7 @@
   const ERROR_KEY = 'lso_local_error_log_v1';
   const ACCESSIBILITY_KEY = 'lso_accessibility_preferences_v1';
   const DAILY_RECOVERY_KEY = 'lso_daily_recovery_v1';
+  const ERROR_RESOLUTION_OVERRIDE_KEY = 'lso_system_error_resolution_overrides_v1';
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
   let lastHealth = null;
@@ -17,6 +18,8 @@
   let loggingServerError = false;
   let lastShownErrorSignature = '';
   let lastShownErrorAt = 0;
+  let systemErrorFilter = 'open';
+  let activeHealthPanel = 'overview';
 
   function safeText(value) {
     return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
@@ -73,8 +76,18 @@
     const value = storageGet(ERROR_KEY, []);
     return Array.isArray(value) ? value : [];
   }
-  function saveLocalError(record) {
-    try { localStorage.setItem(ERROR_KEY, JSON.stringify([record, ...localErrors()].slice(0, 100))); } catch { /* no-op */ }
+  function saveLocalErrors(records) {
+    try { localStorage.setItem(ERROR_KEY, JSON.stringify((Array.isArray(records) ? records : []).slice(0, 100))); } catch { /* no-op */ }
+  }
+  function saveLocalError(record) { saveLocalErrors([record, ...localErrors()]); }
+  function resolutionOverrides() {
+    try { const value = JSON.parse(localStorage.getItem(ERROR_RESOLUTION_OVERRIDE_KEY) || '{}'); return value && typeof value === 'object' ? value : {}; } catch { return {}; }
+  }
+  function saveResolutionOverride(id, note) {
+    const overrides = resolutionOverrides();
+    overrides[String(id)] = { resolvedAt: new Date().toISOString(), resolvedBy: currentAccount()?.username || 'Administrator', note: String(note || '') };
+    try { localStorage.setItem(ERROR_RESOLUTION_OVERRIDE_KEY, JSON.stringify(overrides)); } catch { /* no-op */ }
+    return overrides[String(id)];
   }
   function classifyError(detail = {}) {
     const technical = String(detail.technicalMessage || detail.message || detail.reason?.message || detail.reason || 'Unknown error');
@@ -165,6 +178,45 @@
   // ---------------------------------------------------------------------------
   // System Health and migration center
   // ---------------------------------------------------------------------------
+  function setHealthPanel(panelName = 'overview') {
+    const available = ['overview', 'access', 'diagnostics', 'errors'];
+    activeHealthPanel = available.includes(panelName) ? panelName : 'overview';
+    qsa('[data-health-panel]').forEach((button) => {
+      const active = button.dataset.healthPanel === activeHealthPanel;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-current', active ? 'step' : 'false');
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    qsa('[data-health-workflow-panel]').forEach((panel) => {
+      const active = panel.dataset.healthWorkflowPanel === activeHealthPanel;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
+    });
+    requestAnimationFrame(() => el('systemHealthNavigation')?.scrollIntoView({ block: 'nearest' }));
+  }
+  function renderHealthWorkflowSummary(health = lastHealth) {
+    const summary = el('healthWorkflowSummary');
+    if (!summary) return;
+    if (!health) {
+      summary.textContent = navigator.onLine ? 'Health status has not been verified in this session.' : 'Offline: reconnect before running a complete health check.';
+      summary.dataset.state = 'pending';
+      return;
+    }
+    const failed = (health.checks || []).filter((check) => !check.ok).length;
+    const unresolved = Number(health.counts?.unresolvedErrors || 0);
+    if (!failed && !unresolved) {
+      summary.textContent = 'All verified checks passed and no unresolved server errors were reported.';
+      summary.dataset.state = 'healthy';
+    } else {
+      summary.textContent = `${failed} compatibility check${failed === 1 ? '' : 's'} and ${unresolved} unresolved error${unresolved === 1 ? '' : 's'} need attention.`;
+      summary.dataset.state = 'attention';
+    }
+    const errorsButton = document.querySelector('[data-health-panel="errors"]');
+    if (errorsButton) errorsButton.classList.toggle('has-attention', unresolved > 0);
+    const diagnosticsButton = document.querySelector('[data-health-panel="diagnostics"]');
+    if (diagnosticsButton) diagnosticsButton.classList.toggle('has-attention', failed > 0);
+  }
   function renderHealthVersions(health = null) {
     const container = el('healthVersionGrid'); if (!container) return;
     const migrationCount = health?.migrations?.length || 0;
@@ -198,6 +250,7 @@
     const c = health?.counts || {};
     const items = [['Members', c.members || 0], ['Activities', c.events || 0], ['Attendance Marks', c.attendance || 0], ['Duty Entries', c.dutyEntries || 0], ['Accounts', c.accounts || 0], ['Recovery Points', c.recoveryPoints || 0], ['Unresolved Errors', c.unresolvedErrors || 0], ['State Updated', health?.stateUpdatedAt ? dateTimeLabel(health.stateUpdatedAt) : '—']];
     container.innerHTML = items.map(([label, value]) => `<div class="health-count-card"><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
+    renderHealthWorkflowSummary(health);
   }
   const permissionLabels = {
     manageAccounts:'Manage accounts',manageMembers:'Manage member records',generateContract:'Generate contracts',editMonthlyReport:'Edit Monthly Reports',finalizeMonthlyReport:'Finalize Monthly Reports',reopenMonthlyReport:'Reopen Monthly Reports',manageEvents:'Create/edit activities',deleteEvents:'Delete activities',saveDraftAttendance:'Save draft attendance',finalizeAttendance:'Finalize attendance',unlockAttendance:'Unlock attendance',reviewDutyPunches:'Approve/reject Duty punches',manageDutyHours:'Manually manage Duty Hours',manageDutyRequirements:'Set Duty requirements',certifyDutyHours:'Generate Duty certification',manageSettings:'Manage system settings',manageInventory:'Manage inventory',manageData:'Import/export/clear data',manageRecovery:'Manage recovery points',viewSystemHealth:'View System Health',manageSystemErrors:'Resolve system errors',writeActivityLog:'Write audit activity',selfDutyPunch:'Submit personal Duty punches',manageAccessibility:'Use accessibility controls'
@@ -230,11 +283,11 @@
       if (!window.LSOCloud?.getSystemHealth) throw new Error('The website health connector is unavailable. Upload the complete enterprise package.');
       lastHealth = await window.LSOCloud.getSystemHealth();
       try { serverErrors = await window.LSOCloud.listSystemErrors(100); } catch { serverErrors = []; }
-      renderHealthVersions(lastHealth); renderHealthChecks(lastHealth); renderMigrations(lastHealth); renderHealthCounts(lastHealth); renderSystemErrors();
+      renderHealthVersions(lastHealth); renderHealthChecks(lastHealth); renderMigrations(lastHealth); renderHealthCounts(lastHealth); renderSystemErrors(); renderHealthWorkflowSummary(lastHealth);
       window.dispatchEvent(new CustomEvent('lso:system-health-changed', { detail: clone(lastHealth) }));
       if (!quiet) toast('System health check completed.');
     } catch (error) {
-      lastHealth = null; renderHealthVersions(); renderHealthChecks(); renderMigrations(); renderHealthCounts();
+      lastHealth = null; renderHealthVersions(); renderHealthChecks(); renderMigrations(); renderHealthCounts(); renderHealthWorkflowSummary();
       reportError({ module: 'System Health', publicMessage: 'The website could not verify the database schema. Run LSO_MASTER_MIGRATION_INSTALLER.sql in Supabase, then refresh.', technicalMessage: error.message, errorCode: CORE.ERROR_CODES?.MIGRATION || 'DB-MIGRATION-004' }, { show: !quiet });
     } finally { if (button) { button.disabled = false; button.textContent = 'Run Health Check'; } }
   }
@@ -243,25 +296,62 @@
     const text = JSON.stringify(report, null, 2);
     navigator.clipboard?.writeText(text).then(() => toast('Health report copied.')).catch(() => download(`LSO_Health_Report_${todayPH()}.json`, text, 'application/json'));
   }
+  function combinedSystemErrors() {
+    const overrides = resolutionOverrides();
+    const server = (Array.isArray(serverErrors) ? serverErrors : []).map((record) => ({ ...record, _source: 'server', _override: overrides[String(record.id || '')] || null }));
+    const serverKeys = new Set(server.map((record) => `${record.error_code || record.errorCode}|${record.module || 'System'}|${record.public_message || record.publicMessage || ''}`));
+    const local = localErrors().filter((record) => !serverKeys.has(`${record.error_code || record.errorCode}|${record.module || 'System'}|${record.public_message || record.publicMessage || ''}`)).map((record) => ({ ...record, _source: 'local' }));
+    return [...server, ...local].sort((a, b) => String(b.created_at || b.createdAt || '').localeCompare(String(a.created_at || a.createdAt || ''))).slice(0, 100);
+  }
+  function errorResolved(record) { return Boolean(record.resolved_at || record.resolvedAt || record._override?.resolvedAt); }
   function renderSystemErrors() {
     const container = el('systemErrorLog'); if (!container) return;
-    const combined = [...(Array.isArray(serverErrors) ? serverErrors : []), ...localErrors().filter((local) => !(serverErrors || []).some((server) => String(server.id) === String(local.id)))].sort((a, b) => String(b.created_at || b.createdAt || '').localeCompare(String(a.created_at || a.createdAt || ''))).slice(0, 100);
+    const all = combinedSystemErrors();
+    const combined = systemErrorFilter === 'open' ? all.filter((record) => !errorResolved(record)) : all;
     container.innerHTML = combined.length ? combined.map((record) => {
-      const resolved = Boolean(record.resolved_at || record.resolvedAt);
+      const resolved = errorResolved(record);
       const id = record.id || '';
-      return `<article class="system-error-record ${resolved ? '' : 'is-unresolved'}"><div class="system-error-record-header"><div><h4>${safeText(record.error_code || record.errorCode || 'SYS-UNEXPECTED-999')} • ${safeText(record.module || 'System')}</h4><div class="system-error-meta"><span>${safeText(dateTimeLabel(record.created_at || record.createdAt))}</span><span>${safeText(record.created_by_username || record.username || 'Local device')}</span><span>${resolved ? 'Resolved' : 'Unresolved'}</span></div></div><span class="badge ${resolved ? 'badge-green' : 'badge-red'}">${resolved ? 'Resolved' : 'Open'}</span></div><p class="system-error-message">${safeText(record.public_message || record.publicMessage || '')}</p>${isAdmin() && !resolved && id ? `<div class="system-error-actions"><button class="button button-secondary" data-resolve-system-error="${safeText(id)}" type="button">Mark Resolved</button></div>` : ''}</article>`;
-    }).join('') : '<div class="system-error-empty"><strong>No system errors recorded</strong><p>The error log is clear.</p></div>';
+      const note = record.resolution_note || record.resolutionNote || record._override?.note || '';
+      const resolvedAt = record.resolved_at || record.resolvedAt || record._override?.resolvedAt || '';
+      const sourceLabel = record._source === 'server' ? 'Shared log' : 'This device';
+      return `<article class="system-error-record ${resolved ? 'is-resolved' : 'is-unresolved'}"><div class="system-error-record-header"><div><h4>${safeText(record.error_code || record.errorCode || 'SYS-UNEXPECTED-999')} • ${safeText(record.module || 'System')}</h4><div class="system-error-meta"><span>${safeText(dateTimeLabel(record.created_at || record.createdAt))}</span><span>${safeText(record.created_by_username || record.username || 'Local device')}</span><span>${safeText(sourceLabel)}</span></div></div><span class="badge ${resolved ? 'badge-green' : 'badge-red'}">${resolved ? 'Resolved' : 'Open'}</span></div><p class="system-error-message">${safeText(record.public_message || record.publicMessage || '')}</p>${resolved ? `<div class="system-error-resolution"><strong>Resolution recorded</strong><small>${safeText(note || 'No note provided.')} • ${safeText(dateTimeLabel(resolvedAt))}</small></div>` : ''}${isAdmin() && !resolved && id ? `<div class="system-error-actions"><button class="button button-secondary" data-resolve-system-error="${safeText(id)}" data-error-source="${safeText(record._source)}" type="button">Mark Resolved</button></div>` : ''}</article>`;
+    }).join('') : `<div class="system-error-empty"><strong>${systemErrorFilter === 'open' ? 'No open system errors' : 'No system errors recorded'}</strong><p>${systemErrorFilter === 'open' ? 'The current error-resolution queue is clear.' : 'The error log is clear.'}</p></div>`;
+    el('showOpenSystemErrorsButton')?.classList.toggle('button-primary', systemErrorFilter === 'open');
+    el('showAllSystemErrorsButton')?.classList.toggle('button-primary', systemErrorFilter === 'all');
   }
-  async function resolveSystemError(id) {
+  async function resolveSystemError(id, source = 'server') {
     const note = window.prompt('Enter a brief resolution note:'); if (note === null) return;
-    try { await window.LSOCloud?.resolveSystemError?.(id, note); serverErrors = await window.LSOCloud.listSystemErrors(100); renderSystemErrors(); toast('System error marked resolved.'); } catch (error) { reportError({ module: 'System Health', publicMessage: 'The error record could not be resolved.', technicalMessage: error.message }); }
+    const trimmedNote = note.trim();
+    if (!trimmedNote) { toast('Enter a short resolution note before closing the error.', true); return; }
+    try {
+      if (source === 'local') {
+        const records = localErrors();
+        const index = records.findIndex((record) => String(record.id) === String(id));
+        if (index < 0) throw new Error('The local error record is no longer available.');
+        records[index] = { ...records[index], resolvedAt: new Date().toISOString(), resolvedBy: currentAccount()?.username || 'Administrator', resolutionNote: trimmedNote };
+        saveLocalErrors(records);
+      } else {
+        if (!window.LSOCloud?.resolveSystemError) throw new Error('The shared error-resolution connector is unavailable.');
+        const result = await window.LSOCloud.resolveSystemError(id, trimmedNote);
+        if (result === false || result?.ok === false) throw new Error(result?.message || 'The shared error record was not marked resolved.');
+        saveResolutionOverride(id, trimmedNote);
+        try { serverErrors = await window.LSOCloud.listSystemErrors(100); } catch { /* Keep current list and local confirmation. */ }
+      }
+      renderSystemErrors();
+      renderHealthWorkflowSummary(lastHealth);
+      toast('System error marked resolved.');
+    } catch (error) {
+      console.error('Unable to resolve system error:', error);
+      toast(error.message || 'The error record could not be resolved.', true);
+    }
   }
   function exportErrors() {
-    const combined = [...(serverErrors || []), ...localErrors()];
-    const rows = [['Error Code','Severity','Module','Message','Technical Details','Created At','Created By','Resolved At']];
-    combined.forEach((r) => rows.push([r.error_code || r.errorCode, r.severity, r.module, r.public_message || r.publicMessage, r.technical_message || r.technicalMessage, r.created_at || r.createdAt, r.created_by_username || r.username, r.resolved_at || r.resolvedAt]));
+    const combined = combinedSystemErrors();
+    const rows = [['Error Code','Severity','Module','Message','Technical Details','Created At','Created By','Source','Resolved At','Resolution Note']];
+    combined.forEach((r) => rows.push([r.error_code || r.errorCode, r.severity, r.module, r.public_message || r.publicMessage, r.technical_message || r.technicalMessage, r.created_at || r.createdAt, r.created_by_username || r.username, r._source, r.resolved_at || r.resolvedAt || r._override?.resolvedAt, r.resolution_note || r.resolutionNote || r._override?.note]));
     download(`LSO_System_Errors_${todayPH()}.csv`, rows.map((row) => row.map(csvEscape).join(',')).join('\n'), 'text/csv');
   }
+
 
   // ---------------------------------------------------------------------------
   // Automated backup and recovery
@@ -412,7 +502,7 @@
   function saveMonthlyState(state) { storageSet(MONTHLY_KEY,state); window.dispatchEvent(new CustomEvent('lso:monthly-report-changed',{detail:{key:activeReportKey(),source:'enterprise-workflow'}})); window.LSOMonthlyReport?.refresh?.(); }
   function monthlyMissing(report) {
     const missing=[]; if(!report) return ['Report record'];
-    if(!report.asOfDate) missing.push('As-of Date'); if(!report.academicYear) missing.push('Academic Year'); if(!report.preparedBy) missing.push('Prepared By'); if(!report.notedBy) missing.push('Noted By'); if(!report.approvedBy) missing.push('Approved By');
+    if(!report.asOfDate) missing.push('As-of Date'); if(!report.academicYear) missing.push('Academic Year'); if(!report.preparedBy) missing.push('Prepared By'); if(!report.notedBy) missing.push('Noted By');
     (report.traineeRows||[]).forEach((row,index)=>{ if(!row.date) missing.push(`Table 5 Original Entry Date, row ${index+1}`); });
     return missing;
   }
@@ -467,9 +557,23 @@
   }
   function wireEvents() {
     el('accessibilityButton')?.addEventListener('click',openAccessibility);el('closeAccessibilityButton')?.addEventListener('click',closeAccessibility);el('accessibilityOverlay')?.addEventListener('click',closeAccessibility);el('saveAccessibilityButton')?.addEventListener('click',saveAccessibility);el('resetAccessibilityButton')?.addEventListener('click',resetAccessibility);
-    el('dismissSystemErrorButton')?.addEventListener('click',closeErrorDialog);el('copySystemErrorButton')?.addEventListener('click',copyErrorDetails);el('openHealthFromErrorButton')?.addEventListener('click',()=>{closeErrorDialog();setView('systemHealthView');setTimeout(()=>refreshSystemHealth(),50);});
+    el('dismissSystemErrorButton')?.addEventListener('click',closeErrorDialog);el('copySystemErrorButton')?.addEventListener('click',copyErrorDetails);el('openHealthFromErrorButton')?.addEventListener('click',()=>{closeErrorDialog();setView('systemHealthView');setHealthPanel('errors');setTimeout(()=>refreshSystemHealth(),50);});
     el('refreshSystemHealthButton')?.addEventListener('click',()=>refreshSystemHealth());el('copyHealthReportButton')?.addEventListener('click',copyHealthReport);el('exportSystemErrorsButton')?.addEventListener('click',exportErrors);el('exportPermissionMatrixButton')?.addEventListener('click',exportPermissionMatrix);
-    el('systemErrorLog')?.addEventListener('click',(event)=>{const button=event.target.closest('[data-resolve-system-error]');if(button)resolveSystemError(button.dataset.resolveSystemError);});
+    const healthButtons=qsa('[data-health-panel]');
+    healthButtons.forEach((button,index)=>{
+      button.addEventListener('click',()=>setHealthPanel(button.dataset.healthPanel));
+      button.addEventListener('keydown',(event)=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+        event.preventDefault();
+        const nextIndex=event.key==='Home'?0:event.key==='End'?healthButtons.length-1:(index+(event.key==='ArrowRight'?1:-1)+healthButtons.length)%healthButtons.length;
+        const next=healthButtons[nextIndex];
+        setHealthPanel(next.dataset.healthPanel);
+        next.focus();
+      });
+    });
+    el('showOpenSystemErrorsButton')?.addEventListener('click',()=>{systemErrorFilter='open';renderSystemErrors();});
+    el('showAllSystemErrorsButton')?.addEventListener('click',()=>{systemErrorFilter='all';renderSystemErrors();});
+    el('systemErrorLog')?.addEventListener('click',(event)=>{const button=event.target.closest('[data-resolve-system-error]');if(button)resolveSystemError(button.dataset.resolveSystemError,button.dataset.errorSource||'server');});
     el('createRecoveryPointButton')?.addEventListener('click',async()=>{const label=window.prompt('Recovery point label:','Manual recovery point');if(label===null)return;const reason=window.prompt('Reason or note (optional):','');try{await createRecoveryPoint(label,reason||'',{type:'manual'});toast('Recovery point created.');}catch(error){reportError({module:'Backup & Recovery',publicMessage:'The recovery point could not be created.',technicalMessage:error.message,errorCode:CORE.ERROR_CODES?.BACKUP||'DATA-BACKUP-006'});}});
     el('refreshRecoveryPointsButton')?.addEventListener('click',()=>refreshRecoveryPoints());el('recoveryPointList')?.addEventListener('click',(event)=>{const restore=event.target.closest('[data-restore-recovery]');const remove=event.target.closest('[data-delete-recovery]');if(restore)restoreRecovery(restore.dataset.restoreRecovery);if(remove)deleteRecovery(remove.dataset.deleteRecovery);});
     el('validateBackupFile')?.addEventListener('change',(event)=>validateBackupFile(event.target.files?.[0]));
@@ -490,7 +594,7 @@
   }
   function initialize() {
     if (el('systemVersionFooter')) el('systemVersionFooter').textContent = `LSO System v${VERSION.app} • Database target ${String(VERSION.schemaTarget || '').split('_')[0] || '—'}`;
-    applyAccessibility();injectDutySettings();renderDutySettings();renderHealthVersions();renderHealthChecks();renderMigrations();renderHealthCounts();renderPermissionMatrix();renderRecoveryPoints();renderSystemErrors();renderDutyEnhancements();renderMonthlyWorkflow();wireEvents();
+    applyAccessibility();injectDutySettings();renderDutySettings();renderHealthVersions();renderHealthChecks();renderMigrations();renderHealthCounts();renderPermissionMatrix();renderRecoveryPoints();renderSystemErrors();renderDutyEnhancements();renderMonthlyWorkflow();wireEvents();setHealthPanel(activeHealthPanel);renderHealthWorkflowSummary();
     window.dispatchEvent(new CustomEvent('lso:enterprise-ready', { detail: { version: VERSION } }));
     if(isAdmin()){setTimeout(()=>{ensureDailyRecovery();refreshSystemHealth({quiet:true});refreshRecoveryPoints({quiet:true});},900);}
   }

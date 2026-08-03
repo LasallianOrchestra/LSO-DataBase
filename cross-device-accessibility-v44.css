@@ -1,0 +1,923 @@
+/* LSO V44 — Cross-device accessibility and design compatibility
+   Presentation only: no data, permission, database, or workflow logic is changed. */
+
+:root {
+  --v44-safe-top: env(safe-area-inset-top, 0px);
+  --v44-safe-right: env(safe-area-inset-right, 0px);
+  --v44-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --v44-safe-left: env(safe-area-inset-left, 0px);
+  --v44-content-max: 1680px;
+  --v44-touch-target: 44px;
+}
+
+html {
+  min-width: 320px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: 92px;
+}
+
+body,
+#appShell,
+.main-content,
+.view,
+.panel,
+.panel-header,
+.form-grid,
+.table-wrap,
+.monthly-table-wrap,
+.monthly-report-tab-panel,
+.health-workflow-panel,
+.attendance-management-layout,
+.attendance-roster-panel,
+#attendanceWorkspace {
+  min-width: 0;
+}
+
+body {
+  overflow-x: hidden;
+  padding-bottom: var(--v44-safe-bottom);
+}
+
+img,
+svg,
+canvas,
+video,
+iframe {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+button,
+[role="button"],
+summary,
+.nav-item,
+.health-nav-button,
+.monthly-report-tab {
+  touch-action: manipulation;
+}
+
+.main-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.view {
+  width: min(100%, var(--v44-content-max));
+  max-width: var(--v44-content-max);
+  min-width: 0;
+  margin-inline: auto;
+  padding-left: max(clamp(16px, 2.2vw, 36px), var(--v44-safe-left));
+  padding-right: max(clamp(16px, 2.2vw, 36px), var(--v44-safe-right));
+  padding-bottom: max(40px, calc(24px + var(--v44-safe-bottom)));
+}
+
+/* Keep every primary action available. V43 hid some topbar actions on phones. */
+.topbar-actions .button,
+.topbar-actions .icon-button,
+.topbar-actions .notification-center {
+  display: inline-flex;
+}
+
+.topbar {
+  min-width: 0;
+  padding-top: max(12px, var(--v44-safe-top));
+  padding-right: max(clamp(14px, 2vw, 32px), var(--v44-safe-right));
+  padding-left: max(clamp(14px, 2vw, 32px), var(--v44-safe-left));
+}
+
+.topbar > div:not(.topbar-actions) {
+  min-width: 0;
+}
+
+.topbar h2,
+.topbar .eyebrow {
+  overflow-wrap: anywhere;
+}
+
+.topbar-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.topbar-status {
+  min-width: 0;
+  max-width: min(360px, 35vw);
+}
+
+.topbar-status > div {
+  min-width: 0;
+}
+
+.topbar-status strong,
+.topbar-status small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fluid grids: maintain the visual system without forcing overflow. */
+.metric-grid,
+.dashboard-grid,
+.dashboard-operations-grid,
+.quick-action-grid,
+.alert-summary-grid,
+.health-count-grid,
+.health-version-grid,
+.attendance-kpi-grid,
+.monthly-report-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+}
+
+.form-grid.two-columns,
+.filter-grid,
+.settings-grid,
+.monthly-report-setup-grid,
+.monthly-section-grid,
+.health-layout-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+}
+
+.panel-header,
+.stack-mobile,
+.inline-actions,
+.monthly-report-actions,
+.attendance-period-actions,
+.calendar-controls,
+.monthly-report-action-buttons,
+.monthly-report-toolbar-actions,
+.accounts-refresh-control {
+  min-width: 0;
+}
+
+.inline-actions,
+.monthly-report-actions,
+.attendance-period-actions,
+.calendar-controls,
+.monthly-report-action-buttons,
+.accounts-refresh-control {
+  flex-wrap: wrap;
+}
+
+.inline-actions > *,
+.monthly-report-actions > *,
+.attendance-period-actions > *,
+.calendar-controls > *,
+.monthly-report-action-buttons > *,
+.accounts-refresh-control > * {
+  max-width: 100%;
+}
+
+/* Forms stay readable under browser zoom and on mobile Safari. */
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.field,
+.field > span,
+.panel-subtitle,
+.monthly-report-help,
+.permission-editor-note,
+.account-security-note {
+  overflow-wrap: anywhere;
+}
+
+/* Tables are contained inside their own workspaces on every device. */
+.table-wrap,
+.monthly-table-wrap,
+.permission-matrix-wrap,
+.health-migration-table,
+.attendance-semester-rates-table,
+.compact-report-table,
+.monthly-comparative-table {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.table-wrap table,
+.monthly-table-wrap table {
+  width: 100%;
+  min-width: max-content;
+}
+
+th,
+td {
+  vertical-align: middle;
+}
+
+/* Keep fixed/sticky navigation from blocking content when zoomed. */
+.system-health-navigation,
+#monthlyReportView .monthly-report-toolbar {
+  scroll-margin-top: 96px;
+}
+
+/* Notifications and accessibility controls remain within the viewport. */
+.notification-popover,
+.accessibility-drawer {
+  max-width: calc(100vw - var(--v44-safe-left) - var(--v44-safe-right) - 24px);
+  max-height: calc(100dvh - var(--v44-safe-top) - var(--v44-safe-bottom) - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-backdrop {
+  padding-top: max(12px, var(--v44-safe-top));
+  padding-right: max(12px, var(--v44-safe-right));
+  padding-bottom: max(12px, var(--v44-safe-bottom));
+  padding-left: max(12px, var(--v44-safe-left));
+}
+
+.modal-card,
+.system-error-card {
+  width: min(100%, 960px);
+  max-width: 100%;
+  max-height: calc(100dvh - var(--v44-safe-top) - var(--v44-safe-bottom) - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Professional desktop and large-screen behavior. */
+@media (min-width: 1440px) {
+  .app-shell {
+    grid-template-columns: 276px minmax(0, 1fr);
+  }
+
+  .dashboard-operations-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .dashboard-operations-grid > * {
+    grid-column: span 4;
+  }
+
+  .dashboard-operations-grid > .activity-module,
+  .dashboard-operations-grid > .upcoming-module {
+    grid-column: span 6;
+  }
+
+  .attendance-overview-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr);
+  }
+
+  .attendance-management-layout {
+    grid-template-columns: minmax(280px, .32fr) minmax(0, 1fr);
+  }
+}
+
+/* Standard laptops and landscape tablets. */
+@media (max-width: 1180px) {
+  .topbar-status {
+    max-width: 290px;
+  }
+
+  .dashboard-operations-grid,
+  .dashboard-grid,
+  .attendance-overview-grid,
+  .attendance-period-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-layout,
+  .attendance-management-layout,
+  .recovery-center-grid {
+    grid-template-columns: minmax(250px, .38fr) minmax(0, 1fr);
+  }
+
+  .monthly-report-command-badge {
+    max-width: 330px;
+  }
+}
+
+/* Tablet and mobile shell. */
+@media (max-width: 920px) {
+  html {
+    scroll-padding-top: 78px;
+  }
+
+  .sidebar {
+    width: min(320px, 88vw);
+    max-width: calc(100vw - 32px);
+    padding-top: max(18px, var(--v44-safe-top));
+    padding-bottom: max(18px, var(--v44-safe-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .sidebar-close {
+    min-width: var(--v44-touch-target);
+    min-height: var(--v44-touch-target);
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 68px;
+  }
+
+  .mobile-menu {
+    display: inline-grid !important;
+    place-items: center;
+    min-width: var(--v44-touch-target);
+    min-height: var(--v44-touch-target);
+  }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .topbar-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .topbar-status {
+    display: flex !important;
+    flex: 1 1 260px;
+    max-width: none;
+  }
+
+  .topbar-actions .button {
+    min-height: 42px;
+    padding-inline: 11px;
+    white-space: nowrap;
+  }
+
+  .view {
+    padding-top: 14px;
+  }
+
+  .dashboard-operations-grid,
+  .dashboard-grid,
+  .attendance-overview-grid,
+  .attendance-period-grid,
+  .management-layout,
+  .attendance-management-layout,
+  .recovery-center-grid,
+  .monthly-report-setup-grid,
+  .monthly-section-grid,
+  .health-layout-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel-header.stack-mobile,
+  .panel-header,
+  .monthly-report-command,
+  .system-health-hero,
+  .attendance-command-header {
+    align-items: flex-start;
+  }
+
+  .panel-header.stack-mobile,
+  #accountsView .panel-header,
+  .system-health-hero,
+  .attendance-command-header {
+    flex-direction: column;
+  }
+
+  .panel-header.stack-mobile > .inline-actions,
+  #accountsView .accounts-refresh-control,
+  .system-health-hero > .inline-actions,
+  .attendance-command-header > .inline-actions {
+    width: 100%;
+  }
+
+  #monthlyReportView .monthly-report-toolbar,
+  .system-health-navigation {
+    position: static !important;
+  }
+
+  .monthly-report-tabs,
+  .system-health-navigation,
+  .attendance-group-toggle,
+  .attendance-roster-mode-toggle {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .monthly-report-tab,
+  .health-nav-button,
+  .attendance-group-toggle > *,
+  .attendance-roster-mode-toggle > * {
+    flex: 0 0 auto;
+  }
+
+  .health-nav-button {
+    min-width: 170px;
+  }
+
+  .action-center-toolbar {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .action-center-toolbar .search-field {
+    grid-column: 1 / -1;
+  }
+
+  #attendanceView .attendance-roster-scroll,
+  #attendanceView #attendanceWorkspace > .attendance-roster-scroll {
+    max-height: min(58dvh, 620px);
+  }
+
+  #attendanceView .attendance-calendar-panel {
+    overflow: hidden;
+  }
+
+  #attendanceView .attendance-calendar-weekdays,
+  #attendanceView .attendance-calendar-grid {
+    min-width: 680px;
+  }
+
+  #attendanceView .attendance-calendar-panel > .attendance-calendar-weekdays,
+  #attendanceView .attendance-calendar-panel > .attendance-calendar-grid {
+    overflow: visible;
+  }
+
+  #attendanceView .attendance-calendar-panel {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #attendanceView .attendance-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  #attendanceView .attendance-toolbar .inline-actions {
+    width: 100%;
+  }
+
+  #accountsView .table-wrap,
+  #systemHealthView .permission-matrix-wrap,
+  #monthlyReportView .monthly-table-wrap {
+    max-height: min(62dvh, 680px);
+  }
+}
+
+/* Phones: same professional design, simplified composition. */
+@media (max-width: 680px) {
+  html {
+    scroll-padding-top: 72px;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-block: max(9px, var(--v44-safe-top)) 9px;
+  }
+
+  .topbar-actions {
+    grid-column: auto;
+  }
+
+  .topbar-status {
+    display: none !important;
+  }
+
+  .topbar .eyebrow {
+    display: none;
+  }
+
+  .topbar h2 {
+    font-size: clamp(17px, 5vw, 20px);
+    line-height: 1.15;
+  }
+
+  .topbar-actions {
+    max-width: 142px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+
+  .topbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .topbar-actions .button {
+    font-size: 0;
+    min-width: var(--v44-touch-target);
+    width: var(--v44-touch-target);
+    padding: 0;
+    justify-content: center;
+  }
+
+  #addMemberTop::before {
+    content: "+";
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  #exportCsvTop::before {
+    content: "⇩";
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .view {
+    padding-left: max(11px, var(--v44-safe-left));
+    padding-right: max(11px, var(--v44-safe-right));
+  }
+
+  .panel,
+  .monthly-report-panel,
+  .accounts-workspace-panel,
+  .permission-center-panel {
+    padding: 14px;
+    border-radius: 13px;
+  }
+
+  #dashboardView .hero-card,
+  .dcc-hero,
+  #monthlyReportView .monthly-report-command,
+  .system-health-hero,
+  .attendance-command-header {
+    padding: 17px !important;
+    border-radius: 13px !important;
+  }
+
+  .metric-grid,
+  .dashboard-grid,
+  .dashboard-operations-grid,
+  .quick-action-grid,
+  .alert-summary-grid,
+  .health-count-grid,
+  .health-version-grid,
+  .attendance-kpi-grid,
+  .monthly-report-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-card,
+  .quick-action-card,
+  .health-count-card,
+  .health-version-card {
+    min-width: 0;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 46px;
+    font-size: 16px; /* avoids unintended iOS zoom */
+  }
+
+  .button,
+  .icon-button,
+  .notification-button,
+  .small-button,
+  .table-action,
+  summary {
+    min-height: var(--v44-touch-target);
+  }
+
+  .inline-actions,
+  .monthly-report-actions,
+  .attendance-period-actions,
+  .monthly-report-action-buttons,
+  .accounts-refresh-control {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .inline-actions > .button:only-child,
+  .monthly-report-actions > .button:only-child,
+  .attendance-period-actions > .button:only-child,
+  .accounts-refresh-control > .button:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .inline-actions .button,
+  .monthly-report-actions .button,
+  .attendance-period-actions .button,
+  .monthly-report-action-buttons .button,
+  .accounts-refresh-control .button {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .action-center-toolbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .action-center-toolbar > * {
+    grid-column: 1 !important;
+  }
+
+  .system-error-workflow-note {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 9px 10px;
+    align-items: start;
+  }
+
+  .system-error-workflow-note > i {
+    display: none;
+  }
+
+  .monthly-report-toolbar {
+    gap: 10px;
+  }
+
+  .monthly-report-toolbar-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .monthly-report-status {
+    width: 100%;
+  }
+
+  #attendanceView .attendance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #attendanceView .attendance-summary > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  #attendanceView .attendance-roster-scroll,
+  #attendanceView #attendanceWorkspace > .attendance-roster-scroll {
+    max-height: min(56dvh, 540px);
+  }
+
+  #attendanceView .attendance-roster-scroll table {
+    min-width: 760px;
+  }
+
+  #attendanceView .attendance-semester-rates-table table,
+  #attendanceView .compact-report-table table {
+    min-width: 660px;
+  }
+
+  #monthlyReportView .monthly-table-wrap table,
+  #monthlyReportView .monthly-comparative-table table {
+    min-width: 720px;
+  }
+
+  #accountsView .table-wrap table {
+    min-width: 980px;
+  }
+
+  #systemHealthView .health-migration-table table {
+    min-width: 680px;
+  }
+
+  #systemHealthView .permission-matrix-wrap table {
+    min-width: 760px;
+  }
+
+  .notification-popover {
+    position: fixed !important;
+    inset: max(8px, var(--v44-safe-top)) max(8px, var(--v44-safe-right)) max(8px, var(--v44-safe-bottom)) max(8px, var(--v44-safe-left)) !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    border-radius: 14px !important;
+  }
+
+  .notification-list {
+    max-height: none;
+  }
+
+  .accessibility-drawer {
+    width: min(100%, 420px) !important;
+    max-width: calc(100vw - var(--v44-safe-left) - var(--v44-safe-right));
+  }
+
+  .modal-card,
+  .system-error-card {
+    border-radius: 14px;
+  }
+
+  .modal-header,
+  #memberForm {
+    padding-inline: 16px;
+  }
+}
+
+/* Small phones and 200% zoom scenarios. */
+@media (max-width: 460px) {
+  .metric-grid,
+  .dashboard-grid,
+  .dashboard-operations-grid,
+  .quick-action-grid,
+  .alert-summary-grid,
+  .health-count-grid,
+  .health-version-grid,
+  .attendance-kpi-grid,
+  .monthly-report-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inline-actions,
+  .monthly-report-actions,
+  .attendance-period-actions,
+  .monthly-report-action-buttons,
+  .accounts-refresh-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .topbar-actions {
+    max-width: 96px;
+  }
+
+  .panel-header h3 {
+    font-size: 16px;
+  }
+
+  #dashboardView .hero-card h3,
+  .dcc-hero h2,
+  #monthlyReportView .monthly-report-command h3,
+  .system-health-hero h3 {
+    font-size: clamp(21px, 7vw, 25px) !important;
+  }
+
+  .monthly-report-tab,
+  .health-nav-button {
+    min-height: 48px;
+  }
+
+  .health-nav-button {
+    min-width: 152px;
+  }
+}
+
+/* Short landscape screens: preserve access to controls without clipping. */
+@media (max-width: 920px) and (max-height: 540px) and (orientation: landscape) {
+  .topbar {
+    position: static;
+    min-height: 58px;
+  }
+
+  .sidebar {
+    padding-block: 10px;
+  }
+
+  .brand {
+    padding-bottom: 10px;
+  }
+
+  .nav-list {
+    margin-top: 10px;
+  }
+
+  .nav-item {
+    min-height: 38px;
+    padding-block: 7px;
+  }
+
+  .modal-card,
+  .system-error-card,
+  .notification-popover,
+  .accessibility-drawer {
+    max-height: calc(100dvh - 12px) !important;
+  }
+
+  #attendanceView .attendance-roster-scroll,
+  #attendanceView #attendanceWorkspace > .attendance-roster-scroll {
+    max-height: 68dvh;
+  }
+}
+
+/* Pointer, motion, contrast, and forced-color accessibility. */
+@media (hover: none), (pointer: coarse) {
+  .button,
+  .icon-button,
+  .notification-button,
+  .nav-item,
+  .health-nav-button,
+  .monthly-report-tab,
+  .table-action,
+  summary {
+    min-height: var(--v44-touch-target);
+  }
+
+  .button:hover,
+  .nav-item:hover,
+  .health-nav-button:hover,
+  .monthly-report-tab:hover,
+  .table-action:hover {
+    transform: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --pro-line: #879c93;
+    --pro-line-strong: #687f75;
+    --pro-muted: #3e554c;
+  }
+
+  .panel,
+  .metric-card,
+  .table-wrap,
+  .monthly-table-wrap,
+  input,
+  select,
+  textarea,
+  .button-secondary {
+    border-width: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .sidebar,
+  .hero-card,
+  .dcc-hero,
+  .system-health-hero,
+  .monthly-report-command {
+    forced-color-adjust: auto;
+  }
+
+  .status-indicator,
+  .notification-badge,
+  .badge {
+    border: 1px solid CanvasText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media print {
+  .topbar,
+  .sidebar,
+  .sidebar-overlay,
+  .notification-popover,
+  .accessibility-drawer {
+    display: none !important;
+  }
+
+  .app-shell,
+  .main-content,
+  .view {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .table-wrap,
+  .monthly-table-wrap,
+  .permission-matrix-wrap {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}

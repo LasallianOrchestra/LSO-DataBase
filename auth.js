@@ -482,12 +482,10 @@
   }
 
   function startAccountRefresh() {
-    clearInterval(accountRefreshTimer);
-    accountRefreshTimer = setInterval(() => {
-      if (window.LSOCurrentAccount?.role === 'Administrator' && !document.hidden) {
-        refreshAccounts().catch(() => undefined);
-      }
-    }, 10000);
+    // Accounts are refreshed when the Accounts workspace opens or when the
+    // Administrator requests it. Continuous polling rebuilt the full table
+    // every 10 seconds and interrupted role/member selections.
+    stopAccountRefresh();
   }
 
   function stopAccountRefresh() {
@@ -587,25 +585,35 @@
     return messages[code] || 'The registration could not be submitted.';
   }
 
-  async function refreshAccounts() {
+  function accountCacheSignature(accounts = []) {
+    return JSON.stringify(accounts.map((account) => ({
+      id: account?.id || '', username: account?.username || '', role: account?.role || '',
+      approvalStatus: account?.approvalStatus || '', disabled: Boolean(account?.disabled),
+      memberId: account?.memberId || '', updatedAt: account?.updatedAt || account?.approvedAt || account?.requestedAt || ''
+    })).sort((a, b) => String(a.id).localeCompare(String(b.id))));
+  }
+
+  async function refreshAccounts({ forceNotify = false, throwOnError = false } = {}) {
     const active = window.LSOCurrentAccount;
     if (!active) {
+      const changed = accountsCache.length > 0;
       accountsCache = [];
-      emit('lso:accounts-changed', { count: 0, source: 'cloud' });
+      if (changed || forceNotify) emit('lso:accounts-changed', { count: 0, source: 'cloud' });
       return accountsCache;
     }
 
     try {
-      if (active.role === 'Administrator') {
-        const result = await window.LSOCloud.listProfiles();
-        accountsCache = Array.isArray(result) ? result.map(normalizeAccount).filter(Boolean) : [];
-      } else {
-        accountsCache = [normalizeAccount(active)];
-      }
-      emit('lso:accounts-changed', { count: accountsCache.length, source: 'cloud' });
+      const previousSignature = accountCacheSignature(accountsCache);
+      const nextAccounts = active.role === 'Administrator'
+        ? ((await window.LSOCloud.listProfiles()) || []).map(normalizeAccount).filter(Boolean)
+        : [normalizeAccount(active)].filter(Boolean);
+      accountsCache = Array.isArray(nextAccounts) ? nextAccounts : [];
+      const changed = previousSignature !== accountCacheSignature(accountsCache);
+      if (changed || forceNotify) emit('lso:accounts-changed', { count: accountsCache.length, source: 'cloud' });
       return accountsCache;
     } catch (error) {
       console.error('Unable to refresh accounts:', error);
+      if (throwOnError) throw error;
       return accountsCache;
     }
   }

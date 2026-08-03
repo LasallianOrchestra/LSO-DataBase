@@ -70,10 +70,10 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '3.3.0',
-    build: '2026.07.29-dynamic-role-permissions.1',
+    app: '4.1.0',
+    build: '2026.08.04-workflow-accessibility.1',
     schemaTarget: '009_dynamic_role_permissions',
-    cache: 'lso-enterprise-v38',
+    cache: 'lso-enterprise-v41',
     permissions: 'permissions-manifest-v4-dynamic',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });

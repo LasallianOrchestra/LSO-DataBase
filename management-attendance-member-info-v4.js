@@ -26,6 +26,7 @@
   let attendance = loadArray(ATTENDANCE_KEY);
   let instruments = loadArray(INSTRUMENTS_KEY);
   let selectedEventId = events[0]?.id || null;
+  const actionCenterState = { search: '', module: '', priority: '' };
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -891,7 +892,7 @@
     toast('Instrument inventory exported.');
   }
 
-  // Alerts and action center
+  // Alerts and system-wide action center
   function nextTransition(member) {
     const current = today();
     const candidates = [
@@ -899,6 +900,23 @@
       ['Membership Period', member.regularMemberDate]
     ].filter(([, date]) => date && date > current).sort((a, b) => a[1].localeCompare(b[1]));
     return candidates[0] || null;
+  }
+
+  function actionItem(item = {}) {
+    return {
+      id: item.id || uid('action'),
+      type: item.type || 'system',
+      module: item.module || 'System',
+      stage: item.stage || 'review',
+      severity: ['high', 'medium', 'low'].includes(item.severity) ? item.severity : 'medium',
+      title: item.title || 'Work item',
+      detail: item.detail || '',
+      memberId: item.memberId || '',
+      eventId: item.eventId || '',
+      viewId: item.viewId || '',
+      targetId: item.targetId || '',
+      actionLabel: item.actionLabel || 'Open'
+    };
   }
 
   function buildAlerts() {
@@ -913,45 +931,77 @@
       if (transition) {
         const days = daysBetween(today(), transition[1]);
         if (days !== null && days >= 0 && days <= alertDays) {
-          alerts.push({
-            type: 'transition', severity: days <= 7 ? 'high' : 'medium', title: `${member.fullName} moves to ${transition[0]}`,
+          alerts.push(actionItem({
+            id: `transition:${member.id}:${transition[1]}`, type: 'transition', module: 'Membership', stage: 'monitor',
+            severity: days <= 7 ? 'high' : 'low', title: `${member.fullName} moves to ${transition[0]}`,
             detail: `${dateLabel(transition[1], true)} • ${days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'} remaining`}`,
-            memberId: member.id
-          });
+            memberId: member.id, actionLabel: 'Open Member'
+          }));
         }
       }
       if (member.reviewStatus === 'Overdue') {
-        alerts.push({ type: 'profile', severity: 'high', title: `${member.fullName} has an overdue profile review`, detail: `Last reviewed: ${dateLabel(member.lastProfileReview, true)}`, memberId: member.id });
+        alerts.push(actionItem({ id: `profile-overdue:${member.id}`, type: 'profile', module: 'Members', stage: 'review', severity: 'high', title: `${member.fullName} has an overdue profile review`, detail: `Last reviewed: ${dateLabel(member.lastProfileReview, true)}`, memberId: member.id, actionLabel: 'Review Profile' }));
       } else if (member.reviewStatus === 'For Review' || Number(member.recordQuality || 0) < 80) {
-        alerts.push({ type: 'profile', severity: 'medium', title: `${member.fullName} needs a record review`, detail: `${member.recordQuality || 0}% complete • ${member.reviewStatus || 'For Review'}`, memberId: member.id });
+        alerts.push(actionItem({ id: `profile-review:${member.id}`, type: 'profile', module: 'Members', stage: 'review', severity: 'medium', title: `${member.fullName} needs a record review`, detail: `${member.recordQuality || 0}% complete • ${member.reviewStatus || 'For Review'}`, memberId: member.id, actionLabel: 'Review Profile' }));
       }
       const attendanceInfo = getMemberAttendance(member.id);
       if (attendanceInfo.sessions >= 3 && attendanceInfo.rate < attendanceThreshold) {
-        alerts.push({ type: 'attendance', severity: 'high', title: `${member.fullName} has low attendance`, detail: `${attendanceInfo.rate}% across ${attendanceInfo.sessions} counted activities`, memberId: member.id });
+        alerts.push(actionItem({ id: `attendance-rate:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'high', title: `${member.fullName} has low attendance`, detail: `${attendanceInfo.rate}% across ${attendanceInfo.sessions} counted activities`, memberId: member.id, actionLabel: 'Open Member' }));
       }
       const attendanceSignals = window.LSOAttendanceGovernance?.memberSignals?.(member.id, attendanceThreshold);
       if (attendanceSignals?.absenceStreak >= 2) {
-        alerts.push({ type: 'attendance', severity: 'high', title: `${member.fullName} has consecutive absences`, detail: `${attendanceSignals.absenceStreak} consecutive counted absences in the current attendance group`, memberId: member.id });
+        alerts.push(actionItem({ id: `attendance-absence:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'high', title: `${member.fullName} has consecutive absences`, detail: `${attendanceSignals.absenceStreak} consecutive counted absences in the current attendance group`, memberId: member.id, actionLabel: 'Open Member' }));
       }
       if (attendanceSignals?.lateCount >= 3) {
-        alerts.push({ type: 'attendance', severity: 'medium', title: `${member.fullName} has repeated lateness`, detail: `${attendanceSignals.lateCount} Late records in the selected semester`, memberId: member.id });
+        alerts.push(actionItem({ id: `attendance-late:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'medium', title: `${member.fullName} has repeated lateness`, detail: `${attendanceSignals.lateCount} Late records in the selected semester`, memberId: member.id, actionLabel: 'Open Member' }));
       }
     });
 
-    const workflowAlerts = window.LSOAttendanceGovernance?.buildAlerts?.() || [];
-    workflowAlerts.forEach((alert) => alerts.push(alert));
+    (window.LSOAttendanceGovernance?.buildAlerts?.() || []).forEach((alert) => alerts.push(actionItem({
+      ...alert, id: `attendance-workflow:${alert.eventId || alert.title}`, module: 'Attendance', stage: 'complete', actionLabel: 'Open Attendance'
+    })));
 
+    if (isAdmin()) {
+      (window.LSOAuth?.loadAccounts?.() || []).filter((account) => !account.isDefault && account.approvalStatus === 'Pending').forEach((account) => {
+        alerts.push(actionItem({ id: `account:${account.id}`, type: 'account', module: 'Accounts', stage: 'review', severity: 'high', title: `${account.displayName || account.username} is awaiting account approval`, detail: `@${account.username} • Choose a role${account.role === 'Trainee/Probationary' ? ' and linked member' : ''}, then approve.`, viewId: 'accountsView', targetId: account.id, actionLabel: 'Review Account' }));
+      });
+    }
+
+    const duty = window.LSODutyHours?.getData?.() || loadDutyHours();
+    if (can('reviewDutyPunches')) {
+      (duty.entries || []).forEach((entry) => {
+        if (entry.timeInApprovalStatus === 'Pending') alerts.push(actionItem({ id: `duty-in:${entry.id}`, type: 'duty', module: 'Duty Hours', stage: 'review', severity: 'high', title: 'Time In requires approval', detail: `${entry.date || 'No date'} • Review the submitted Time In punch.`, viewId: 'dutyHoursView', targetId: entry.id, actionLabel: 'Review Time In' }));
+        if (entry.timeOutApprovalStatus === 'Pending') alerts.push(actionItem({ id: `duty-out:${entry.id}`, type: 'duty', module: 'Duty Hours', stage: 'review', severity: 'high', title: 'Time Out requires approval', detail: `${entry.date || 'No date'} • Review the completed Time Out punch.`, viewId: 'dutyHoursView', targetId: entry.id, actionLabel: 'Review Time Out' }));
+      });
+    }
+
+    if (can('editMonthlyReport')) {
+      const reports = loadMonthlyReports().reports || {};
+      Object.values(reports).forEach((report) => {
+        if (report?.month && report.workflowStatus !== 'Finalized') alerts.push(actionItem({ id: `monthly:${report.month}`, type: 'report', module: 'Monthly Report', stage: 'complete', severity: 'medium', title: `${report.month} Monthly Report remains Draft`, detail: 'Complete the required filing information and finalize it when verified.', viewId: 'monthlyReportView', targetId: report.month, actionLabel: 'Continue Report' }));
+      });
+    }
+
+    if (isAdmin()) {
+      const enterprise = window.LSOEnterprise?.getNotifications?.() || [];
+      enterprise.filter((notice) => notice.actionType === 'system-health').forEach((notice) => alerts.push(actionItem({ id: notice.id, type: 'system', module: 'System Health', stage: 'verify', severity: notice.severity || 'high', title: notice.title, detail: notice.detail, viewId: 'systemHealthView', targetId: 'errors', actionLabel: 'Open Health Center' })));
+    }
+
+    const unique = new Map();
+    alerts.forEach((alert) => { if (!unique.has(alert.id)) unique.set(alert.id, alert); });
     const severityOrder = { high: 0, medium: 1, low: 2 };
-    return alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity] || a.title.localeCompare(b.title));
+    const stageOrder = { review: 0, complete: 1, verify: 2, monitor: 3 };
+    return [...unique.values()].sort((a, b) => (stageOrder[a.stage] ?? 9) - (stageOrder[b.stage] ?? 9) || severityOrder[a.severity] - severityOrder[b.severity] || a.title.localeCompare(b.title));
   }
 
   function alertIcon(type) {
-    return ({ transition: '→', profile: 'ID', attendance: '%' })[type] || '!';
+    return ({ transition: '→', profile: 'ID', attendance: '%', account: 'AC', duty: 'DH', report: 'PDF', system: '!' })[type] || '•';
   }
 
   function alertAction(alert) {
-    if (alert.eventId) return `<button class="small-button" data-alert-event="${safeText(alert.eventId)}">Open Attendance</button>`;
-    if (alert.memberId) return `<button class="small-button" data-alert-member="${safeText(alert.memberId)}">Open Member</button>`;
+    if (alert.eventId) return `<button class="small-button" data-alert-event="${safeText(alert.eventId)}">${safeText(alert.actionLabel)}</button>`;
+    if (alert.memberId) return `<button class="small-button" data-alert-member="${safeText(alert.memberId)}">${safeText(alert.actionLabel)}</button>`;
+    if (alert.viewId) return `<button class="small-button" data-alert-view="${safeText(alert.viewId)}" data-alert-target="${safeText(alert.targetId)}">${safeText(alert.actionLabel)}</button>`;
     return '';
   }
 
@@ -959,28 +1009,68 @@
     const container = el('dashboardAlertPreview');
     if (!container) return;
     const alerts = buildAlerts();
-    container.innerHTML = alerts.length ? alerts.slice(0, 4).map((alert) => `<div class="alert-preview-item severity-${safeText(alert.severity)}"><span>${safeText(alertIcon(alert.type))}</span><div><strong>${safeText(alert.title)}</strong><small>${safeText(alert.detail)}</small></div></div>`).join('') : '<div class="all-clear-card"><strong>All clear</strong><span>No urgent automated alerts were found.</span></div>';
+    container.innerHTML = alerts.length ? alerts.slice(0, 4).map((alert) => `<div class="alert-preview-item severity-${safeText(alert.severity)}"><span>${safeText(alertIcon(alert.type))}</span><div><strong>${safeText(alert.title)}</strong><small>${safeText(alert.module)} • ${safeText(alert.detail)}</small></div></div>`).join('') : '<div class="all-clear-card"><strong>All clear</strong><span>No urgent automated actions were found.</span></div>';
+  }
+
+  function actionCenterFilteredItems(items) {
+    const search = normalize(actionCenterState.search);
+    return items.filter((item) => {
+      if (actionCenterState.module && item.module !== actionCenterState.module) return false;
+      if (actionCenterState.priority && item.severity !== actionCenterState.priority) return false;
+      if (search && !normalize(`${item.title} ${item.detail} ${item.module}`).includes(search)) return false;
+      return true;
+    });
+  }
+
+  function renderActionWorkflow(items) {
+    const target = el('actionWorkflowMap');
+    if (!target) return;
+    const stages = [
+      ['review', '1', 'Review', 'Approvals and records'],
+      ['complete', '2', 'Complete', 'Finish and finalize'],
+      ['verify', '3', 'Verify', 'Health and error checks'],
+      ['monitor', '4', 'Monitor', 'Upcoming follow-up']
+    ];
+    target.innerHTML = stages.map(([key, number, label, note], index) => `<div class="action-workflow-step ${items.some((item) => item.stage === key) ? 'has-items' : 'is-clear'}"><span>${number}</span><div><strong>${label}</strong><small>${note}</small></div><b>${items.filter((item) => item.stage === key).length}</b>${index < stages.length - 1 ? '<i aria-hidden="true">→</i>' : ''}</div>`).join('');
+  }
+
+  function populateActionCenterModules(items) {
+    const select = el('actionCenterModuleFilter');
+    if (!select) return;
+    const value = actionCenterState.module;
+    const modules = [...new Set(items.map((item) => item.module))].sort();
+    select.innerHTML = '<option value="">All modules</option>' + modules.map((module) => `<option value="${safeText(module)}">${safeText(module)}</option>`).join('');
+    select.value = modules.includes(value) ? value : '';
+    actionCenterState.module = select.value;
   }
 
   function renderAlerts() {
     const summary = el('alertSummaryGrid');
     const sections = el('alertSections');
-    if (!summary || !sections) {
-      renderDashboardAlerts();
-      return;
-    }
-    const alerts = buildAlerts();
-    const categories = [
-      ['transition', 'Upcoming Transitions'],
-      ['profile', 'Profile Reviews'],
-      ['attendance', 'Attendance Risk']
+    if (!summary || !sections) { renderDashboardAlerts(); return; }
+    const allItems = buildAlerts();
+    populateActionCenterModules(allItems);
+    renderActionWorkflow(allItems);
+    const items = actionCenterFilteredItems(allItems);
+    const counts = [
+      ['Open Work', items.length, 'All visible items'],
+      ['Urgent', items.filter((item) => item.severity === 'high').length, 'Needs immediate review'],
+      ['Awaiting Review', items.filter((item) => item.stage === 'review').length, 'Approvals and records'],
+      ['To Complete', items.filter((item) => item.stage === 'complete').length, 'Drafts and finalization']
     ];
-    summary.innerHTML = categories.map(([key, label]) => `<div class="alert-summary-card"><span>${safeText(label)}</span><strong>${alerts.filter((alert) => alert.type === key).length}</strong></div>`).join('');
-    sections.innerHTML = categories.map(([key, label]) => {
-      const items = alerts.filter((alert) => alert.type === key);
-      return `<article class="panel alert-section-card"><div class="panel-header"><div><p class="eyebrow">${safeText(key)}</p><h3>${safeText(label)}</h3></div><span class="period-count badge ${items.some((item) => item.severity === 'high') ? 'badge-red' : 'badge-green'}">${items.length} item${items.length === 1 ? '' : 's'}</span></div>
-        <div class="alert-list">${items.length ? items.map((alert) => `<div class="alert-row severity-${safeText(alert.severity)}"><span class="alert-row-icon">${safeText(alertIcon(alert.type))}</span><div><strong>${safeText(alert.title)}</strong><small>${safeText(alert.detail)}</small></div>${alertAction(alert)}</div>`).join('') : '<div class="all-clear-row">No items in this category.</div>'}</div></article>`;
+    summary.innerHTML = counts.map(([label, value, note]) => `<div class="alert-summary-card"><span>${safeText(label)}</span><strong>${value}</strong><small>${safeText(note)}</small></div>`).join('');
+
+    const stages = [
+      ['review', 'Review & Approvals', 'Check requests and records before taking action.'],
+      ['complete', 'Complete & Finalize', 'Finish drafts and lock verified work.'],
+      ['verify', 'Verify & Maintain', 'Confirm system health and resolve technical records.'],
+      ['monitor', 'Upcoming & Follow-up', 'Prepare for scheduled transitions and future work.']
+    ];
+    sections.innerHTML = stages.map(([key, label, description]) => {
+      const stageItems = items.filter((item) => item.stage === key);
+      return `<article class="panel alert-section-card action-stage-${key}"><div class="panel-header"><div><p class="eyebrow">Workflow Stage</p><h3>${safeText(label)}</h3><p class="panel-subtitle">${safeText(description)}</p></div><span class="period-count badge ${stageItems.some((item) => item.severity === 'high') ? 'badge-red' : stageItems.length ? 'badge-gold' : 'badge-green'}">${stageItems.length} item${stageItems.length === 1 ? '' : 's'}</span></div><div class="alert-list">${stageItems.length ? stageItems.map((alert) => `<div class="alert-row severity-${safeText(alert.severity)}"><span class="alert-row-icon">${safeText(alertIcon(alert.type))}</span><div><span class="action-module-label">${safeText(alert.module)}</span><strong>${safeText(alert.title)}</strong><small>${safeText(alert.detail)}</small></div>${alertAction(alert)}</div>`).join('') : '<div class="all-clear-row">No work items in this stage.</div>'}</div></article>`;
     }).join('');
+    if (el('actionCenterUpdated')) el('actionCenterUpdated').textContent = `Updated ${new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit' }).format(new Date())}`;
     renderDashboardAlerts();
   }
 
@@ -1091,6 +1181,26 @@
         <td><div class="table-actions">${approvalActions}<button class="small-button danger" data-account-action="delete" data-id="${safeText(account.id)}" ${protectedAccount ? 'disabled' : ''}>Delete</button></div></td>
       </tr>`;
     }).join('');
+  }
+
+  async function refreshAccountsWorkspace({ announce = false } = {}) {
+    if (!isAdmin()) return;
+    const button = el('refreshAccountsButton');
+    const status = el('accountsRefreshStatus');
+    if (button) { button.disabled = true; button.textContent = 'Refreshing…'; }
+    if (status) status.textContent = 'Checking the shared account list…';
+    try {
+      await window.LSOAuth?.refreshAccounts?.({ forceNotify: true, throwOnError: true });
+      renderAccounts();
+      const count = (window.LSOAuth?.loadAccounts?.() || []).length;
+      if (status) status.textContent = `${count} account${count === 1 ? '' : 's'} • Updated ${new Intl.DateTimeFormat('en-PH', { hour: 'numeric', minute: '2-digit' }).format(new Date())}`;
+      if (announce) toast('Account list refreshed.');
+    } catch (error) {
+      if (status) status.textContent = 'Refresh failed — existing account data remains visible';
+      if (announce) toast(error.message || 'Accounts could not be refreshed.', true);
+    } finally {
+      if (button) { button.disabled = false; button.textContent = 'Refresh Accounts'; }
+    }
   }
 
   async function saveAccountRole(accountId, role) {
@@ -1433,7 +1543,8 @@
     renderAttendance();
     renderInstruments();
     renderAlerts();
-    renderAccounts();
+    // Account rows are refreshed only by account/auth events or an explicit
+    // Administrator refresh. Unrelated shared-state saves must not rebuild the table.
     renderSettings();
     renderActivityLog();
     renderInstrumentMemberOptions();
@@ -1476,21 +1587,50 @@
     });
     el('exportInstrumentCsv').addEventListener('click', exportInstrumentCsv);
 
-    el('refreshAlertsButton').addEventListener('click', () => { renderAlerts(); toast('Action Center refreshed.'); });
+    el('refreshAlertsButton').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true; button.textContent = 'Refreshing…';
+      try {
+        const jobs = [];
+        if (isAdmin()) jobs.push(window.LSOAuth?.refreshAccounts?.({ forceNotify: false }));
+        if (can('reviewDutyPunches')) jobs.push(window.LSODutyHours?.refreshFromServer?.());
+        await Promise.allSettled(jobs.filter(Boolean));
+        renderAlerts();
+        toast('Action Center refreshed.');
+      } finally { button.disabled = false; button.textContent = 'Refresh Action Center'; }
+    });
+    el('actionCenterSearch')?.addEventListener('input', (event) => { actionCenterState.search = event.target.value; renderAlerts(); });
+    el('actionCenterModuleFilter')?.addEventListener('change', (event) => { actionCenterState.module = event.target.value; renderAlerts(); });
+    el('actionCenterPriorityFilter')?.addEventListener('change', (event) => { actionCenterState.priority = event.target.value; renderAlerts(); });
+    el('clearActionCenterFilters')?.addEventListener('click', () => {
+      actionCenterState.search = ''; actionCenterState.module = ''; actionCenterState.priority = '';
+      if (el('actionCenterSearch')) el('actionCenterSearch').value = '';
+      if (el('actionCenterPriorityFilter')) el('actionCenterPriorityFilter').value = '';
+      renderAlerts();
+    });
     el('alertSections').addEventListener('click', (event) => {
       const memberButton = event.target.closest('[data-alert-member]');
       const eventButton = event.target.closest('[data-alert-event]');
-      const instrumentButton = event.target.closest('[data-alert-instrument]');
+      const viewButton = event.target.closest('[data-alert-view]');
       if (memberButton) window.LSOApp?.openRecord?.(memberButton.dataset.alertMember);
       if (eventButton) {
         selectedEventId = eventButton.dataset.alertEvent;
         setView('attendanceView');
         renderAttendance();
       }
-      if (instrumentButton) {
-        setView('instrumentsView');
-        const item = instruments.find((instrument) => instrument.id === instrumentButton.dataset.alertInstrument);
-        if (item) openInstrumentModal(item);
+      if (viewButton) {
+        const viewId = viewButton.dataset.alertView;
+        const targetId = viewButton.dataset.alertTarget || '';
+        setView(viewId);
+        if (viewId === 'accountsView') setTimeout(() => {
+          refreshAccountsWorkspace();
+          document.querySelector(`[data-account-row="${window.CSS?.escape ? CSS.escape(targetId) : targetId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 60);
+        if (viewId === 'dutyHoursView') setTimeout(() => el('dutyApprovalPanel')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 80);
+        if (viewId === 'monthlyReportView' && /^\d{4}-\d{2}$/.test(targetId)) setTimeout(() => {
+          if (el('monthlyReportMonth')) { el('monthlyReportMonth').value = targetId; el('monthlyReportMonth').dispatchEvent(new Event('change', { bubbles: true })); }
+        }, 60);
+        if (viewId === 'systemHealthView') setTimeout(() => document.querySelector('[data-health-panel="errors"]')?.click(), 50);
       }
     });
 
@@ -1504,6 +1644,8 @@
       const button = event.target.closest('[data-account-action]');
       if (button) accountAction(button.dataset.accountAction, button.dataset.id);
     });
+    el('refreshAccountsButton')?.addEventListener('click', () => refreshAccountsWorkspace({ announce: true }));
+    qsa('[data-view="accountsView"]').forEach((button) => button.addEventListener('click', () => setTimeout(() => refreshAccountsWorkspace(), 40)));
 
     el('applyTimelineDefaults').addEventListener('click', () => applyTimelineDefaults(true));
     el('traineeStartDate').addEventListener('change', () => {
@@ -1527,7 +1669,10 @@
       renderInstruments();
       renderAlerts();
     });
-    window.addEventListener('lso:accounts-changed', () => renderAccounts());
+    window.addEventListener('lso:accounts-changed', () => { renderAccounts(); renderAlerts(); });
+    ['lso:duty-hours-changed', 'lso:monthly-report-changed', 'lso:system-health-changed', 'lso:system-errors-changed'].forEach((eventName) => {
+      window.addEventListener(eventName, () => renderAlerts());
+    });
     window.addEventListener('lso:cloud-state-changed', () => {
       events = loadArray(EVENTS_KEY);
       attendance = loadArray(ATTENDANCE_KEY);

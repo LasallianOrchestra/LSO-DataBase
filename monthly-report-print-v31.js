@@ -90,8 +90,6 @@
       preparedTitle: 'EVP for Membership',
       notedBy: '',
       notedTitle: 'President',
-      approvedBy: '',
-      approvedTitle: '',
       workflowStatus: 'Draft',
       revision: 0,
       finalizedAt: '',
@@ -117,8 +115,6 @@
     report.workflowStatus = report.workflowStatus === 'Finalized' ? 'Finalized' : 'Draft';
     report.revision = Math.max(0, Number(report.revision) || 0);
     report.workflowHistory = Array.isArray(report.workflowHistory) ? report.workflowHistory : [];
-    report.approvedBy = String(report.approvedBy || '');
-    report.approvedTitle = String(report.approvedTitle || '');
     report.loaRows = Array.isArray(report.loaRows) ? report.loaRows : [];
     report.ojtRows = Array.isArray(report.ojtRows) ? report.ojtRows : [];
     report.quittedRows = Array.isArray(report.quittedRows) ? report.quittedRows : [];
@@ -383,8 +379,6 @@
     reportField('monthlyReportPreparedTitle', 'preparedTitle');
     reportField('monthlyReportNotedBy', 'notedBy');
     reportField('monthlyReportNotedTitle', 'notedTitle');
-    reportField('monthlyReportApprovedBy', 'approvedBy');
-    reportField('monthlyReportApprovedTitle', 'approvedTitle');
   }
 
   function percent(count, total) {
@@ -624,11 +618,11 @@
       monthlyReportPreparedBy: 'preparedBy',
       monthlyReportPreparedTitle: 'preparedTitle',
       monthlyReportNotedBy: 'notedBy',
-      monthlyReportNotedTitle: 'notedTitle',
-      monthlyReportApprovedBy: 'approvedBy',
-      monthlyReportApprovedTitle: 'approvedTitle'
+      monthlyReportNotedTitle: 'notedTitle'
     };
     Object.entries(mapping).forEach(([id, key]) => { if (el(id)) report[key] = el(id).value.trim(); });
+    delete report.approvedBy;
+    delete report.approvedTitle;
   }
 
   function handleMonthChange(value) {
@@ -1041,7 +1035,6 @@
       y = drawTableRow(page, columns, ['TOTAL:', counts.total, '100%'], bounds.left, y, { size: 9, minHeight: 25, total: true, bold: true });
       drawSignatoryBlock(page, bounds.left, y - 38, 210, 'Prepared By:', report.preparedBy, report.preparedTitle);
       drawSignatoryBlock(page, bounds.left, y - 168, 210, 'Noted By:', report.notedBy, report.notedTitle);
-      if (report.approvedBy) drawSignatoryBlock(page, bounds.left + 245, y - 168, 210, 'Approved By:', report.approvedBy, report.approvedTitle);
     }
 
     // Manpower Complement: continuous numbering across Official, Trainee and Probationary records.
@@ -1089,7 +1082,6 @@
       const page = await templatePage();
       drawSignatoryBlock(page, bounds.left, 610, 240, 'Prepared By:', report.preparedBy, report.preparedTitle);
       drawSignatoryBlock(page, bounds.left, 455, 240, 'Noted By:', report.notedBy, report.notedTitle);
-      if (report.approvedBy) drawSignatoryBlock(page, bounds.left + 270, 455, 240, 'Approved By:', report.approvedBy, report.approvedTitle);
     }
 
     // Summary of Manpower Count: Gender and Year Level.
@@ -1310,7 +1302,7 @@
     }));
 
     el('monthlyReportMonth')?.addEventListener('change', (event) => handleMonthChange(event.target.value));
-    ['monthlyReportDate', 'monthlyReportSemester', 'monthlyReportAcademicYear', 'monthlyReportPreparedBy', 'monthlyReportPreparedTitle', 'monthlyReportNotedBy', 'monthlyReportNotedTitle', 'monthlyReportApprovedBy', 'monthlyReportApprovedTitle']
+    ['monthlyReportDate', 'monthlyReportSemester', 'monthlyReportAcademicYear', 'monthlyReportPreparedBy', 'monthlyReportPreparedTitle', 'monthlyReportNotedBy', 'monthlyReportNotedTitle']
       .forEach((id) => el(id)?.addEventListener('input', () => { updateReportFromFields(); queueSave(); if (['monthlyReportSemester', 'monthlyReportAcademicYear'].includes(id)) renderTraineeFile(); }));
 
     el('monthlyReportSaveButton')?.addEventListener('click', () => { updateReportFromFields(); saveState(); });

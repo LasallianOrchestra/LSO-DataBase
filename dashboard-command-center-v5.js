@@ -321,6 +321,19 @@
     return cards.filter((card) => card.visible);
   }
 
+  function renderSnapshotStrip(data) {
+    const activeOfficial = data.members.filter((member) => memberStage(member) === 'Membership Period' && !isInactive(member) && !isLoa(member)).length;
+    const developing = data.members.filter((member) => ['Trainee Period', 'Probationary Period'].includes(memberStage(member)) && !isInactive(member) && !isLoa(member)).length;
+    const monthActivities = monthEvents(data).length;
+    const openActions = actionCards(data).reduce((total, card) => total + Number(card.value || 0), 0);
+    return `<section class="dcc-snapshot-strip" aria-label="Current system snapshot">
+      <button data-dcc-member-stat="members" type="button"><span>Official Members</span><strong>${activeOfficial}</strong><small>Current active roster</small></button>
+      <button data-dcc-detail="members-developing" type="button"><span>Developing Members</span><strong>${developing}</strong><small>Trainee + Probationary</small></button>
+      <button data-dcc-action="attendance" type="button"><span>${safe(monthLabel(selectedMonth))}</span><strong>${monthActivities}</strong><small>Scheduled activities</small></button>
+      <button data-dcc-action="alerts" type="button"><span>Open Actions</span><strong>${openActions}</strong><small>Review system workflow</small></button>
+    </section>`;
+  }
+
   function renderHeader(data) {
     const account = currentAccount();
     const firstName = String(account.displayName || account.username || 'LSO team').trim().split(/\s+/)[0];
@@ -510,7 +523,7 @@
       return;
     }
     const data = dashboardData();
-    host.innerHTML = `${renderHeader(data)}${renderActionCenter(data)}<div class="dcc-main-grid">${renderMonthlyOverview(data)}${renderUpcoming(data)}${renderAttendanceHealth(data)}${renderDutyProgress(data)}${renderMemberStats(data)}${renderDataQuality(data)}${renderRecentActivity(data)}</div>${renderQuickActions()}${renderDetailModal()}`;
+    host.innerHTML = `${renderHeader(data)}${renderSnapshotStrip(data)}${renderActionCenter(data)}<div class="dcc-main-grid dcc-simple-main">${renderMonthlyOverview(data)}${renderUpcoming(data)}${renderAttendanceHealth(data)}${renderDutyProgress(data)}</div>${renderQuickActions()}${renderDetailModal()}`;
     document.body.classList.add('dashboard-command-center-ready');
     if (detailState) updateDetailModal(data);
   }
@@ -555,6 +568,7 @@
       'missing-timeout': { title: 'Open duty sessions without Time Out', module: 'duty-hours', items: data.quality.missingTimeOut.map((entry) => dutyItem(entry, 'TimeIn')) },
       'event-no-attendance': { title: 'Past activities without attendance', module: 'attendance', items: data.quality.eventWithoutRoster.map((event) => eventItem(event, 'No marked roster')) },
       'members-current': { title: 'Current Official Members', module: 'members', items: data.members.filter((member) => memberStage(member) === 'Membership Period' && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
+      'members-developing': { title: 'Developing members', module: 'members', items: data.members.filter((member) => ['Trainee Period', 'Probationary Period'].includes(memberStage(member)) && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
       'members-trainee': { title: 'Current Trainee members', module: 'members', items: data.members.filter((member) => memberStage(member) === 'Trainee Period' && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
       'members-probationary': { title: 'Current Probationary members', module: 'members', items: data.members.filter((member) => memberStage(member) === 'Probationary Period' && !isInactive(member) && !isLoa(member)).map((member) => memberItem(member, memberStatus(member))) },
       'members-loa': { title: 'Members on leave of absence', module: 'members', items: data.members.filter(isLoa).map((member) => memberItem(member, memberStage(member))) },

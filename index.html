@@ -45,7 +45,7 @@
 <link rel="icon" href="favicon.ico?v=20260717-logos" sizes="any"/>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20260717-logos"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20260721-pwa-v1"/>
-<link rel="manifest" href="manifest.webmanifest?v=20260729-role-permission-v38"/>
+<link rel="manifest" href="manifest.webmanifest?v=20260804-cross-device-v44"/>
 <link href="styles.css?v=20260720-member-table-v2" rel="stylesheet"/>
 <link href="duty-roster-layout.css?v=20260717-1605" rel="stylesheet"/>
 <link href="access-control.css?v=20260721-role-approval-v2" rel="stylesheet"/>
@@ -113,6 +113,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <link href="attendance-duty-revision-v35.css?v=20260728-attendance-duty-v35" rel="stylesheet"/>
 <link href="mobile-shell-scroll-v37.css?v=20260729-mobile-shell-v37" rel="stylesheet"/>
 <link href="ui-performance-responsive-v39.css?v=20260803-role-scroll-performance-v39" rel="stylesheet"/>
+<link href="workflow-accessibility-v41.css?v=20260804-display-v42" rel="stylesheet"/>
+<link href="professional-interface-v43.css?v=20260804-professional-v43" rel="stylesheet"/>
+<link href="cross-device-accessibility-v44.css?v=20260804-cross-device-v44" rel="stylesheet"/>
 </head>
 <body>
 <div aria-live="polite" class="connection-banner hidden" id="connectionBanner" role="status"></div>
@@ -600,18 +603,32 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
   <div class="monthly-report-tab-panel active" data-monthly-panel="setup">
     <div class="monthly-report-setup-grid">
       <article class="panel monthly-report-panel">
-        <div class="panel-header"><div><p class="eyebrow">Report Details</p><h3>Monthly Filing Information</h3><p class="panel-subtitle">The date and signatories are entered by the Administrator and printed throughout the official report.</p></div></div>
-        <div class="monthly-report-form-grid">
-          <label class="field"><span>Report Month *</span><input id="monthlyReportMonth" type="month"/></label>
-          <label class="field"><span>As-of Date *</span><input id="monthlyReportDate" data-monthly-edit type="date"/></label>
-          <label class="field"><span>Semester *</span><select id="monthlyReportSemester" data-monthly-edit><option>First Semester</option><option>Second Semester</option><option>Summer Term</option></select></label>
-          <label class="field"><span>Academic Year *</span><input id="monthlyReportAcademicYear" data-monthly-edit placeholder="e.g., 2026-2027"/></label>
-          <label class="field"><span>Prepared By *</span><input id="monthlyReportPreparedBy" data-monthly-edit placeholder="Full name"/></label>
-          <label class="field"><span>Prepared By Position</span><input id="monthlyReportPreparedTitle" data-monthly-edit placeholder="e.g., EVP for Membership"/></label>
-          <label class="field"><span>Noted By *</span><input id="monthlyReportNotedBy" data-monthly-edit placeholder="Full name"/></label>
-          <label class="field"><span>Noted By Position</span><input id="monthlyReportNotedTitle" data-monthly-edit placeholder="e.g., President"/></label>
-          <label class="field"><span>Approved By</span><input id="monthlyReportApprovedBy" data-monthly-edit placeholder="Administrator approval name"/></label>
-          <label class="field"><span>Approved By Position</span><input id="monthlyReportApprovedTitle" data-monthly-edit placeholder="e.g., President / Adviser"/></label>
+        <div class="panel-header"><div><p class="eyebrow">Report Details</p><h3>Monthly Filing Information</h3><p class="panel-subtitle">The report date and required signatories are entered by the Administrator and printed throughout the official report.</p></div></div>
+        <div class="monthly-report-form-grid" aria-label="Monthly filing information">
+          <section class="monthly-filing-group" aria-labelledby="monthlyPeriodHeading">
+            <div class="monthly-filing-group-heading">
+              <span class="monthly-filing-step" aria-hidden="true">01</span>
+              <div><strong id="monthlyPeriodHeading">Reporting Period</strong><small>Choose the month, date, semester, and academic year covered by this filing.</small></div>
+            </div>
+            <div class="monthly-filing-fields">
+              <label class="field"><span>Report Month *</span><input id="monthlyReportMonth" type="month"/></label>
+              <label class="field"><span>As-of Date *</span><input id="monthlyReportDate" data-monthly-edit type="date"/></label>
+              <label class="field"><span>Semester *</span><select id="monthlyReportSemester" data-monthly-edit><option>First Semester</option><option>Second Semester</option><option>Summer Term</option></select></label>
+              <label class="field"><span>Academic Year *</span><input id="monthlyReportAcademicYear" data-monthly-edit placeholder="e.g., 2026-2027"/></label>
+            </div>
+          </section>
+          <section class="monthly-filing-group" aria-labelledby="monthlySignatoryHeading">
+            <div class="monthly-filing-group-heading">
+              <span class="monthly-filing-step" aria-hidden="true">02</span>
+              <div><strong id="monthlySignatoryHeading">Required Signatories</strong><small>Enter only the preparer and noting officer used by the monthly report.</small></div>
+            </div>
+            <div class="monthly-filing-fields">
+              <label class="field"><span>Prepared By *</span><input id="monthlyReportPreparedBy" data-monthly-edit placeholder="Full name"/></label>
+              <label class="field"><span>Prepared By Position</span><input id="monthlyReportPreparedTitle" data-monthly-edit placeholder="e.g., EVP for Membership"/></label>
+              <label class="field"><span>Noted By *</span><input id="monthlyReportNotedBy" data-monthly-edit placeholder="Full name"/></label>
+              <label class="field"><span>Noted By Position</span><input id="monthlyReportNotedTitle" data-monthly-edit placeholder="e.g., President"/></label>
+            </div>
+          </section>
         </div>
         <p class="monthly-report-help">The Trainer is permanently counted as <strong>1</strong> in the Comparative Manpower Complement. Member counts are read from the shared database.</p>
       </article>
@@ -786,7 +803,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </div>
 <div class="attendance-summary" id="attendanceSummary"></div>
 <div class="attendance-toolbar"><label class="field search-field"><span>Search roster</span><input id="attendanceMemberSearch" type="search" placeholder="Member name, stage, section..."/></label><div class="inline-actions"><button class="button button-secondary" id="markAllPresent">Mark All Present</button><button class="button button-primary" id="saveAttendanceButton">Save Attendance</button></div></div>
-<div class="table-wrap"><table class="attendance-table"><thead><tr><th>Member</th><th>Stage / Period</th><th>Section</th><th>Status</th><th>Remarks</th></tr></thead><tbody id="attendanceRosterBody"></tbody></table></div>
+<div class="attendance-roster-table-heading"><div><strong>Member Attendance Roster</strong><small>Members remain visible below. Scroll inside this roster to complete attendance without losing the action buttons.</small></div><span>Scrollable roster</span></div>
+<div class="table-wrap attendance-roster-scroll" tabindex="0" aria-label="Scrollable member attendance roster"><table class="attendance-table"><caption class="sr-only">Attendance roster for the selected activity and membership group</caption><thead><tr><th>Member</th><th>Stage / Period</th><th>Section</th><th>Status</th><th>Remarks</th></tr></thead><tbody id="attendanceRosterBody"></tbody></table></div>
 </div>
 </article>
 </div>
@@ -997,17 +1015,24 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </section>
 
 <section class="view" id="alertsView">
-<div class="alerts-header">
-<div><p class="eyebrow">Automated Monitoring</p><h3>Action Center</h3><p>Prioritized items generated from membership timelines, profile quality, safety contacts, and attendance records.</p></div>
-<button class="button button-secondary" id="refreshAlertsButton">Refresh Alerts</button>
+<div class="alerts-header action-center-header">
+<div><p class="eyebrow">Operational Workflow</p><h3>Action Center</h3><p>Review, open, complete, and verify pending work from across the system in one organized workspace.</p></div>
+<div class="inline-actions"><span class="action-center-updated" id="actionCenterUpdated" aria-live="polite">Ready</span><button class="button button-secondary" id="refreshAlertsButton" type="button">Refresh Action Center</button></div>
+</div>
+<div class="action-workflow-map" id="actionWorkflowMap" aria-label="Action Center workflow"></div>
+<div class="panel action-center-toolbar">
+<label class="field search-field"><span>Search work items</span><input id="actionCenterSearch" type="search" placeholder="Member, activity, module, or task..."/></label>
+<label class="field"><span>Module</span><select id="actionCenterModuleFilter"><option value="">All modules</option></select></label>
+<label class="field"><span>Priority</span><select id="actionCenterPriorityFilter"><option value="">All priorities</option><option value="high">Urgent</option><option value="medium">Review soon</option><option value="low">Monitor</option></select></label>
+<button class="button button-secondary" id="clearActionCenterFilters" type="button">Clear Filters</button>
 </div>
 <div class="alert-summary-grid" id="alertSummaryGrid"></div>
 <div class="alert-sections" id="alertSections"></div>
 </section>
 
 <section class="view" id="accountsView">
-<article class="panel">
-<div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review registrations and choose each account role before approval. The Administrator can customize every non-Administrator role's landing page, visible modules, Attendance calendars, and action permissions in System Health → Role & Permission Center.</p></div></div>
+<article class="panel accounts-workspace-panel">
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review registrations and choose each account role before approval. The Administrator can customize every non-Administrator role's landing page, visible modules, Attendance calendars, and action permissions in System Health → Role & Permission Center.</p></div><div class="accounts-refresh-control"><span id="accountsRefreshStatus" role="status">Loaded when this page opens</span><button class="button button-secondary" id="refreshAccountsButton" type="button">Refresh Accounts</button></div></div>
 <div class="account-security-note"><strong>Approval workflow:</strong> Choose the account role before clicking Approve. Role access is controlled centrally in <b>System Health → Role & Permission Center</b>. Trainee/Probationary accounts still require a linked current member before approval.</div>
 <div class="table-wrap"><table><thead><tr><th>Account</th><th>Username / Optional Email</th><th>Role Before Approval</th><th>Linked Trainee/Probationary Member</th><th>Requested</th><th>Access Status</th><th>Approved</th><th class="actions-column">Actions</th></tr></thead><tbody id="accountsTableBody"></tbody></table></div>
 </article>
@@ -1015,10 +1040,20 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 
 <section class="view" id="systemHealthView">
 <div class="system-health-hero">
-<div><p class="eyebrow">Administrator Diagnostics</p><h3>System Health &amp; Version Center</h3><p>Verify the website, database schema, migrations, PWA cache, backups, permissions, and unresolved errors from one controlled workspace.</p></div>
+<div><p class="eyebrow">Administrator Diagnostics</p><h3>System Health &amp; Control Center</h3><p>Follow a clear workflow: review the overview, manage access, verify compatibility, and resolve logged errors.</p><div class="health-workflow-summary" id="healthWorkflowSummary" aria-live="polite">Run a health check to verify the current system state.</div></div>
 <div class="inline-actions"><button class="button button-secondary" id="copyHealthReportButton" type="button">Copy Health Report</button><button class="button button-primary" id="refreshSystemHealthButton" type="button">Run Health Check</button></div>
 </div>
+<nav class="system-health-navigation" id="systemHealthNavigation" role="tablist" aria-label="System Health workflow">
+<button class="health-nav-button active" id="systemHealthOverviewTab" data-health-panel="overview" role="tab" aria-selected="true" aria-controls="systemHealthOverviewPanel" type="button"><span>1</span><strong>Overview</strong><small>Versions and records</small></button>
+<button class="health-nav-button" id="systemHealthAccessTab" data-health-panel="access" role="tab" aria-selected="false" aria-controls="systemHealthAccessPanel" type="button"><span>2</span><strong>Access Control</strong><small>Roles and permissions</small></button>
+<button class="health-nav-button" id="systemHealthDiagnosticsTab" data-health-panel="diagnostics" role="tab" aria-selected="false" aria-controls="systemHealthDiagnosticsPanel" type="button"><span>3</span><strong>Diagnostics</strong><small>Checks and migrations</small></button>
+<button class="health-nav-button" id="systemHealthErrorsTab" data-health-panel="errors" role="tab" aria-selected="false" aria-controls="systemHealthErrorsPanel" type="button"><span>4</span><strong>Error Resolution</strong><small>Open and resolved logs</small></button>
+</nav>
+<section class="health-workflow-panel active" id="systemHealthOverviewPanel" data-health-workflow-panel="overview" role="tabpanel" aria-labelledby="systemHealthOverviewTab">
 <div class="health-version-grid" id="healthVersionGrid"></div>
+<article class="panel health-overview-panel"><div class="panel-header"><div><p class="eyebrow">Database Snapshot</p><h3>Shared Record Counts</h3><p class="panel-subtitle">A quick operational snapshot from the shared system state.</p></div></div><div class="health-count-grid" id="healthCountGrid"></div></article>
+</section>
+<section class="health-workflow-panel" id="systemHealthAccessPanel" data-health-workflow-panel="access" role="tabpanel" aria-labelledby="systemHealthAccessTab" hidden>
 <article class="panel permission-center-panel">
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Access Control</p><h3>Role &amp; Permission Center</h3><p class="panel-subtitle">Choose a role, assign the modules and actions it can use, and select the page that opens immediately after login.</p></div><div class="inline-actions"><button class="button button-secondary" id="refreshRolePermissionsButton" type="button">Refresh Permissions</button><button class="button button-secondary" id="exportPermissionMatrixButton" type="button">Export Permission Matrix</button></div></div>
 <div class="role-permission-editor" id="rolePermissionEditor">
@@ -1031,21 +1066,22 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="permission-editor-note" id="permissionEditorProtectionNote"></div>
 <div class="permission-role-summary" id="permissionRoleSummary"></div>
 <details class="permission-editor-section" data-permission-section="modules" open><summary><span><strong>Visible Modules</strong><small>Checked modules appear in the navigation and can be selected as the landing page.</small></span></summary><div class="permission-toggle-grid" id="permissionModuleOptions"></div></details>
-<details class="permission-editor-section" data-permission-section="actions" open><summary><span><strong>Action Permissions</strong><small>Controls for create, edit, approve, finalize, print, and management actions.</small></span></summary><div class="permission-toggle-grid" id="permissionActionOptions"></div></details>
-<details class="permission-editor-section" data-permission-section="attendance" open><summary><span><strong>Attendance Calendar Access</strong><small>Choose which Official, Trainee, and Probationary calendars the role can open.</small></span></summary><div class="permission-toggle-grid" id="permissionAttendanceOptions"></div></details>
+<details class="permission-editor-section" data-permission-section="actions"><summary><span><strong>Action Permissions</strong><small>Controls for create, edit, approve, finalize, print, and management actions.</small></span></summary><div class="permission-toggle-grid" id="permissionActionOptions"></div></details>
+<details class="permission-editor-section" data-permission-section="attendance"><summary><span><strong>Attendance Calendar Access</strong><small>Choose which Official, Trainee, and Probationary calendars the role can open.</small></span></summary><div class="permission-toggle-grid" id="permissionAttendanceOptions"></div></details>
 </div>
-<div class="table-wrap permission-matrix-wrap"><table class="permission-matrix-table"><thead id="permissionMatrixHead"></thead><tbody id="permissionMatrixBody"></tbody></table></div>
+<details class="permission-matrix-disclosure"><summary>View complete permission matrix</summary><div class="table-wrap permission-matrix-wrap"><table class="permission-matrix-table"><thead id="permissionMatrixHead"></thead><tbody id="permissionMatrixBody"></tbody></table></div></details>
 </article>
+</section>
+<section class="health-workflow-panel" id="systemHealthDiagnosticsPanel" data-health-workflow-panel="diagnostics" role="tabpanel" aria-labelledby="systemHealthDiagnosticsTab" hidden>
 <div class="health-layout-grid">
 <article class="panel"><div class="panel-header"><div><p class="eyebrow">Compatibility</p><h3>System Checks</h3><p class="panel-subtitle">Every required table, column, function, and service is checked independently.</p></div></div><div id="systemHealthChecks" class="health-check-list"></div></article>
-<article class="panel"><div class="panel-header"><div><p class="eyebrow">Schema History</p><h3>Applied Migrations</h3><p class="panel-subtitle">The master installer records each immutable database migration.</p></div></div><div class="table-wrap"><table><thead><tr><th>Version</th><th>Migration</th><th>Applied</th><th>Checksum</th></tr></thead><tbody id="migrationHistoryBody"></tbody></table></div></article>
-</div>
-<div class="health-layout-grid">
-<article class="panel"><div class="panel-header"><div><p class="eyebrow">Database Snapshot</p><h3>Shared Record Counts</h3></div></div><div class="health-count-grid" id="healthCountGrid"></div></article>
-<article class="panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Error Reporting</p><h3>System Error Log</h3><p class="panel-subtitle">Friendly error codes are shown to users; Administrators can inspect and resolve technical records here.</p></div><button class="button button-secondary" id="exportSystemErrorsButton" type="button">Export CSV</button></div><div id="systemErrorLog" class="system-error-log"></div></article>
+<article class="panel"><div class="panel-header"><div><p class="eyebrow">Schema History</p><h3>Applied Migrations</h3><p class="panel-subtitle">The master installer records each immutable database migration.</p></div></div><div class="table-wrap health-migration-table"><table><thead><tr><th>Version</th><th>Migration</th><th>Applied</th><th>Checksum</th></tr></thead><tbody id="migrationHistoryBody"></tbody></table></div></article>
 </div>
 </section>
-
+<section class="health-workflow-panel" id="systemHealthErrorsPanel" data-health-workflow-panel="errors" role="tabpanel" aria-labelledby="systemHealthErrorsTab" hidden>
+<article class="panel system-error-workspace"><div class="panel-header stack-mobile"><div><p class="eyebrow">Error Resolution Workflow</p><h3>System Error Log</h3><p class="panel-subtitle">Filter open or resolved records, review the details, and document the resolution without creating a second error.</p></div><div class="inline-actions"><button class="button button-secondary" id="showOpenSystemErrorsButton" type="button">Open Errors</button><button class="button button-secondary" id="showAllSystemErrorsButton" type="button">All Records</button><button class="button button-secondary" id="exportSystemErrorsButton" type="button">Export CSV</button></div></div><div class="system-error-workflow-note"><span>1</span><div><strong>Review the error</strong><small>Confirm the module and message.</small></div><i>→</i><span>2</span><div><strong>Apply the correction</strong><small>Test the affected action.</small></div><i>→</i><span>3</span><div><strong>Mark resolved</strong><small>Add a short resolution note.</small></div></div><div id="systemErrorLog" class="system-error-log"></div></article>
+</section>
+</section>
 <section class="view" id="dataView">
 <div class="recovery-center-grid">
 <article class="panel recovery-summary-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Automated Protection</p><h3>Backup &amp; Recovery Center</h3><p class="panel-subtitle">The system creates server recovery points before risky operations and one daily point when an Administrator signs in.</p></div><button class="button button-primary" id="createRecoveryPointButton" type="button">Create Recovery Point</button></div><div class="recovery-kpis" id="recoveryKpis"></div><div class="recovery-status-line" id="automaticRecoveryStatus">Checking recovery protection…</div></article>
@@ -1288,13 +1324,13 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260729-role-permission-v38"></script>
+<script src="lso-system-core-v4.js?v=20260804-workflow-v41"></script>
 <script src="role-access-v4.js?v=20260729-role-permission-v38"></script>
 <script src="cloud-staff-v5.js?v=20260803-security-hardening-1"></script>
 <script src="app-member-information-v5.js?v=20260726-portrait-print-v30"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
-<script src="auth.js?v=20260803-security-hardening-1"></script>
-<script src="management-attendance-member-info-v4.js?v=20260728-attendance-duty-v35"></script>
+<script src="auth.js?v=20260804-workflow-v41"></script>
+<script src="management-attendance-member-info-v4.js?v=20260804-workflow-v41"></script>
 <script src="ui-enhancements.js?v=20260803-role-scroll-performance-v39"></script>
 <script src="dashboard-enhancements.js?v=20260725-render-runtime-v24"></script>
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
@@ -1303,16 +1339,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="duty-hours-member-info-v14.js?v=20260728-attendance-duty-v35"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="monthly-report-template-data.js?v=20260726-portrait-print-v30"></script>
-<script src="monthly-report-print-v31.js?v=20260726-fullbleed-print-v31"></script>
+<script src="monthly-report-print-v31.js?v=20260804-workflow-v41"></script>
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
 <script src="contract-maker-membership-v4.js?v=20260723-membership-contract-v4"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260724-member-information-v3"></script>
 <script src="permissions-dynamic-v38.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="dashboard-command-center-v5.js?v=20260728-general-secretary-dashboard-v34"></script>
+<script src="dashboard-command-center-v5.js?v=20260804-workflow-v41"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v2.js?v=20260729-role-permission-v38"></script>
+<script src="system-enterprise-v2.js?v=20260804-workflow-v41"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
 <script src="role-permission-center-v38.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="pwa-enterprise-v38.js?v=20260803-role-scroll-performance-v39"></script>
+<script src="pwa-enterprise-v38.js?v=20260804-professional-v43"></script>
 </body>
 </html>

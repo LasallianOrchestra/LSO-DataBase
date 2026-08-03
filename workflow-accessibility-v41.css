@@ -1,0 +1,718 @@
+/* LSO V42 — workflow, readable filing forms, contained attendance rosters, and cross-device accessibility.
+   Visual/layout layer only; no database or permission rules are changed. */
+
+:root {
+  --v41-border: #dce9e4;
+  --v41-soft: #f5faf8;
+  --v41-ink: #173b31;
+  --v41-muted: #667b74;
+  --v41-green: #116b4d;
+  --v41-focus: #1c7f5e;
+}
+
+/* Keyboard and touch accessibility */
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid #1c7f5e;
+  outline: 3px solid color-mix(in srgb, var(--v41-focus) 60%, white);
+  outline-offset: 3px;
+}
+:where(.button, .small-button, .icon-button, .nav-item, .segment-button) { touch-action: manipulation; }
+.table-wrap { overscroll-behavior: contain; scrollbar-gutter: stable; }
+.table-wrap thead th { position: sticky; top: 0; z-index: 4; }
+
+/* Monthly Report — removed approval fields leave a balanced form. */
+#monthlyReportView .monthly-report-form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#monthlyReportView .monthly-report-help { margin-bottom: 0; }
+
+/* Attendance — activity and roster workspaces scroll inside their own panels. */
+#attendanceView .attendance-management-layout { align-items: stretch; }
+#attendanceView .management-sidebar-panel,
+#attendanceView .attendance-roster-panel {
+  min-height: 0 !important;
+  overflow: hidden;
+}
+#attendanceView .management-sidebar-panel {
+  display: flex;
+  flex-direction: column;
+}
+#attendanceView #eventList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+#attendanceView .attendance-roster-panel { display: flex; flex-direction: column; }
+#attendanceView #attendancePlaceholder { flex: 1 1 auto; min-height: 300px; }
+#attendanceView #attendanceWorkspace:not(.hidden) {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+#attendanceView #attendanceWorkspace > .panel-header,
+#attendanceView #attendanceWorkspace > .attendance-governance-panel,
+#attendanceView #attendanceWorkspace > .attendance-summary,
+#attendanceView #attendanceWorkspace > .attendance-toolbar { flex: 0 0 auto; }
+#attendanceView #attendanceWorkspace > .attendance-governance-panel {
+  max-height: min(31vh, 290px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+#attendanceView #attendanceWorkspace > .table-wrap {
+  flex: 1 1 280px;
+  min-height: 220px;
+  margin-top: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--v41-border);
+  border-radius: 14px;
+  scrollbar-gutter: stable;
+}
+#attendanceView .attendance-toolbar {
+  position: relative;
+  z-index: 5;
+  padding: 10px;
+  margin-top: 10px;
+  border: 1px solid var(--v41-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 7px 18px rgba(12, 76, 55, .06);
+}
+#attendanceView .attendance-table { min-width: 760px; }
+#attendanceView .attendance-table thead th { top: 0; }
+
+@media (min-width: 921px) {
+  #attendanceView .attendance-management-layout {
+    grid-template-columns: minmax(250px, .34fr) minmax(0, 1fr);
+  }
+  #attendanceView .management-sidebar-panel,
+  #attendanceView .attendance-roster-panel {
+    height: clamp(570px, 74vh, 790px);
+    height: clamp(570px, 74dvh, 790px);
+  }
+}
+
+/* Action Center — one system-wide workflow instead of long unstructured lists. */
+.action-center-header { align-items: center; }
+.action-center-updated {
+  color: var(--v41-muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.action-workflow-map {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.action-workflow-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--v41-border);
+  border-radius: 16px;
+  background: #fff;
+}
+.action-workflow-step > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--v41-green);
+  background: #e9f5ef;
+  font-weight: 900;
+}
+.action-workflow-step strong,
+.action-workflow-step small { display: block; }
+.action-workflow-step strong { color: var(--v41-ink); font-size: 13px; }
+.action-workflow-step small { margin-top: 2px; color: var(--v41-muted); font-size: 11px; }
+.action-workflow-step b {
+  min-width: 30px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  text-align: center;
+  color: var(--v41-green);
+  background: #edf7f2;
+  font-size: 12px;
+}
+.action-workflow-step.has-items { border-color: #9ecdbb; box-shadow: inset 0 3px 0 #19805e; }
+.action-workflow-step.is-clear { opacity: .72; }
+.action-workflow-step > i {
+  position: absolute;
+  right: -9px;
+  z-index: 2;
+  color: #8ba29a;
+  font-style: normal;
+}
+.action-center-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px !important;
+  margin-bottom: 14px;
+}
+#alertsView .alert-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#alertsView .alert-summary-card small { display: block; margin-top: 3px; color: var(--v41-muted); font-size: 11px; }
+#alertsView .alert-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+#alertsView .alert-section-card { min-width: 0; }
+#alertsView .alert-list {
+  max-height: min(48vh, 460px);
+  max-height: min(48dvh, 460px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+#alertsView .alert-row {
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+}
+#alertsView .action-module-label {
+  display: inline-flex;
+  margin-bottom: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #126447;
+  background: #e9f5ef;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+/* Accounts — stable manual refresh and contained table. */
+.accounts-refresh-control { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.accounts-refresh-control span { color: var(--v41-muted); font-size: 12px; text-align: right; }
+#accountsView .accounts-workspace-panel > .table-wrap {
+  max-height: clamp(400px, 66vh, 760px);
+  max-height: clamp(400px, 66dvh, 760px);
+  overflow: auto;
+  border: 1px solid var(--v41-border);
+  border-radius: 14px;
+}
+#accountsView .account-row-busy { opacity: .66; }
+
+/* System Health — four-step navigation with one active workspace. */
+.health-workflow-summary {
+  display: inline-flex;
+  margin-top: 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 12px;
+  color: #f3fbf7;
+  background: rgba(255,255,255,.09);
+  font-size: 12px;
+  font-weight: 750;
+}
+.health-workflow-summary[data-state="healthy"] { background: rgba(31, 163, 107, .22); }
+.health-workflow-summary[data-state="attention"] { background: rgba(188, 69, 73, .28); }
+.system-health-navigation {
+  position: sticky;
+  top: 68px;
+  z-index: 18;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  padding: 10px;
+  margin: 14px 0;
+  border: 1px solid var(--v41-border);
+  border-radius: 18px;
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 10px 24px rgba(15, 72, 53, .08);
+  backdrop-filter: blur(12px);
+}
+.health-nav-button {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  text-align: left;
+  color: var(--v41-ink);
+  background: transparent;
+}
+.health-nav-button > span {
+  grid-row: span 2;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--v41-green);
+  background: #e9f5ef;
+  font-weight: 900;
+}
+.health-nav-button strong,
+.health-nav-button small { display: block; min-width: 0; }
+.health-nav-button strong { font-size: 12px; }
+.health-nav-button small { overflow: hidden; color: var(--v41-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.health-nav-button.active { border-color: #8fc7b2; color: #fff; background: var(--v41-green); }
+.health-nav-button.active > span { color: #fff; background: rgba(255,255,255,.18); }
+.health-nav-button.active small { color: rgba(255,255,255,.8); }
+.health-nav-button.has-attention::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -34px 0 0 28px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #c84552;
+}
+.health-workflow-panel { display: none; }
+.health-workflow-panel.active { display: block; }
+.health-overview-panel { margin-top: 14px; }
+.permission-matrix-disclosure {
+  margin-top: 14px;
+  border: 1px solid var(--v41-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.permission-matrix-disclosure > summary {
+  padding: 13px 15px;
+  color: var(--v41-green);
+  background: var(--v41-soft);
+  font-weight: 850;
+  cursor: pointer;
+}
+.permission-matrix-disclosure .permission-matrix-wrap {
+  max-height: min(58vh, 620px);
+  max-height: min(58dvh, 620px);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.health-migration-table { max-height: min(58vh, 620px); max-height: min(58dvh, 620px); }
+.system-error-workspace .system-error-log {
+  max-height: min(62vh, 680px);
+  max-height: min(62dvh, 680px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.system-error-workflow-note {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto 32px minmax(0, 1fr) auto 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--v41-border);
+  border-radius: 14px;
+  background: var(--v41-soft);
+}
+.system-error-workflow-note > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: #fff; background: var(--v41-green); font-weight: 900; }
+.system-error-workflow-note strong,
+.system-error-workflow-note small { display: block; }
+.system-error-workflow-note strong { font-size: 12px; }
+.system-error-workflow-note small { color: var(--v41-muted); font-size: 10px; }
+.system-error-workflow-note i { color: #839a92; font-style: normal; }
+.system-error-record.is-resolved { border-left: 5px solid #23815f; opacity: .88; }
+.system-error-resolution { padding: 9px 11px; border-radius: 11px; color: #1d5844; background: #edf7f2; }
+.system-error-resolution strong,
+.system-error-resolution small { display: block; }
+.system-error-resolution small { margin-top: 3px; color: var(--v41-muted); }
+
+/* Dashboard — simple interactive overview, fewer redundant modules. */
+.dcc-snapshot-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+.dcc-snapshot-strip button {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--v41-border);
+  border-radius: 16px;
+  text-align: left;
+  color: var(--v41-ink);
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(12, 76, 55, .045);
+}
+.dcc-snapshot-strip span,
+.dcc-snapshot-strip strong,
+.dcc-snapshot-strip small { display: block; }
+.dcc-snapshot-strip span { color: var(--v41-muted); font-size: 11px; font-weight: 800; }
+.dcc-snapshot-strip strong { margin: 4px 0; color: var(--v41-green); font-size: 28px; }
+.dcc-snapshot-strip small { color: var(--v41-muted); font-size: 11px; }
+.dcc-simple-main > .dcc-panel:nth-child(n) { grid-column: span 6; }
+.dcc-simple-main .dcc-month-list,
+.dcc-simple-main .dcc-upcoming-list,
+.dcc-simple-main .dcc-risk-list,
+.dcc-simple-main .dcc-duty-list { max-height: 360px; overflow: auto; overscroll-behavior: contain; }
+#dashboardCommandCenterV4 :is(.dcc-section-heading p:not(.dcc-kicker), .dcc-panel-heading p:not(.dcc-kicker), .dcc-action-copy em, .dcc-quick-grid small, .dcc-empty p, .dcc-activity-row small) { font-size: 11px; }
+#dashboardCommandCenterV4 :is(.dcc-action-copy small, .dcc-month-metrics span, .dcc-inline-kpis span, .dcc-health-kpis span) { font-size: 10px; }
+
+/* Responsive layouts */
+@media (max-width: 1100px) {
+  #monthlyReportView .monthly-report-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .action-center-toolbar { grid-template-columns: 1fr 1fr; }
+  .action-center-toolbar .search-field { grid-column: 1 / -1; }
+  #alertsView .alert-sections { grid-template-columns: 1fr; }
+  #alertsView .alert-list { max-height: min(52vh, 520px); max-height: min(52dvh, 520px); }
+  .dcc-simple-main > .dcc-panel:nth-child(n) { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .action-workflow-map,
+  .system-health-navigation {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .action-workflow-step { flex: 0 0 min(280px, 82vw); scroll-snap-align: start; }
+  .action-workflow-step > i { display: none; }
+  .system-health-navigation { top: 58px; }
+  .health-nav-button { flex: 0 0 min(220px, 72vw); scroll-snap-align: start; }
+  .action-center-toolbar { grid-template-columns: 1fr; }
+  .action-center-toolbar .search-field { grid-column: auto; }
+  #alertsView .alert-summary-grid { grid-template-columns: 1fr 1fr; }
+  #alertsView .alert-row { grid-template-columns: 36px minmax(0, 1fr); }
+  #alertsView .alert-row .small-button { grid-column: 2; justify-self: start; }
+  .accounts-refresh-control { align-items: stretch; flex-direction: column; width: 100%; }
+  .accounts-refresh-control span { text-align: left; }
+  #accountsView .accounts-workspace-panel > .table-wrap { max-height: 68vh; max-height: 68dvh; }
+  #attendanceView .management-sidebar-panel { max-height: 55vh; max-height: 55dvh; }
+  #attendanceView .attendance-roster-panel { height: 76vh; height: 76dvh; }
+  #attendanceView #attendanceWorkspace > .attendance-governance-panel { max-height: 24vh; max-height: 24dvh; }
+  .system-error-workflow-note {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .system-error-workflow-note i { display: none; }
+  .dcc-snapshot-strip { grid-template-columns: 1fr 1fr; }
+  .dcc-hero { padding: 20px !important; }
+}
+
+@media (max-width: 460px) {
+  #monthlyReportView .monthly-report-form-grid,
+  #alertsView .alert-summary-grid,
+  .dcc-snapshot-strip { grid-template-columns: 1fr; }
+  #attendanceView .attendance-roster-panel { height: 80vh; height: 80dvh; }
+  #attendanceView .attendance-toolbar .inline-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+  #attendanceView .attendance-toolbar .button { width: 100%; }
+  .system-health-hero .inline-actions { display: grid; grid-template-columns: 1fr; }
+  .system-health-hero .button { width: 100%; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  :where(.button, .small-button, .icon-button, .health-nav-button, .action-workflow-step, .dcc-snapshot-strip button) { min-height: 44px; }
+  :where(.action-workflow-step, .health-nav-button, .dcc-snapshot-strip button):hover { transform: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* =========================================================
+   V42 Display Repair — Monthly Filing + Attendance Roster
+   Layout only. IDs, data actions, permissions, and workflows are unchanged.
+   ========================================================= */
+
+/* Monthly Filing Information: readable groups and full-size controls. */
+#monthlyReportView .monthly-report-setup-grid {
+  grid-template-columns: minmax(500px, 1.08fr) minmax(440px, .92fr);
+  gap: 20px;
+}
+#monthlyReportView .monthly-report-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 15px;
+}
+#monthlyReportView .monthly-report-setup-grid .monthly-report-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#monthlyReportView .monthly-filing-group {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d6e7df;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #ffffff, #f7fbf9);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+}
+#monthlyReportView .monthly-filing-group-heading {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+#monthlyReportView .monthly-filing-step {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #fff;
+  background: linear-gradient(145deg, #0b5d43, #1b8a62);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .05em;
+}
+#monthlyReportView .monthly-filing-group-heading strong,
+#monthlyReportView .monthly-filing-group-heading small { display: block; }
+#monthlyReportView .monthly-filing-group-heading strong {
+  color: #143f32;
+  font-size: 15px;
+  line-height: 1.25;
+}
+#monthlyReportView .monthly-filing-group-heading small {
+  margin-top: 3px;
+  color: #647a72;
+  font-size: 11px;
+  line-height: 1.45;
+}
+#monthlyReportView .monthly-filing-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+#monthlyReportView .monthly-filing-fields .field {
+  min-width: 0;
+  gap: 7px;
+}
+#monthlyReportView .monthly-filing-fields .field > span {
+  color: #314f45 !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  line-height: 1.25;
+}
+#monthlyReportView .monthly-filing-fields :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1.5px solid #bfd4ca !important;
+  border-radius: 12px;
+  color: #173b31 !important;
+  background: #fff !important;
+  -webkit-text-fill-color: #173b31 !important;
+  font-size: 15px !important;
+  font-weight: 650;
+  opacity: 1 !important;
+}
+#monthlyReportView .monthly-filing-fields input::placeholder {
+  color: #71857d !important;
+  -webkit-text-fill-color: #71857d !important;
+  opacity: 1 !important;
+}
+#monthlyReportView .monthly-filing-fields :is(input, select):hover { border-color: #7eb39f !important; }
+#monthlyReportView .monthly-filing-fields :is(input, select):focus {
+  border-color: #167b58 !important;
+  box-shadow: 0 0 0 4px rgba(22, 123, 88, .13) !important;
+}
+#monthlyReportView .monthly-filing-fields :is(input, select):disabled {
+  color: #50645d !important;
+  background: #eef4f1 !important;
+  -webkit-text-fill-color: #50645d !important;
+  opacity: 1 !important;
+}
+
+/* Attendance: never clip the roster behind a fixed-height panel. */
+#attendanceView .attendance-management-layout {
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  align-items: start !important;
+}
+#attendanceView .management-sidebar-panel,
+#attendanceView .attendance-roster-panel {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+#attendanceView .management-sidebar-panel { display: block !important; }
+#attendanceView #eventList {
+  min-height: 180px;
+  max-height: clamp(320px, 56vh, 620px);
+  max-height: clamp(320px, 56dvh, 620px);
+  overflow: auto !important;
+}
+#attendanceView .attendance-roster-panel { display: block !important; }
+#attendanceView #attendancePlaceholder {
+  min-height: 300px;
+  border: 1px dashed #c8ddd3;
+  border-radius: 16px;
+  background: #f8fbf9;
+}
+#attendanceView #attendanceWorkspace:not(.hidden) {
+  display: block !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+#attendanceView #attendanceWorkspace > .attendance-governance-panel {
+  max-height: none !important;
+  overflow: visible !important;
+}
+#attendanceView .attendance-toolbar {
+  position: relative;
+  top: auto;
+  z-index: 6;
+  margin-bottom: 10px;
+}
+#attendanceView .attendance-roster-table-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid #d6e7df;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  color: #173b31;
+  background: #f2f8f5;
+}
+#attendanceView .attendance-roster-table-heading strong,
+#attendanceView .attendance-roster-table-heading small { display: block; }
+#attendanceView .attendance-roster-table-heading strong { font-size: 13px; }
+#attendanceView .attendance-roster-table-heading small {
+  margin-top: 3px;
+  color: #657a72;
+  font-size: 11px;
+  line-height: 1.4;
+}
+#attendanceView .attendance-roster-table-heading > span {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #0f6849;
+  background: #dff3e9;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+#attendanceView #attendanceWorkspace > .attendance-roster-scroll {
+  display: block !important;
+  width: 100%;
+  min-height: 320px;
+  max-height: clamp(360px, 58vh, 680px);
+  max-height: clamp(360px, 58dvh, 680px);
+  margin-top: 0 !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  border: 1px solid #d6e7df !important;
+  border-radius: 0 0 14px 14px !important;
+  background: #fff !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+#attendanceView .attendance-roster-scroll .attendance-table {
+  display: table !important;
+  width: 100% !important;
+  min-width: 760px !important;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+#attendanceView .attendance-roster-scroll .attendance-table thead { display: table-header-group !important; }
+#attendanceView .attendance-roster-scroll .attendance-table tbody { display: table-row-group !important; }
+#attendanceView .attendance-roster-scroll .attendance-table tr {
+  display: table-row !important;
+  width: auto !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent;
+  box-shadow: none !important;
+}
+#attendanceView .attendance-roster-scroll .attendance-table :is(th, td) {
+  display: table-cell !important;
+  width: auto !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  padding: 11px 12px !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid #e5eeea !important;
+  text-align: left !important;
+  vertical-align: middle;
+  white-space: normal;
+}
+#attendanceView .attendance-roster-scroll .attendance-table td::before { display: none !important; content: none !important; }
+#attendanceView .attendance-roster-scroll .attendance-table td > * {
+  min-width: 0;
+  max-width: 100%;
+  justify-self: auto !important;
+}
+#attendanceView .attendance-roster-scroll .attendance-table :is(select, input) {
+  width: 100%;
+  min-width: 128px;
+  min-height: 42px;
+  color: #173b31;
+  background: #fff;
+}
+#attendanceView .attendance-roster-scroll .attendance-table th {
+  position: sticky !important;
+  top: 0;
+  z-index: 8;
+  color: #294c40;
+  background: #eef6f2 !important;
+  box-shadow: inset 0 -1px 0 #d7e6df;
+}
+#attendanceView .attendance-roster-scroll .attendance-table :is(th, td):first-child {
+  position: sticky !important;
+  left: 0;
+  min-width: 210px;
+  z-index: 7;
+  background: #fff !important;
+  box-shadow: 1px 0 0 #e0ebe6;
+}
+#attendanceView .attendance-roster-scroll .attendance-table th:first-child {
+  z-index: 10;
+  background: #eaf4ef !important;
+}
+#attendanceView .attendance-roster-scroll .attendance-table tbody tr:hover td { background: #f8fcfa; }
+#attendanceView .attendance-roster-scroll .attendance-table tbody tr:hover td:first-child { background: #f1f8f5 !important; }
+
+@media (max-width: 1180px) {
+  #monthlyReportView .monthly-report-setup-grid { grid-template-columns: minmax(0, 1fr); }
+  #attendanceView .attendance-management-layout { grid-template-columns: minmax(0, 1fr); }
+  #attendanceView #eventList { max-height: 380px; }
+}
+
+@media (max-width: 760px) {
+  #monthlyReportView .monthly-filing-fields { grid-template-columns: minmax(0, 1fr); }
+  #monthlyReportView .monthly-report-setup-grid .monthly-report-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #monthlyReportView .monthly-filing-group { padding: 14px; }
+  #monthlyReportView .monthly-filing-group-heading { grid-template-columns: 38px minmax(0, 1fr); }
+  #monthlyReportView .monthly-filing-step { width: 38px; height: 38px; }
+  #monthlyReportView .monthly-filing-fields :is(input, select) { min-height: 50px; font-size: 16px !important; }
+  #attendanceView .management-sidebar-panel { max-height: none !important; }
+  #attendanceView .attendance-roster-panel { height: auto !important; max-height: none !important; }
+  #attendanceView #eventList { min-height: 180px; max-height: 38vh; max-height: 38dvh; }
+  #attendanceView #attendanceWorkspace > .attendance-roster-scroll {
+    min-height: 360px;
+    max-height: 58vh;
+    max-height: 58dvh;
+  }
+  #attendanceView .attendance-roster-table-heading { align-items: flex-start; }
+  #attendanceView .attendance-roster-table-heading > span { display: none; }
+  #attendanceView .attendance-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 460px) {
+  #monthlyReportView .monthly-filing-group-heading small { font-size: 10.5px; }
+  #monthlyReportView .monthly-report-setup-grid .monthly-report-summary-grid { grid-template-columns: minmax(0, 1fr); }
+  #attendanceView #attendanceWorkspace > .attendance-roster-scroll {
+    min-height: 390px;
+    max-height: 62vh;
+    max-height: 62dvh;
+  }
+  #attendanceView .attendance-roster-scroll .attendance-table { min-width: 720px !important; }
+  #attendanceView .attendance-roster-scroll .attendance-table :is(th, td):first-child { min-width: 180px; }
+}
+
