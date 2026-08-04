@@ -8,6 +8,8 @@
   const ACTIVITY_KEY = 'lso_activity_log_v2';
   const SETTINGS_KEY = 'lso_system_settings_v2';
     const MEMBER_KEY = 'lso_member_database_v1';
+  let notificationSyncPromise = null;
+  let lastNotificationSyncAt = 0;
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -144,18 +146,43 @@
   }
 
   function alertNotification(alert) {
-    const targetId = alert.memberId || alert.instrumentId || '';
     const stableTitle = String(alert.title || 'Action required').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);
+    let actionType = 'alerts';
+    let targetId = alert.targetId || '';
+
+    if (alert.routeType === 'attendance-member' || (alert.type === 'attendance' && alert.memberId)) {
+      actionType = 'attendance-member';
+      targetId = alert.memberId || alert.targetId || '';
+    } else if (alert.routeType === 'duty-punch' || (alert.viewId === 'dutyHoursView' && alert.targetId)) {
+      actionType = 'duty-punch';
+      targetId = `${alert.targetId || ''}::${alert.punchType || ''}`;
+    } else if (alert.eventId) {
+      actionType = 'event';
+      targetId = alert.eventId;
+    } else if (alert.memberId) {
+      actionType = 'member';
+      targetId = alert.memberId;
+    } else if (alert.instrumentId) {
+      actionType = 'instrument';
+      targetId = alert.instrumentId;
+    } else if (alert.viewId === 'accountsView') {
+      actionType = 'accounts';
+    } else if (alert.viewId === 'monthlyReportView') {
+      actionType = 'monthly-report';
+    } else if (alert.viewId === 'systemHealthView') {
+      actionType = 'system-health';
+    }
+
     return {
       id: `alert:${alert.type}:${targetId || stableTitle}`,
-      category: 'Action Center',
+      category: alert.module || 'Action Center',
       severity: alert.severity || 'medium',
       title: alert.title || 'Action required',
-      detail: alert.detail || 'Open the Action Center for details.',
+      detail: alert.detail || 'Open the related system record for details.',
       timestamp: '',
-      actionType: alert.memberId ? 'member' : alert.instrumentId ? 'instrument' : 'alerts',
+      actionType,
       targetId,
-      icon: ({ transition: '→', profile: 'ID', safety: '+', attendance: '%', instrument: '♬' })[alert.type] || '!'
+      icon: ({ transition: '→', profile: 'ID', safety: '+', attendance: '%', duty: 'DH', account: 'AC', report: 'PDF', system: '!', instrument: '♬' })[alert.type] || '!'
     };
   }
 
@@ -220,6 +247,31 @@
       if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return `${notification.category} • ${relativeDateLabel(datePart)}`;
     }
     return notification.category;
+  }
+
+  async function syncNotificationSources({ force = false } = {}) {
+    const account = currentAccount();
+    if (!account) return false;
+    const now = Date.now();
+    if (!force && now - lastNotificationSyncAt < 5000) return false;
+    if (notificationSyncPromise) return notificationSyncPromise;
+
+    const canOpenDuty = account.role === 'Trainee/Probationary'
+      || window.LSORoleAccess?.canAccessView?.('dutyHoursView', account)
+      || window.LSORoleAccess?.can?.('reviewDutyPunches', account);
+    const jobs = [];
+    if (canOpenDuty && window.LSODutyHours?.refreshFromServer) jobs.push(window.LSODutyHours.refreshFromServer());
+    if (isAdmin() && window.LSOAuth?.refreshAccounts) jobs.push(window.LSOAuth.refreshAccounts({ forceNotify: false }));
+    if (!jobs.length) return false;
+
+    lastNotificationSyncAt = now;
+    notificationSyncPromise = Promise.allSettled(jobs)
+      .then(() => {
+        renderNotifications();
+        return true;
+      })
+      .finally(() => { notificationSyncPromise = null; });
+    return notificationSyncPromise;
   }
 
   function renderNotifications() {
@@ -303,6 +355,10 @@
 
   function performNotificationAction(action, targetId) {
     toggleNotificationPopover(false);
+    if (action === 'attendance-member' && targetId) {
+      if (!window.LSOOperations?.openAttendanceMember?.(targetId)) showView('attendanceView');
+      return;
+    }
     if (action === 'member' && targetId) {
       window.LSOApp?.openRecord?.(targetId);
       return;
@@ -313,10 +369,25 @@
     }
     if (action === 'accounts') {
       showView('accountsView');
+      setTimeout(() => {
+        const escaped = window.CSS?.escape ? CSS.escape(targetId) : String(targetId || '').replace(/["\\]/g, '\\$&');
+        const row = targetId ? document.querySelector(`[data-account-row="${escaped}"]`) : null;
+        if (row) {
+          row.classList.add('notification-target-highlight');
+          row.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+          setTimeout(() => row.classList.remove('notification-target-highlight'), 4200);
+        }
+      }, 100);
       return;
     }
     if (action === 'event' && targetId) {
       openEvent(targetId);
+      return;
+    }
+    if (action === 'duty-punch' || action === 'duty-session') {
+      const [entryId, punchType = ''] = String(targetId || '').split('::');
+      if (entryId) window.LSOOperations?.openDutyRecord?.(entryId, action === 'duty-punch' ? punchType : '');
+      else showView('dutyHoursView');
       return;
     }
     if (action === 'duty-hours') {
@@ -338,7 +409,13 @@
     }
     if (action === 'system-health') {
       showView('systemHealthView');
-      setTimeout(() => document.getElementById('systemHealthView')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50);
+      setTimeout(() => {
+        document.querySelector('[data-health-panel="errors"]')?.click();
+        const target = document.getElementById('systemErrorLogPanel') || document.getElementById('systemHealthView');
+        target?.classList.add('notification-target-highlight');
+        target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        setTimeout(() => target?.classList.remove('notification-target-highlight'), 4200);
+      }, 70);
       return;
     }
     showView('alertsView');
@@ -521,6 +598,7 @@
     el('notificationButton')?.addEventListener('click', (event) => {
       event.stopPropagation();
       toggleNotificationPopover();
+      syncNotificationSources({ force: true }).catch(() => undefined);
     });
     el('notificationCloseButton')?.addEventListener('click', () => toggleNotificationPopover(false));
     el('markAllNotificationsRead')?.addEventListener('click', markAllNotificationsRead);
@@ -566,6 +644,11 @@
         window.LSOOperations?.refreshAll?.();
         renderDashboardModules();
       }
+    });
+
+    window.addEventListener('focus', () => syncNotificationSources().catch(() => undefined));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncNotificationSources().catch(() => undefined);
     });
 
     window.setInterval(() => {

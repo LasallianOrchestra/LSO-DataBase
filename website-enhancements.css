@@ -1107,3 +1107,28 @@ textarea:focus {
   .duty-review-card-actions { grid-template-columns: 1fr; }
   .duty-punch-status-chip { width: 100%; justify-content: space-between; }
 }
+
+
+/* V48 notification deep-link focus: visual only, no layout changes. */
+.notification-target-highlight {
+  position: relative;
+  outline: 3px solid #167a5b;
+  outline: 3px solid color-mix(in srgb, var(--primary, #167a5b) 72%, white);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 8px rgba(22, 122, 91, .16), 0 10px 30px rgba(18, 63, 51, .12);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary, #167a5b) 16%, transparent), var(--shadow, 0 10px 30px rgba(18, 63, 51, .12));
+  animation: notificationTargetPulse 1.15s ease-out 2;
+}
+
+@keyframes notificationTargetPulse {
+  0%, 100% { transform: translateZ(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-target-highlight { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .notification-target-highlight { outline-offset: 2px; }
+}

@@ -915,6 +915,8 @@
       eventId: item.eventId || '',
       viewId: item.viewId || '',
       targetId: item.targetId || '',
+      routeType: item.routeType || '',
+      punchType: item.punchType || '',
       actionLabel: item.actionLabel || 'Open'
     };
   }
@@ -944,16 +946,19 @@
       } else if (member.reviewStatus === 'For Review' || Number(member.recordQuality || 0) < 80) {
         alerts.push(actionItem({ id: `profile-review:${member.id}`, type: 'profile', module: 'Members', stage: 'review', severity: 'medium', title: `${member.fullName} needs a record review`, detail: `${member.recordQuality || 0}% complete • ${member.reviewStatus || 'For Review'}`, memberId: member.id, actionLabel: 'Review Profile' }));
       }
-      const attendanceInfo = getMemberAttendance(member.id);
-      if (attendanceInfo.sessions >= 3 && attendanceInfo.rate < attendanceThreshold) {
-        alerts.push(actionItem({ id: `attendance-rate:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'high', title: `${member.fullName} has low attendance`, detail: `${attendanceInfo.rate}% across ${attendanceInfo.sessions} counted activities`, memberId: member.id, actionLabel: 'Open Member' }));
-      }
-      const attendanceSignals = window.LSOAttendanceGovernance?.memberSignals?.(member.id, attendanceThreshold);
-      if (attendanceSignals?.absenceStreak >= 2) {
-        alerts.push(actionItem({ id: `attendance-absence:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'high', title: `${member.fullName} has consecutive absences`, detail: `${attendanceSignals.absenceStreak} consecutive counted absences in the current attendance group`, memberId: member.id, actionLabel: 'Open Member' }));
-      }
-      if (attendanceSignals?.lateCount >= 3) {
-        alerts.push(actionItem({ id: `attendance-late:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'medium', title: `${member.fullName} has repeated lateness`, detail: `${attendanceSignals.lateCount} Late records in the selected semester`, memberId: member.id, actionLabel: 'Open Member' }));
+      const attendanceGroup = currentMemberAttendanceGroup(member);
+      if (canUseAttendanceGroup(attendanceGroup)) {
+        const attendanceInfo = getMemberAttendance(member.id);
+        if (attendanceInfo.sessions >= 3 && attendanceInfo.rate < attendanceThreshold) {
+          alerts.push(actionItem({ id: `attendance-rate:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'high', title: `${member.fullName} has low attendance`, detail: `${attendanceInfo.rate}% across ${attendanceInfo.sessions} counted activities`, memberId: member.id, viewId: 'attendanceView', targetId: member.id, routeType: 'attendance-member', actionLabel: 'Open Attendance' }));
+        }
+        const attendanceSignals = window.LSOAttendanceGovernance?.memberSignals?.(member.id, attendanceThreshold);
+        if (attendanceSignals?.absenceStreak >= 2) {
+          alerts.push(actionItem({ id: `attendance-absence:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'high', title: `${member.fullName} has consecutive absences`, detail: `${attendanceSignals.absenceStreak} consecutive counted absences in the current attendance group`, memberId: member.id, viewId: 'attendanceView', targetId: member.id, routeType: 'attendance-member', actionLabel: 'Open Attendance' }));
+        }
+        if (attendanceSignals?.lateCount >= 3) {
+          alerts.push(actionItem({ id: `attendance-late:${member.id}`, type: 'attendance', module: 'Attendance', stage: 'review', severity: 'medium', title: `${member.fullName} has repeated lateness`, detail: `${attendanceSignals.lateCount} Late records in the selected semester`, memberId: member.id, viewId: 'attendanceView', targetId: member.id, routeType: 'attendance-member', actionLabel: 'Open Attendance' }));
+        }
       }
     });
 
@@ -970,8 +975,10 @@
     const duty = window.LSODutyHours?.getData?.() || loadDutyHours();
     if (can('reviewDutyPunches')) {
       (duty.entries || []).forEach((entry) => {
-        if (entry.timeInApprovalStatus === 'Pending') alerts.push(actionItem({ id: `duty-in:${entry.id}`, type: 'duty', module: 'Duty Hours', stage: 'review', severity: 'high', title: 'Time In requires approval', detail: `${entry.date || 'No date'} • Review the submitted Time In punch.`, viewId: 'dutyHoursView', targetId: entry.id, actionLabel: 'Review Time In' }));
-        if (entry.timeOutApprovalStatus === 'Pending') alerts.push(actionItem({ id: `duty-out:${entry.id}`, type: 'duty', module: 'Duty Hours', stage: 'review', severity: 'high', title: 'Time Out requires approval', detail: `${entry.date || 'No date'} • Review the completed Time Out punch.`, viewId: 'dutyHoursView', targetId: entry.id, actionLabel: 'Review Time Out' }));
+        const dutyMember = members.find((member) => member.id === entry.memberId);
+        const dutyName = dutyMember?.fullName || entry.submittedByUsername || 'Duty Hours member';
+        if (entry.timeInApprovalStatus === 'Pending') alerts.push(actionItem({ id: `duty-in:${entry.id}`, type: 'duty', module: 'Duty Hours', stage: 'review', severity: 'high', title: `${dutyName} submitted Time In`, detail: `${entry.date || 'No date'} • Review the exact Time In punch.`, viewId: 'dutyHoursView', targetId: entry.id, routeType: 'duty-punch', punchType: 'TimeIn', actionLabel: 'Review Time In' }));
+        if (entry.timeOutApprovalStatus === 'Pending') alerts.push(actionItem({ id: `duty-out:${entry.id}`, type: 'duty', module: 'Duty Hours', stage: 'review', severity: 'high', title: `${dutyName} submitted Time Out`, detail: `${entry.date || 'No date'} • Review the exact Time Out punch.`, viewId: 'dutyHoursView', targetId: entry.id, routeType: 'duty-punch', punchType: 'TimeOut', actionLabel: 'Review Time Out' }));
       });
     }
 
@@ -998,7 +1005,115 @@
     return ({ transition: '→', profile: 'ID', attendance: '%', account: 'AC', duty: 'DH', report: 'PDF', system: '!' })[type] || '•';
   }
 
+  function clearNotificationTargetHighlight() {
+    document.querySelectorAll('.notification-target-highlight').forEach((node) => node.classList.remove('notification-target-highlight'));
+  }
+
+  function highlightNotificationTarget(node) {
+    if (!node) return false;
+    clearNotificationTargetHighlight();
+    node.classList.add('notification-target-highlight');
+    node.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    window.setTimeout(() => node.classList.remove('notification-target-highlight'), 4200);
+    return true;
+  }
+
+  function latestAttendanceContext(memberId) {
+    const member = getMembers().find((item) => item.id === memberId);
+    if (!member) return null;
+    const eventMap = new Map(events.map((event) => [event.id, event]));
+    const targetGroup = currentMemberAttendanceGroup(member);
+    const records = attendance
+      .filter((entry) => {
+        const event = eventMap.get(entry.eventId);
+        return entry.memberId === memberId && event && attendanceRecordGroup(entry, event, member) === targetGroup;
+      })
+      .map((entry) => ({ entry, event: eventMap.get(entry.eventId) }))
+      .sort((a, b) => String(b.event?.date || '').localeCompare(String(a.event?.date || '')));
+    const latest = records[0] || null;
+    const group = normalizeAttendanceGroup(targetGroup);
+    return {
+      member,
+      group,
+      semester: normalizeSemester(latest?.event?.semester || activeAttendanceSemester()),
+      month: normalizeAttendanceMonth(String(latest?.event?.date || activeAttendanceMonth()).slice(0, 7)),
+      eventId: latest?.event?.id || ''
+    };
+  }
+
+  function openAttendanceMember(memberId) {
+    const context = latestAttendanceContext(memberId);
+    if (!context) {
+      toast('The attendance member record could not be found.', true);
+      return false;
+    }
+    if (!canUseAttendanceGroup(context.group)) {
+      toast(window.LSORoleAccess?.deniedMessage?.('attendanceGroup') || 'This attendance calendar is not assigned to your role.', true);
+      return false;
+    }
+
+    window.LSOAttendanceSemester = context.semester;
+    window.LSOAttendanceMonth = context.month;
+    window.LSOAttendanceGroup = context.group;
+    window.LSOAttendanceRosterMode = 'Current';
+    selectedEventId = context.eventId || null;
+    setView('attendanceView');
+    renderAttendance();
+
+    const selectMember = (attempt = 0) => {
+      window.LSOAttendanceGovernance?.render?.();
+      const select = el('attendanceIndividualSelect');
+      const optionExists = select && [...select.options].some((option) => option.value === memberId);
+      if (!optionExists && attempt < 4) {
+        window.setTimeout(() => selectMember(attempt + 1), 80);
+        return;
+      }
+      if (!optionExists) {
+        toast(`${context.member.fullName || 'This member'} is not available in the selected attendance calendar.`, true);
+        el('attendanceGroupToggle')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      select.value = memberId;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      window.LSOAttendanceGovernance?.render?.();
+      window.setTimeout(() => {
+        const target = el('individualAttendanceSummary')?.closest('.panel') || el('attendanceIndividualSelect')?.closest('.panel') || el('attendanceIndividualSelect');
+        highlightNotificationTarget(target);
+        try { select.focus({ preventScroll: true }); } catch { select.focus(); }
+      }, 40);
+    };
+    window.setTimeout(() => selectMember(), 60);
+    return true;
+  }
+
+  async function openDutyRecord(entryId, punchType = '') {
+    if (!entryId) return false;
+    const dutyData = window.LSODutyHours?.getData?.() || { entries: [] };
+    const entry = (dutyData.entries || []).find((item) => item.id === entryId);
+    if (entry?.semester) window.LSODutyHours?.setSemester?.(entry.semester);
+    setView('dutyHoursView');
+    try { await window.LSODutyHours?.refreshFromServer?.(); } catch { /* cached data remains available */ }
+    window.LSODutyHours?.refresh?.();
+
+    window.setTimeout(() => {
+      const escapedEntry = window.CSS?.escape ? CSS.escape(entryId) : String(entryId).replace(/["\\]/g, '\\$&');
+      const exactReview = punchType ? document.querySelector(`[data-review-entry-card="${escapedEntry}-${punchType}"]`) : null;
+      const anyReview = document.querySelector(`[data-review-entry-card^="${escapedEntry}-"]`);
+      const session = document.querySelector(`[data-duty-session-id="${escapedEntry}"]`);
+      const target = exactReview || anyReview || session || el('dutyApprovalPanel') || el('dutySelfServicePanel');
+      highlightNotificationTarget(target);
+      const action = target?.querySelector?.('button:not([disabled]), select:not([disabled]), input:not([disabled])');
+      if (action?.focus) { try { action.focus({ preventScroll: true }); } catch { action.focus(); } }
+      if (!exactReview && punchType && can('reviewDutyPunches')) {
+        toast('This punch is no longer pending. Its current Duty Hours record is shown instead.');
+      }
+    }, 120);
+    return true;
+  }
+
   function alertAction(alert) {
+    if (alert.routeType === 'attendance-member' && alert.memberId) return `<button class="small-button" data-alert-attendance-member="${safeText(alert.memberId)}">${safeText(alert.actionLabel)}</button>`;
+    if (alert.routeType === 'duty-punch' && alert.targetId) return `<button class="small-button" data-alert-duty-entry="${safeText(alert.targetId)}" data-alert-duty-punch="${safeText(alert.punchType)}">${safeText(alert.actionLabel)}</button>`;
     if (alert.eventId) return `<button class="small-button" data-alert-event="${safeText(alert.eventId)}">${safeText(alert.actionLabel)}</button>`;
     if (alert.memberId) return `<button class="small-button" data-alert-member="${safeText(alert.memberId)}">${safeText(alert.actionLabel)}</button>`;
     if (alert.viewId) return `<button class="small-button" data-alert-view="${safeText(alert.viewId)}" data-alert-target="${safeText(alert.targetId)}">${safeText(alert.actionLabel)}</button>`;
@@ -1609,14 +1724,29 @@
       renderAlerts();
     });
     el('alertSections').addEventListener('click', (event) => {
+      const attendanceMemberButton = event.target.closest('[data-alert-attendance-member]');
+      const dutyPunchButton = event.target.closest('[data-alert-duty-entry]');
       const memberButton = event.target.closest('[data-alert-member]');
       const eventButton = event.target.closest('[data-alert-event]');
       const viewButton = event.target.closest('[data-alert-view]');
-      if (memberButton) window.LSOApp?.openRecord?.(memberButton.dataset.alertMember);
+      if (attendanceMemberButton) {
+        openAttendanceMember(attendanceMemberButton.dataset.alertAttendanceMember);
+        return;
+      }
+      if (dutyPunchButton) {
+        openDutyRecord(dutyPunchButton.dataset.alertDutyEntry, dutyPunchButton.dataset.alertDutyPunch || '');
+        return;
+      }
+      if (memberButton) {
+        window.LSOApp?.openRecord?.(memberButton.dataset.alertMember);
+        return;
+      }
       if (eventButton) {
         selectedEventId = eventButton.dataset.alertEvent;
         setView('attendanceView');
         renderAttendance();
+        window.setTimeout(() => highlightNotificationTarget(el('attendanceWorkspace')), 60);
+        return;
       }
       if (viewButton) {
         const viewId = viewButton.dataset.alertView;
@@ -1777,6 +1907,8 @@
       window.dispatchEvent(new CustomEvent('lso:attendance-roster-mode-changed', { detail: { mode: window.LSOAttendanceRosterMode } }));
     },
     getInstruments: () => instruments.map((item) => ({ ...item })),
+    openAttendanceMember,
+    openDutyRecord,
     buildAlerts
   };
 

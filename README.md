@@ -47,3 +47,13 @@ The V44 presentation layer keeps the V43 professional interface while adapting n
 ## Smooth Motion add-on
 
 This package adds `smooth-motion-v1.css`, a presentation-only animation layer for module changes, navigation, cards, dialogs, notifications, tables, and touch feedback. Motion is shortened on small screens and automatically reduced when the operating system's Reduce Motion setting is enabled. No database, permission, role, attendance, report, or account workflow code was changed.
+
+
+## V48 Smart Notifications
+
+- Attendance risk notifications open the exact member attendance analytics, including the correct Official, Trainee, or Probationary calendar.
+- Attendance workflow alerts open the exact event roster.
+- Duty Hours reviewer notifications open the exact Time In or Time Out approval card.
+- Duty Hours notifications are delivered according to the Administrator-assigned `reviewDutyPunches` permission instead of a fixed role list.
+- Trainee/Probationary accounts receive personal notifications when their own Time In or Time Out is approved or rejected.
+- Notification data refreshes when the bell is opened and when the app returns to focus, while preserving the existing cloud synchronization workflow.
