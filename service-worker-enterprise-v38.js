@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v45-admin-role-control1';
+const CACHE_VERSION = 'lso-website-enterprise-v45-smooth-motion1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -39,6 +39,7 @@ const CORE_PATHS = [
   './workflow-accessibility-v41.css',
   './professional-interface-v43.css',
   './cross-device-accessibility-v44.css',
+  './smooth-motion-v1.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',

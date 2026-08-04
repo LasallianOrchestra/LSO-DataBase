@@ -1,0 +1,325 @@
+/*
+  LSO Smooth Motion v1
+  Presentation-only animation layer.
+  No layout, permission, database, workflow, or application logic changes.
+*/
+
+:root {
+  --lso-motion-fast: 120ms;
+  --lso-motion-base: 190ms;
+  --lso-motion-slow: 260ms;
+  --lso-motion-ease: cubic-bezier(.2, .72, .2, 1);
+  --lso-motion-emphasis: cubic-bezier(.16, 1, .3, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  .table-wrap,
+  .monthly-table-wrap,
+  .permission-matrix-wrap,
+  .attendance-roster-scroll,
+  .contract-member-list,
+  .notification-list,
+  .system-error-log,
+  .duty-punch-review-list,
+  .activity-list,
+  .recent-list,
+  .event-list {
+    scroll-behavior: smooth;
+  }
+
+  /* Module changes */
+  .view.active {
+    animation: lsoMotionViewIn var(--lso-motion-slow) var(--lso-motion-emphasis) both;
+  }
+
+  .view.active > .hero-card,
+  .view.active > .panel,
+  .view.active > .dashboard-grid,
+  .view.active > .management-layout,
+  .view.active > .contract-workspace,
+  .view.active > .monthly-report-panel,
+  .view.active > .attendance-management-layout,
+  .view.active > .duty-hours-admin-grid,
+  .view.active > .system-health-hero,
+  .view.active > .system-health-navigation,
+  .view.active > .system-error-workspace {
+    animation: lsoMotionSectionIn var(--lso-motion-slow) var(--lso-motion-emphasis) both;
+  }
+
+  .view.active > :nth-child(2) { animation-delay: 28ms; }
+  .view.active > :nth-child(3) { animation-delay: 52ms; }
+  .view.active > :nth-child(4) { animation-delay: 76ms; }
+
+  /* Navigation and interactive controls */
+  .nav-item,
+  .button,
+  .icon-button,
+  .notification-button,
+  .text-button,
+  .table-action,
+  .segment-button,
+  .health-nav-button,
+  .monthly-report-tab,
+  .quick-action-card,
+  .dcc-action-card,
+  .action-card,
+  .permission-toggle-card,
+  .contract-member-card,
+  summary {
+    transition:
+      transform var(--lso-motion-base) var(--lso-motion-ease),
+      box-shadow var(--lso-motion-base) var(--lso-motion-ease),
+      border-color var(--lso-motion-base) ease,
+      background-color var(--lso-motion-base) ease,
+      color var(--lso-motion-base) ease,
+      opacity var(--lso-motion-base) ease;
+  }
+
+  input,
+  select,
+  textarea,
+  .search-field,
+  .password-field {
+    transition:
+      border-color var(--lso-motion-base) ease,
+      box-shadow var(--lso-motion-base) ease,
+      background-color var(--lso-motion-base) ease;
+  }
+
+  /* Cards and data surfaces */
+  .panel,
+  .metric-card,
+  .hero-card,
+  .settings-card,
+  .storage-card,
+  .account-panel,
+  .activity-card,
+  .duty-punch-card,
+  .duty-roster-card,
+  .attendance-period-card,
+  .monthly-period-card,
+  .health-workflow-panel,
+  .system-error-card,
+  .contract-form-panel,
+  .contract-member-panel,
+  .contract-preview-panel {
+    transition:
+      transform var(--lso-motion-base) var(--lso-motion-ease),
+      box-shadow var(--lso-motion-base) var(--lso-motion-ease),
+      border-color var(--lso-motion-base) ease;
+  }
+
+  tbody tr,
+  .notification-list > *,
+  .activity-list > *,
+  .recent-list > *,
+  .event-list > *,
+  .duty-punch-review-list > * {
+    transition:
+      background-color var(--lso-motion-fast) ease,
+      opacity var(--lso-motion-fast) ease,
+      transform var(--lso-motion-fast) var(--lso-motion-ease);
+  }
+
+  /* Overlays and transient feedback */
+  .modal-backdrop:not(.hidden),
+  .accessibility-overlay:not(.hidden) {
+    animation: lsoMotionFadeIn var(--lso-motion-base) ease both;
+  }
+
+  .modal-backdrop:not(.hidden) .modal-card,
+  .system-error-dialog:not(.hidden) .system-error-card,
+  .accessibility-drawer:not(.hidden),
+  .notification-popover:not(.hidden) {
+    animation: lsoMotionDialogIn var(--lso-motion-slow) var(--lso-motion-emphasis) both;
+  }
+
+  .toast,
+  .connection-banner:not(.hidden) {
+    animation: lsoMotionToastIn var(--lso-motion-slow) var(--lso-motion-emphasis) both;
+  }
+
+  .sidebar,
+  .sidebar-overlay,
+  .notification-popover,
+  .accessibility-drawer {
+    transition:
+      transform var(--lso-motion-slow) var(--lso-motion-emphasis),
+      opacity var(--lso-motion-base) ease,
+      visibility var(--lso-motion-base) ease;
+  }
+
+  .badge,
+  .notification-badge,
+  .status-indicator,
+  .monthly-count-pill,
+  .contract-count-badge,
+  .duty-roster-count {
+    transition:
+      transform var(--lso-motion-fast) var(--lso-motion-ease),
+      opacity var(--lso-motion-fast) ease;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .nav-item:hover {
+    transform: translateX(3px);
+  }
+
+  .button:hover,
+  .icon-button:hover,
+  .notification-button:hover,
+  .text-button:hover,
+  .table-action:hover,
+  .segment-button:hover,
+  .health-nav-button:hover,
+  .monthly-report-tab:hover {
+    transform: translateY(-1px);
+  }
+
+  .quick-action-card:hover,
+  .dcc-action-card:hover,
+  .action-card:hover,
+  .permission-toggle-card:hover,
+  .metric-card:hover,
+  .duty-punch-card:hover,
+  .duty-roster-card:hover,
+  .attendance-period-card:hover,
+  .monthly-period-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .button:active,
+  .icon-button:active,
+  .notification-button:active,
+  .text-button:active,
+  .table-action:active,
+  .segment-button:active,
+  .health-nav-button:active,
+  .monthly-report-tab:active,
+  .quick-action-card:active,
+  .dcc-action-card:active,
+  .action-card:active {
+    transform: translateY(0) scale(.985);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: none),
+       (prefers-reduced-motion: no-preference) and (pointer: coarse) {
+  .button:active,
+  .icon-button:active,
+  .notification-button:active,
+  .text-button:active,
+  .table-action:active,
+  .segment-button:active,
+  .health-nav-button:active,
+  .monthly-report-tab:active,
+  .nav-item:active,
+  .quick-action-card:active,
+  .dcc-action-card:active,
+  .action-card:active {
+    transform: scale(.985);
+    transition-duration: 80ms;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (max-width: 680px) {
+  :root {
+    --lso-motion-base: 150ms;
+    --lso-motion-slow: 190ms;
+  }
+
+  .view.active {
+    animation-name: lsoMotionViewInMobile;
+  }
+
+  .view.active > :nth-child(n) {
+    animation-delay: 0ms;
+  }
+
+  .panel,
+  .metric-card,
+  .hero-card,
+  .settings-card,
+  .storage-card,
+  .account-panel,
+  .activity-card,
+  .duty-punch-card,
+  .duty-roster-card,
+  .attendance-period-card,
+  .monthly-period-card,
+  .health-workflow-panel,
+  .system-error-card {
+    transition-duration: var(--lso-motion-fast);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  .table-wrap,
+  .monthly-table-wrap,
+  .permission-matrix-wrap,
+  .attendance-roster-scroll,
+  .contract-member-list,
+  .notification-list,
+  .system-error-log,
+  .duty-punch-review-list,
+  .activity-list,
+  .recent-list,
+  .event-list {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes lsoMotionViewIn {
+  from { opacity: .55; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes lsoMotionViewInMobile {
+  from { opacity: .72; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes lsoMotionSectionIn {
+  from { opacity: .72; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes lsoMotionFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lsoMotionDialogIn {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes lsoMotionToastIn {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

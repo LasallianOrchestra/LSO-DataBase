@@ -44,3 +44,6 @@ The package excludes private SQL setup scripts. This release does not require a 
 
 The V44 presentation layer keeps the V43 professional interface while adapting navigation, actions, forms, tables, modals, Attendance, Monthly Reports, Action Center, Accounts, and System Health for laptops, tablets, phones, landscape screens, touch input, text zoom, high contrast, reduced motion, and safe-area devices. No database schema, role, permission, or workflow logic is changed.
 
+## Smooth Motion add-on
+
+This package adds `smooth-motion-v1.css`, a presentation-only animation layer for module changes, navigation, cards, dialogs, notifications, tables, and touch feedback. Motion is shortened on small screens and automatically reduced when the operating system's Reduce Motion setting is enabled. No database, permission, role, attendance, report, or account workflow code was changed.
