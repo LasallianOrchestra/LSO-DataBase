@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v7-validated-archive-workflow';
+  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v8-attendance-lifecycle-workflow';
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -994,6 +994,7 @@
     renderIndividualAttendance();
     renderCalendar();
     renderFuturisticDashboardSignals();
+    window.LSOAttendanceWorkspace?.refresh?.();
   }
 
   function removeRetiredInventoryFromUI() {

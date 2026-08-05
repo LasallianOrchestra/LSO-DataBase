@@ -1,3 +1,42 @@
+# LSO V60 — End-to-End Debugged Release
+
+This release completes a full simulated browser regression pass across authentication, account administration, dynamic permissions, members, contracts, Monthly Reports and archives, Attendance, Duty Hours and punch review, notifications, Action Center, System Health, error resolution, recovery, saving/synchronization behavior, PWA delivery, accessibility, and responsive layouts. It also aligns the visible application, System Health, recovery metadata, and PWA cache identifiers with V60. No database schema migration is required.
+
+## V60 verification highlights
+
+- Main end-to-end browser suite: 51 of 51 checks passed.
+- Extended administration and workflow suite: 25 of 25 checks passed.
+- V59 Attendance lifecycle suite remains included and previously passed 26 of 26 checks.
+- No uncaught browser errors or console errors were detected in the simulated runs.
+- The deployment package excludes all debug scripts, screenshots, and generated test data.
+
+# LSO V58 — Attendance Lifecycle Workflow
+
+This release rebuilds Attendance around a controlled five-stage lifecycle: Draft, Review, Finalized Archive, Reopened Revision, and Semester Summary. It adds monthly validation, LOA verification, duplicate detection, stable tab navigation, automatic validated archive creation, revision-safe reopening, and responsive cross-device layouts. The V57 semantic save-queue protections remain included.
+
+# LSO Orchestra Management System — V57 Save Queue Stability
+
+This release fixes the repeated **“Saving 1 change…”** cycle across the system without changing any module workflow or database schema.
+
+## Root cause corrected
+
+- Supabase stores shared JSON as `jsonb`, which can return the same object with a different property order. The previous attendance-governance merge compared these objects with ordinary `JSON.stringify`, incorrectly treating equal archive/settings data as a new local change after every poll.
+- Shared-storage writes were queued even when a module attempted to save data that was already identical to the stored value.
+- A pending marker left by a closed or interrupted browser session could be uploaded before the current server state was checked.
+- Settings and Monthly Report compatibility data could request two writes even though both use the same shared settings payload.
+
+## V57 changes
+
+- Uses semantic, property-order-independent comparison for all synchronized JSON data.
+- Ignores no-op saves across Members, Attendance, Duty Hours, Monthly Reports, Settings, Accounts-related state, and activity data.
+- Clears stale pending markers when local and server data already match.
+- Coalesces Settings and Monthly Report compatibility updates into one effective shared payload.
+- Verifies the server response before clearing a pending change.
+- Preserves a newer edit made while an earlier save is in progress and sends only that newer payload afterward.
+- Suppresses duplicate status events and increases retry spacing after real network failures.
+
+No Supabase SQL migration is required.
+
 # LSO Orchestra Management System — V55 Runtime Stability
 
 This release repairs the page-wide lag and browser crashes that appeared as attendance archives and synchronized records grew. It preserves the existing database schema, permissions, workflows, and visual design.
@@ -160,4 +199,15 @@ This package adds `smooth-motion-v1.css`, a presentation-only animation layer fo
 - Adds authorized archive deletion. Deleting the current validated copy returns its connected live month to Draft; deleting an older revision leaves the current finalized month unchanged.
 - Current Roster remains the only place where monthly and semester finalization actions are shown.
 - Archive browsing is read-only, responsive, and separated from the calendar and attendance-entry workspace.
+- No Supabase schema migration is required.
+
+
+## V59 Attendance Debug and Verification
+
+- Displays approved-LOA members in the Current Roster as read-only Excused entries.
+- Normalizes numeric and text event/member identifiers so saved attendance cannot disappear or duplicate across legacy data.
+- Separates Current and Archive attendance records when reading, summarizing, and saving a roster.
+- Makes deletion of the current validated archive return the live month to a true Draft state.
+- Removes the per-event save burst during archive deletion; the monthly lifecycle remains the authoritative state.
+- Aligns the PWA cache marker with the active service-worker version to prevent the current cache from being removed as stale.
 - No Supabase schema migration is required.

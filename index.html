@@ -125,6 +125,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <link href="runtime-stability-v54.css?v=20260805-runtime-stability-v54" rel="stylesheet"/>
 <link href="attendance-semester-stability-v55.css?v=20260805-semester-state-v55" rel="stylesheet"/>
 <link href="attendance-archive-workflow-v56.css?v=20260805-attendance-archive-v56" rel="stylesheet"/>
+<link rel="stylesheet" href="attendance-workflow-v58.css?v=20260806-end-to-end-debug-v60"/>
 </head>
 <body>
 <div aria-live="polite" class="connection-banner hidden" id="connectionBanner" role="status"></div>
@@ -257,7 +258,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="logout-button" id="logoutButton" type="button">Log Out</button>
 <p>One Symphony, One Spirit,<br/>One Lasallian Legacy.</p>
 <small>Shared online database</small>
-<small class="system-version-footer" id="systemVersionFooter">LSO System v3.0.0 • Database target 006</small>
+<small class="system-version-footer" id="systemVersionFooter">LSO System v6.0.0 • Database target 009</small>
 </div>
 </aside>
 <button aria-label="Close navigation" class="sidebar-overlay" id="sidebarOverlay" type="button"></button>
@@ -772,10 +773,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 
 <section class="view" id="attendanceView">
 <div class="attendance-command-header futuristic-command-header">
-<div><p class="eyebrow">Attendance Intelligence</p><h3>Monthly &amp; Semestral Attendance Center</h3><p>Each membership stage has its own calendar. Finalize every month independently, then calculate the semester from the finalized monthly ratings.</p></div>
+<div><p class="eyebrow">Attendance Operations</p><h3>Attendance Workflow Center</h3><p>Record attendance, validate the selected month, preserve finalized copies, and calculate semester ratings through one controlled workflow.</p></div>
 <div class="inline-actions"><button class="button button-secondary" id="exportAttendanceAnalyticsCsv" type="button">Export Analytics CSV</button><button class="button button-secondary" id="printOverallAttendance" type="button">Print Semestral Rating</button><button class="button button-secondary" id="printMonthlyAttendance" type="button">Print Final Monthly Rating</button><button class="button button-primary" id="addEventButton" type="button">+ New Activity</button></div>
 </div>
-<div class="semester-control-panel panel">
+<nav class="attendance-workspace-tabs panel" id="attendanceWorkspaceTabs" aria-label="Attendance workflow sections">
+  <button class="attendance-workspace-tab active" data-attendance-workspace-tab="current" type="button"><span>1</span><div><strong>Current Attendance</strong><small>Setup, record, and review</small></div></button>
+  <button class="attendance-workspace-tab" data-attendance-workspace-tab="archive" type="button"><span>2</span><div><strong>Monthly Archive</strong><small>Validated finalized copies</small></div></button>
+  <button class="attendance-workspace-tab" data-attendance-workspace-tab="semester" type="button"><span>3</span><div><strong>Semester Summary</strong><small>Finalized monthly ratings</small></div></button>
+</nav>
+<div class="attendance-workspace-context" id="attendanceWorkspaceContext" aria-live="polite"><span>Current Attendance</span><strong>Draft → Review → Finalize</strong><small>Choose a month and activity, complete the roster, then validate the month before finalizing.</small></div>
+<div class="semester-control-panel panel" id="attendanceSharedSemesterControls">
 <div><p class="eyebrow">Academic Term</p><h4>Choose the attendance semester</h4><small>The semester end date determines which finalized monthly ratings are included in the semestral computation.</small></div>
 <div class="segmented-control semester-toggle" id="attendanceSemesterToggle" aria-label="Attendance semester">
 <button class="segment-button active" data-attendance-semester="First Semester" type="button">1st Semester</button>
@@ -783,7 +790,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </div>
 <div class="semester-live-label"><span>Viewing</span><strong id="attendanceSemesterLabel">First Semester</strong></div>
 </div>
-<div class="attendance-group-control-panel panel">
+<div class="attendance-group-control-panel panel" id="attendanceSharedGroupControls">
 <div class="attendance-group-control-copy"><p class="eyebrow">Independent Attendance Calendars</p><h4>Choose the membership attendance group</h4><small>Official Members, Trainees, and Probationary Members each use a separate calendar, activity list, monthly finalization, and semester rating.</small></div>
 <div class="segmented-control attendance-group-toggle" id="attendanceGroupToggle" aria-label="Attendance membership group">
 <button class="segment-button active" data-attendance-group="Official Members" type="button"><span>Official</span><small>Membership Period</small></button>
@@ -791,7 +798,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="segment-button" data-attendance-group="Probationary Members" type="button"><span>Probationary</span><small>Evaluation Period</small></button>
 </div>
 <div class="attendance-group-actions">
-<div class="segmented-control attendance-roster-mode-toggle" id="attendanceRosterModeToggle" aria-label="Attendance roster mode">
+<div class="segmented-control attendance-roster-mode-toggle attendance-legacy-mode-toggle" id="attendanceRosterModeToggle" aria-label="Attendance roster mode">
 <button class="segment-button active" data-attendance-roster-mode="Current" type="button"><span>Current Roster</span><small>Active members only</small></button>
 <button class="segment-button" data-attendance-roster-mode="Archive" type="button"><span>Attendance Archive</span><small>Validated finalized months</small></button>
 </div>
@@ -806,22 +813,39 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </section>
 <section class="attendance-period-center panel" id="attendancePeriodFinalizationCenter" aria-labelledby="attendancePeriodCenterTitle">
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Final Attendance Ratings</p><h3 id="attendancePeriodCenterTitle">Monthly Finalization &amp; Semester Computation</h3><p class="panel-subtitle">The selected calendar month is finalized independently. The semestral rate is the average of its finalized monthly ratings up to the semester end date.</p></div></div>
+<div class="attendance-month-progress" id="attendanceMonthProgress" aria-label="Monthly attendance workflow">
+  <div data-attendance-stage="Draft"><span>1</span><strong>Draft</strong><small>Record attendance</small></div>
+  <i aria-hidden="true">→</i>
+  <div data-attendance-stage="In Review"><span>2</span><strong>Review</strong><small>Validate the month</small></div>
+  <i aria-hidden="true">→</i>
+  <div data-attendance-stage="Finalized"><span>3</span><strong>Finalized</strong><small>Create archive copy</small></div>
+</div>
 <div class="attendance-period-grid">
-<article class="attendance-period-card monthly-period-card">
+<article class="attendance-period-card monthly-period-card" data-attendance-workspace-panel="current">
 <div class="attendance-period-card-header"><div><span>Selected Month</span><strong id="attendanceMonthFinalizationTitle">Current month</strong></div><span class="badge badge-gold" id="attendanceMonthFinalizationBadge">Draft</span></div>
 <p id="attendanceMonthFinalizationMeta">No finalized monthly rating yet.</p>
-<div class="attendance-period-actions admin-only"><button class="button button-primary" id="finalizeAttendanceMonthButton" type="button">Finalize Whole Month</button><button class="button button-secondary hidden" id="reopenAttendanceMonthButton" type="button">Reopen Month</button></div>
+<div class="attendance-period-actions admin-only">
+  <button class="button button-primary" id="reviewAttendanceMonthButton" data-state-visibility-owner="attendance-month" type="button">Review Month</button>
+  <button class="button button-secondary hidden" id="returnAttendanceMonthToDraftButton" data-state-visibility-owner="attendance-month" type="button">Return for Corrections</button>
+  <button class="button button-primary hidden" id="finalizeAttendanceMonthButton" data-state-visibility-owner="attendance-month" type="button">Finalize Validated Month</button>
+  <button class="button button-secondary hidden" id="reopenAttendanceMonthButton" data-state-visibility-owner="attendance-month" type="button">Reopen Month</button>
+</div>
 </article>
-<article class="attendance-period-card semester-period-card">
+<article class="attendance-period-card attendance-review-card" id="attendanceMonthReviewCard" data-attendance-workspace-panel="current">
+  <div class="attendance-period-card-header"><div><span>Monthly Validation</span><strong>Review checklist</strong></div><span class="badge badge-gray" id="attendanceMonthReviewBadge">Not reviewed</span></div>
+  <p id="attendanceMonthReviewSummary">Complete attendance records, then review the month before finalization.</p>
+  <div class="attendance-review-checklist" id="attendanceMonthReviewChecklist"></div>
+</article>
+<article class="attendance-period-card semester-period-card" data-attendance-workspace-panel="semester">
 <div class="attendance-period-card-header"><div><span>Selected Semester</span><strong>Semestral Attendance Rating</strong></div><span class="badge badge-gold" id="attendanceSemesterFinalizationBadge">Draft</span></div>
 <div class="attendance-semester-rating-row"><div><span>Computed Rating</span><strong id="attendanceSemesterRatingValue">—</strong><small id="attendanceSemesterRatingMeta">Set the semester end date and finalize each month.</small></div><label class="field"><span>Semester End Date *</span><input id="attendanceSemesterEndDate" type="date"/></label></div>
 <div class="attendance-period-actions"><button class="button button-secondary admin-only" id="saveAttendanceSemesterEndDate" data-state-visibility-owner="attendance-semester" type="button">Save End Date</button><button class="button button-primary admin-only" id="finalizeAttendanceSemesterButton" data-state-visibility-owner="attendance-semester" type="button">Finalize Semester Rating</button><button class="button button-secondary hidden admin-only" id="reopenAttendanceSemesterButton" data-state-visibility-owner="attendance-semester" type="button">Reopen Semester</button></div>
 </article>
 </div>
-<div class="table-wrap attendance-semester-rates-table"><table><thead><tr><th>Finalized Month</th><th>Activities</th><th>Monthly Rating</th><th>Status</th></tr></thead><tbody id="attendanceSemesterMonthlyRatesBody"></tbody></table></div>
+<div class="table-wrap attendance-semester-rates-table" data-attendance-workspace-panel="semester"><table><thead><tr><th>Finalized Month</th><th>Activities</th><th>Monthly Rating</th><th>Status</th></tr></thead><tbody id="attendanceSemesterMonthlyRatesBody"></tbody></table></div>
 
 </section>
-<div class="attendance-overview-grid">
+<div class="attendance-overview-grid" id="attendanceOverviewGrid">
 <article class="panel attendance-overall-panel">
 <div class="panel-header"><div><p class="eyebrow">Separated Group Summary</p><h3><span id="attendanceGroupHeading">Official Members</span> Attendance</h3><p class="panel-subtitle" id="overallAttendanceCaption">Selected month records only</p></div></div>
 <div class="attendance-kpi-grid" id="overallAttendanceMetrics"></div>
@@ -837,7 +861,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="individual-attendance-history" id="individualAttendanceHistory"></div>
 </article>
 </div>
-<article class="panel attendance-calendar-panel">
+<article class="panel attendance-calendar-panel" id="attendanceCalendarPanel">
 <div class="calendar-header-row">
 <div><p class="eyebrow">Monthly Schedule</p><h3 id="attendanceCalendarMonth">Attendance Calendar</h3><p class="panel-subtitle">Only activities from the selected attendance calendar, semester, and month are shown.</p></div>
 <div class="calendar-controls"><button class="button button-secondary calendar-print-button" id="printCalendarMonthlyAttendance" type="button">Print This Month</button><button class="icon-button" id="calendarPreviousMonth" type="button" aria-label="Previous month">‹</button><button class="button button-secondary" id="calendarToday" type="button">Today</button><button class="icon-button" id="calendarNextMonth" type="button" aria-label="Next month">›</button></div>
@@ -847,7 +871,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="attendance-month-workspace-summary" id="attendanceMonthWorkspaceSummary" aria-live="polite"></div>
 <div class="calendar-selected-date-bar"><div><strong id="calendarSelectedDateLabel">Select a date</strong><small id="calendarSelectedDateMeta">Activities for the selected calendar and date will appear below.</small></div><button class="button button-primary" id="createEventOnSelectedDate" type="button">+ Create on Selected Date</button></div>
 </article>
-<div class="management-layout attendance-management-layout">
+<div class="management-layout attendance-management-layout" id="attendanceManagementLayout">
 <article class="panel management-sidebar-panel">
 <div class="panel-header stack-mobile month-event-list-header"><div><p class="eyebrow">Selected Month Activities</p><h3 id="eventListHeading">Monthly Activities</h3><p class="panel-subtitle" id="eventCountLabel">0 activities</p></div><div class="event-list-month-badge"><span>Month workspace</span><strong id="eventListMonthLabel">Current month</strong></div></div>
 <label class="field"><span>Search events</span><input id="eventSearch" type="search" placeholder="Title, venue, or date..."/></label>
@@ -858,11 +882,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="hidden" id="attendanceWorkspace">
 <div class="panel-header stack-mobile"><div><p class="eyebrow" id="attendanceEventType">Rehearsal</p><h3 id="attendanceEventTitle"></h3><p class="panel-subtitle" id="attendanceEventMeta"></p><span class="attendance-roster-group-badge">Roster: <strong id="attendanceRosterGroupLabel">Official Members</strong></span></div><div class="inline-actions"><button class="button button-secondary" id="printEventAttendance" type="button">Print Selected Group Roster</button><button class="button button-secondary" id="editEventButton">Edit</button><button class="button button-danger" id="deleteEventButton">Delete</button></div></div>
 <div class="attendance-governance-panel hidden" id="attendanceGovernancePanel">
-  <div class="attendance-workflow-status"><span class="badge badge-gold" id="attendanceWorkflowStatusBadge">Draft</span><div><strong id="attendanceWorkflowStatusTitle">Attendance is open as a draft</strong><small id="attendanceWorkflowStatusMeta">Draft changes remain editable until the Administrator finalizes this roster.</small></div></div>
+  <div class="attendance-workflow-status"><span class="badge badge-gold" id="attendanceWorkflowStatusBadge">Draft</span><div><strong id="attendanceWorkflowStatusTitle">Activity attendance is editable</strong><small id="attendanceWorkflowStatusMeta">Save the activity roster, then validate and finalize the whole month from the monthly workflow.</small></div></div>
   <div class="attendance-workflow-actions admin-only"><button class="button button-primary" id="finalizeAttendanceButton" type="button">Finalize &amp; Lock Attendance</button><button class="button button-secondary hidden" id="unlockAttendanceButton" type="button">Unlock for Editing</button><button class="button button-secondary" id="exportAttendanceAuditCsv" type="button">Export Audit CSV</button></div>
   <details class="attendance-audit-details"><summary>View attendance audit history</summary><div class="attendance-audit-empty" id="attendanceAuditEmpty">No attendance audit activity has been recorded for this roster yet.</div><div class="attendance-audit-history" id="attendanceAuditHistory"></div></details>
 </div>
 <div class="attendance-summary" id="attendanceSummary"></div>
+<div class="attendance-recording-state" id="attendanceRecordingState" aria-live="polite"><span>Draft activity</span><small>Changes are saved only when you select Save Attendance.</small></div>
 <div class="attendance-toolbar"><label class="field search-field"><span>Search roster</span><input id="attendanceMemberSearch" type="search" placeholder="Member name, stage, section..."/></label><div class="inline-actions"><button class="button button-secondary" id="markAllPresent">Mark All Present</button><button class="button button-primary" id="saveAttendanceButton">Save Attendance</button></div></div>
 <div class="attendance-roster-table-heading"><div><strong>Member Attendance Roster</strong><small>Members remain visible below. Scroll inside this roster to complete attendance without losing the action buttons.</small></div><span>Scrollable roster</span></div>
 <div class="table-wrap attendance-roster-scroll" tabindex="0" aria-label="Scrollable member attendance roster"><table class="attendance-table"><caption class="sr-only">Attendance roster for the selected activity and membership group</caption><thead><tr><th>Member</th><th>Stage / Period</th><th>Section</th><th>Status</th><th>Remarks</th></tr></thead><tbody id="attendanceRosterBody"></tbody></table></div>
@@ -1403,19 +1428,20 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260804-workflow-v41"></script>
+<script src="lso-system-core-v4.js?v=20260806-end-to-end-debug-v60"></script>
 <script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
 <script src="role-access-v4.js?v=20260729-role-permission-v38"></script>
-<script src="cloud-staff-v5.js?v=20260805-semester-state-v55"></script>
+<script src="cloud-staff-v5.js?v=20260805-save-queue-stability-v57"></script>
 <script src="app-member-information-v5.js?v=20260805-runtime-stability-v54"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
 <script src="auth.js?v=20260804-workflow-v41"></script>
-<script src="management-attendance-member-info-v4.js?v=20260805-runtime-stability-v54"></script>
+<script src="management-attendance-member-info-v4.js?v=20260806-end-to-end-debug-v60"></script>
 <script src="ui-enhancements.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="dashboard-enhancements.js?v=20260805-runtime-stability-v54"></script>
+<script src="dashboard-enhancements.js?v=20260805-attendance-workflow-v58"></script>
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
-<script src="workflow-attendance-month-v6.js?v=20260805-attendance-archive-v56"></script>
-<script src="attendance-governance-v2.js?v=20260805-attendance-archive-v56"></script>
+<script src="workflow-attendance-month-v6.js?v=20260805-attendance-workflow-v58"></script>
+<script src="attendance-governance-v2.js?v=20260806-end-to-end-debug-v60"></script>
+<script src="attendance-workflow-v58.js?v=20260805-attendance-workflow-v58"></script>
 <script src="duty-hours-member-info-v14.js?v=20260805-attendance-duty-performance-v52"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="monthly-report-template-data.js?v=20260726-portrait-print-v30"></script>
@@ -1431,6 +1457,6 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="system-enterprise-v2.js?v=20260805-runtime-stability-v54"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
 <script src="role-permission-center-v38.js?v=20260805-governance-v50"></script>
-<script src="pwa-enterprise-v38.js?v=20260805-attendance-archive-v56"></script>
+<script src="pwa-enterprise-v38.js?v=20260806-end-to-end-debug-v60"></script>
 </body>
 </html>

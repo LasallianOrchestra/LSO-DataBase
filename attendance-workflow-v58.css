@@ -1,0 +1,324 @@
+/* V58 Attendance lifecycle rebuild: layout, workflow states, and cross-device accessibility only. */
+
+#attendanceView {
+  --attendance-accent: #167a5b;
+  --attendance-accent-dark: #123f33;
+  --attendance-soft: #eef6f2;
+  --attendance-line: #d7e2dc;
+  --attendance-warning: #a96d05;
+  --attendance-danger: #b42318;
+}
+
+.attendance-workspace-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.65rem;
+  margin: 0 0 0.9rem;
+  border: 1px solid var(--attendance-line);
+  background: #f6f9f7;
+}
+
+.attendance-workspace-tab {
+  min-width: 0;
+  min-height: 4.4rem;
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: #42524c;
+  text-align: left;
+  cursor: pointer;
+}
+
+.attendance-workspace-tab > span {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  background: #e2ebe6;
+  color: #40544b;
+  font-weight: 800;
+}
+
+.attendance-workspace-tab div {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.attendance-workspace-tab strong,
+.attendance-workspace-tab small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attendance-workspace-tab strong { color: #183f32; font-size: 0.95rem; }
+.attendance-workspace-tab small { color: #6b7771; font-size: 0.75rem; }
+.attendance-workspace-tab.active {
+  border-color: #92b9a9;
+  background: #fff;
+  box-shadow: 0 0.32rem 0.9rem rgba(18, 63, 51, 0.08);
+}
+.attendance-workspace-tab.active > span { background: var(--attendance-accent); color: #fff; }
+
+.attendance-workspace-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15rem 0.7rem;
+  align-items: center;
+  padding: 0.75rem 0.95rem;
+  margin-bottom: 0.9rem;
+  border-left: 0.28rem solid var(--attendance-accent);
+  border-radius: 0.55rem;
+  background: #f8fbf9;
+  color: #34473f;
+}
+.attendance-workspace-context > span {
+  grid-row: 1 / 3;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  padding: 0 0.8rem 0 0;
+  border-right: 1px solid var(--attendance-line);
+  color: var(--attendance-accent-dark);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.attendance-workspace-context strong { color: var(--attendance-accent-dark); }
+.attendance-workspace-context small { color: #68756f; }
+
+.attendance-legacy-mode-toggle { display: none !important; }
+
+.attendance-month-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  margin-bottom: 0.8rem;
+  border: 1px solid var(--attendance-line);
+  border-radius: 0.78rem;
+  background: #f7faf8;
+}
+.attendance-month-progress > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.18rem 0.55rem;
+  align-items: center;
+  padding: 0.55rem;
+  border-radius: 0.62rem;
+  color: #65726c;
+}
+.attendance-month-progress > div > span {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: #e3ebe7;
+  font-weight: 800;
+}
+.attendance-month-progress > div strong { font-size: 0.84rem; color: #35473f; }
+.attendance-month-progress > div small { font-size: 0.72rem; }
+.attendance-month-progress > div.active { background: #fff; box-shadow: inset 0 0 0 1px #8ebaa7; }
+.attendance-month-progress > div.active > span { background: var(--attendance-accent); color: #fff; }
+.attendance-month-progress > div.complete > span { background: #d8eee4; color: #12633f; }
+.attendance-month-progress > i { color: #8a9992; font-style: normal; }
+
+#attendanceView.attendance-workspace-current .attendance-period-grid {
+  grid-template-columns: minmax(17rem, 0.9fr) minmax(19rem, 1.1fr);
+}
+#attendanceView.attendance-workspace-semester .attendance-period-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+#attendanceView.attendance-workspace-semester .semester-period-card { max-width: none; }
+
+.attendance-review-card {
+  align-content: start;
+  background: linear-gradient(180deg, #fbfdfc, #f5faf7);
+}
+.attendance-review-checklist {
+  display: grid;
+  gap: 0.48rem;
+  margin-top: 0.65rem;
+}
+.attendance-review-check {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  gap: 0.58rem;
+  align-items: start;
+  padding: 0.58rem 0.62rem;
+  border: 1px solid #dce5e0;
+  border-radius: 0.58rem;
+  background: #fff;
+}
+.attendance-review-check > span {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: #f5e9d1;
+  color: #8b5b02;
+  font-weight: 900;
+}
+.attendance-review-check > div { display: grid; gap: 0.12rem; }
+.attendance-review-check strong { color: #263a32; font-size: 0.82rem; }
+.attendance-review-check small { color: #68756f; line-height: 1.35; }
+.attendance-review-check.is-ready { border-color: #cfe5da; background: #fbfefc; }
+.attendance-review-check.is-ready > span { background: #dff1e8; color: #13633f; }
+.attendance-review-check.needs-action { border-color: #ead6ae; }
+
+.attendance-period-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+.attendance-period-actions .button { min-height: 2.85rem; }
+
+.attendance-recording-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.58rem 0.72rem;
+  margin: 0.55rem 0;
+  border: 1px solid #d8e3dd;
+  border-radius: 0.55rem;
+  background: #f8fbf9;
+}
+.attendance-recording-state span { color: #174c3b; font-weight: 800; }
+.attendance-recording-state small { color: #68756f; text-align: right; }
+.attendance-recording-state.state-in-review { border-color: #a9c9dd; background: #f2f8fc; }
+.attendance-recording-state.state-finalized { border-color: #b6d8c8; background: #eef8f3; }
+.attendance-recording-state.state-reopened { border-color: #e0b8b2; background: #fff7f6; }
+
+/* The monthly lifecycle is the authoritative finalization path. */
+#attendanceGovernancePanel #finalizeAttendanceButton,
+#attendanceGovernancePanel #unlockAttendanceButton { display: none !important; }
+
+#attendanceView.attendance-workspace-archive .attendance-finalized-archive-block {
+  display: block;
+}
+#attendanceView.attendance-workspace-archive .attendance-archive-notice {
+  display: flex;
+}
+#attendanceView.attendance-workspace-archive .attendance-overview-grid {
+  margin-top: 0.9rem;
+}
+#attendanceView.attendance-workspace-archive #overallAttendanceCaption::before {
+  content: "Validated archive • ";
+  font-weight: 700;
+  color: #166247;
+}
+
+.attendance-finalized-archive-heading,
+.attendance-archive-card,
+.attendance-archive-revision {
+  transform: none !important;
+  transition: border-color 120ms ease, background-color 120ms ease !important;
+}
+.attendance-finalized-archive-heading:hover,
+.attendance-archive-card:hover,
+.attendance-archive-revision:hover { transform: none !important; }
+
+#attendanceView .attendance-roster-scroll {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+#attendanceView .attendance-table thead th { position: sticky; top: 0; z-index: 2; }
+#attendanceView .attendance-toolbar { position: sticky; top: 0; z-index: 4; background: #fff; padding-top: 0.35rem; }
+
+@media (max-width: 1050px) {
+  #attendanceView.attendance-workspace-current .attendance-period-grid { grid-template-columns: 1fr; }
+  .attendance-workspace-tabs { grid-template-columns: 1fr 1fr 1fr; }
+  .attendance-workspace-tab { grid-template-columns: 1.8rem minmax(0, 1fr); padding-inline: 0.62rem; }
+  .attendance-workspace-tab > span { width: 1.8rem; height: 1.8rem; }
+}
+
+@media (max-width: 760px) {
+  .attendance-workspace-tabs {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.5rem;
+  }
+  .attendance-workspace-tab {
+    flex: 0 0 min(78vw, 17rem);
+    scroll-snap-align: start;
+    min-height: 4rem;
+  }
+  .attendance-workspace-context {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .attendance-workspace-context > span {
+    grid-row: auto;
+    justify-self: start;
+    border-right: 0;
+    border-bottom: 1px solid var(--attendance-line);
+    padding: 0 0 0.35rem;
+  }
+  .attendance-month-progress {
+    display: flex;
+    overflow-x: auto;
+    align-items: stretch;
+    scroll-snap-type: x mandatory;
+  }
+  .attendance-month-progress > div {
+    flex: 0 0 10.5rem;
+    scroll-snap-align: start;
+  }
+  .attendance-month-progress > i { align-self: center; }
+  .attendance-period-actions .button { flex: 1 1 100%; width: 100%; }
+  .attendance-recording-state { align-items: flex-start; flex-direction: column; }
+  .attendance-recording-state small { text-align: left; }
+  #attendanceView .attendance-toolbar {
+    position: static;
+  }
+  #attendanceView .attendance-roster-scroll {
+    max-height: min(58vh, 33rem);
+  }
+}
+
+@media (max-width: 460px) {
+  .attendance-workspace-tab { flex-basis: 84vw; }
+  .attendance-review-check { grid-template-columns: 1.55rem minmax(0, 1fr); padding: 0.52rem; }
+  .attendance-review-check > span { width: 1.45rem; height: 1.45rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attendance-workspace-tab,
+  .attendance-archive-card,
+  .attendance-archive-revision { transition: none !important; }
+}
+
+
+/* V59 debug repair: make approved-LOA roster entries visible and unambiguous. */
+#attendanceView .attendance-loa-row {
+  background: color-mix(in srgb, var(--warning-soft, #fff5d6) 58%, #ffffff);
+}
+#attendanceView .attendance-loa-row .attendance-status,
+#attendanceView .attendance-loa-row .attendance-remarks {
+  cursor: not-allowed;
+  opacity: .9;
+}
+#attendanceView .attendance-loa-row .attendance-remarks {
+  font-style: italic;
+}
+@media (prefers-contrast: more) {
+  #attendanceView .attendance-loa-row { outline: 2px solid currentColor; outline-offset: -2px; }
+}

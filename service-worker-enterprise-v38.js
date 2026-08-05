@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v56-attendance-archive-workflow1';
+const CACHE_VERSION = 'lso-website-enterprise-v60-end-to-end-debug1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -48,6 +48,7 @@ const CORE_PATHS = [
   './runtime-stability-v54.css',
   './attendance-semester-stability-v55.css',
   './attendance-archive-workflow-v56.css',
+  './attendance-workflow-v58.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',
@@ -63,6 +64,7 @@ const CORE_PATHS = [
   './renderall-compat-v25.js',
   './workflow-attendance-month-v6.js',
   './attendance-governance-v2.js',
+  './attendance-workflow-v58.js',
   './duty-hours-member-info-v14.js',
   './pdf-lib.min.js',
   './monthly-report-template-data.js',

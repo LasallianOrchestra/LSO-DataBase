@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v9-validated-archive-workflow';
+  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v10-attendance-lifecycle-workflow';
 
   const EVENTS_KEY = 'lso_events_v2';
   const ATTENDANCE_KEY = 'lso_attendance_v2';
@@ -9,6 +9,7 @@
   const GROUPS = ['Official Members', 'Trainee Members', 'Probationary Members'];
   const MODES = ['Current', 'Archive'];
   const SEMESTERS = ['First Semester', 'Second Semester'];
+  const MONTH_STATES = ['Draft', 'In Review', 'Finalized', 'Reopened'];
   const PERIOD_SETTINGS_KEY = 'attendancePeriodGovernance';
   const el = (id) => document.getElementById(id);
 
@@ -221,11 +222,17 @@
   function monthState(month = activeMonth(), semester = activeSemester(), group = activeGroup(), mode = activeMode()) {
     const data = loadPeriodGovernance();
     const raw = data.monthFinalizations[monthScopeKey(month, semester, group, mode)] || {};
+    let state = MONTH_STATES.includes(raw.state) ? raw.state : (raw.state === 'Finalized' ? 'Finalized' : 'Draft');
+    // V56 and earlier represented reopened months as Draft plus reopenedAt.
+    // Preserve that intent during migration without rewriting the stored data.
+    if (state === 'Draft' && raw.reopenedAt && Math.max(0, Number(raw.revision) || 0) > 0 && !raw.snapshot) state = 'Reopened';
     return {
-      state: raw.state === 'Finalized' ? 'Finalized' : 'Draft',
+      state,
       revision: Math.max(0, Number(raw.revision) || 0),
       finalizedAt: raw.finalizedAt || '', finalizedBy: raw.finalizedBy || '',
-      reopenedAt: raw.reopenedAt || '', reopenedBy: raw.reopenedBy || '',
+      reviewedAt: raw.reviewedAt || '', reviewedBy: raw.reviewedBy || '',
+      reopenedAt: raw.reopenedAt || '', reopenedBy: raw.reopenedBy || '', reopenReason: raw.reopenReason || '',
+      validation: raw.validation && typeof raw.validation === 'object' ? raw.validation : null,
       snapshot: raw.snapshot && typeof raw.snapshot === 'object' ? raw.snapshot : null,
       history: Array.isArray(raw.history) ? raw.history : []
     };
@@ -337,8 +344,21 @@
     return normalizeWorkflow(event.attendanceWorkflows?.[workflowKey(group, mode)]);
   }
 
+  function hasManagedMonthState(month = activeMonth(), semester = activeSemester(), group = activeGroup(), mode = activeMode()) {
+    const raw = loadPeriodGovernance().monthFinalizations[monthScopeKey(month, semester, group, mode)];
+    return Boolean(raw && typeof raw === 'object' && Object.keys(raw).length);
+  }
+
   function workflowState(event, group = activeGroup(), mode = activeMode()) {
-    if (event?.date && monthState(String(event.date).slice(0, 7), event.semester || activeSemester(), group, mode).state === 'Finalized') return 'Finalized';
+    if (event?.date) {
+      const eventMonth = String(event.date).slice(0, 7);
+      const monthly = monthState(eventMonth, event.semester || activeSemester(), group, mode);
+      if (monthly.state === 'Finalized') return 'Finalized';
+      // Once a month enters the lifecycle workflow, its monthly state becomes
+      // authoritative. This also releases legacy event locks when a finalized
+      // month is reopened or returned for corrections.
+      if (hasManagedMonthState(eventMonth, event.semester || activeSemester(), group, mode) && ['Draft', 'In Review', 'Reopened'].includes(monthly.state)) return 'Draft';
+    }
     return getWorkflow(event, group, mode).state;
   }
 
@@ -358,13 +378,21 @@
     return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
+  let monthlyReportsCacheRaw = null;
+  let monthlyReportsCacheValue = {};
+
   function loadMonthlyReports() {
+    let raw = '{}';
+    try { raw = window.LSOStorage?.getItem(MONTHLY_KEY) || '{}'; } catch { raw = '{}'; }
+    if (raw === monthlyReportsCacheRaw) return monthlyReportsCacheValue;
+    monthlyReportsCacheRaw = raw;
     try {
-      const raw = JSON.parse(window.LSOStorage?.getItem(MONTHLY_KEY) || '{}');
-      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+      const parsed = JSON.parse(raw);
+      monthlyReportsCacheValue = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch {
-      return {};
+      monthlyReportsCacheValue = {};
     }
+    return monthlyReportsCacheValue;
   }
 
   function memberPhaseOnDate(member, value) {
@@ -674,7 +702,7 @@
 
   function appendDraftSaveAudit(beforeRecords) {
     const event = selectedEvent();
-    if (!event || workflowState(event) === 'Finalized') return;
+    if (!event || workflowState(event) === 'Finalized' || monthState(String(event.date || '').slice(0, 7), event.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') return;
     const afterRecords = scopedAttendanceRecords();
     if (attendanceRecordSignature(beforeRecords || []) === attendanceRecordSignature(afterRecords)) return;
 
@@ -817,48 +845,236 @@
   }
 
 
-  function finalizeMonth() {
-    if (activeMode() !== 'Current') return window.LSOApp?.showToast?.('Finalized archive copies are view-only. Return to Current Roster to finalize a month.', true);
-    if (!canFinalizeAttendance()) return window.LSOApp?.showToast?.('Your role is not assigned to finalize a monthly attendance period.', true);
-    if (window.LSOCloud?.getSessionToken?.() && window.LSOCloud?.canWrite?.('settings') === false) {
-      return window.LSOApp?.showToast?.('This role can edit attendance but cannot save the finalized archive. Assign its System Settings data access in Role Management before finalizing.', true);
-    }
-    const month = activeMonth();
-    const events = scopedMonthEvents(month);
-    if (!events.length) return window.LSOApp?.showToast?.('There are no completed activities in this calendar month to finalize.', true);
-    if (monthState(month).state === 'Finalized') return window.LSOApp?.showToast?.('This monthly attendance period is already finalized.', true);
-    if (!window.confirm(`Finalize ${month} for ${activeGroup()}? Unmarked active members will be recorded as Absent. Members on approved LOA will be recorded as Excused and will not affect attendance ratings or absence streaks.`)) return;
-    let nextAttendance = getAttendance().map((record) => ({ ...record }));
+  let validationDirtyVersion = 1;
+  const validationCache = new Map();
+
+  function markValidationDirty() {
+    validationDirtyVersion += 1;
+    if (validationCache.size > 18) validationCache.clear();
+  }
+
+  function validationScopeCacheKey(month, semester, group, mode) {
+    return `${monthScopeKey(month, semester, group, mode)}::${validationDirtyVersion}`;
+  }
+
+  function monthStateIsEditable(state) {
+    return state === 'Draft' || state === 'Reopened';
+  }
+
+  function monthStateLocksEditing(state) {
+    return state === 'In Review' || state === 'Finalized';
+  }
+
+  function attendanceScopeRecordKey(record) {
+    return `${String(record?.eventId ?? '')}::${String(record?.memberId ?? '')}::${String(record?.attendanceGroup || activeGroup())}::${String(record?.rosterModeAtEdit || 'Current')}`;
+  }
+
+  function recordMutationTime(record) {
+    return Math.max(Date.parse(record?.updatedAt || '') || 0, Date.parse(record?.createdAt || '') || 0);
+  }
+
+  function recordBelongsToMonthScope(record, eventIds, group = activeGroup(), mode = activeMode()) {
+    return eventIds.has(String(record?.eventId ?? '')) &&
+      String(record?.attendanceGroup || group) === String(group) &&
+      String(record?.rosterModeAtEdit || 'Current') === String(mode);
+  }
+
+  function prepareMonthAttendance(month = activeMonth(), semester = activeSemester(), group = activeGroup(), mode = activeMode()) {
+    const events = scopedMonthEvents(month, semester, group);
+    const eventIds = new Set(events.map((event) => String(event.id ?? '')));
+    const current = getAttendance().map((record) => ({ ...record }));
+    const indexesByKey = new Map();
+    current.forEach((record, index) => {
+      if (!recordBelongsToMonthScope(record, eventIds, group, mode)) return;
+      const key = attendanceScopeRecordKey(record);
+      if (!indexesByKey.has(key)) indexesByKey.set(key, []);
+      indexesByKey.get(key).push(index);
+    });
+
+    const removeIndexes = new Set();
+    const updateByIndex = new Map();
+    let duplicateCount = 0;
+    indexesByKey.forEach((indexes) => {
+      if (indexes.length <= 1) return;
+      const sorted = [...indexes].sort((a, b) => recordMutationTime(current[b]) - recordMutationTime(current[a]) || b - a);
+      sorted.slice(1).forEach((index) => removeIndexes.add(index));
+      duplicateCount += sorted.length - 1;
+      indexesByKey.set(attendanceScopeRecordKey(current[sorted[0]]), [sorted[0]]);
+    });
+
     const now = new Date().toISOString();
     const actor = periodActor();
+    let loaCorrectionCount = 0;
     events.forEach((event) => {
-      const roster = rosterMembersForEvent(event);
-      roster.forEach((member) => {
-        const index = nextAttendance.findIndex((record) => String(record.eventId) === String(event.id) && String(record.memberId) === String(member.id) && (record.attendanceGroup || activeGroup()) === activeGroup() && (record.rosterModeAtEdit || 'Current') === activeMode());
-        const existing = index >= 0 ? nextAttendance[index] : {};
-        const onLeave = memberOnLeaveForDate(member, event.date);
-        if (existing.status && !onLeave) return;
-        const record = { ...existing, eventId: event.id, memberId: member.id, status: onLeave ? 'Excused' : 'Absent', remarks: onLeave ? 'Automatically marked Excused because the member was on approved LOA for this attendance date.' : (existing.remarks || 'Automatically marked Absent during monthly finalization.'), attendanceGroup: activeGroup(), rosterModeAtEdit: activeMode(), loaAutoExcused: onLeave, createdAt: existing.createdAt || now, updatedAt: now, updatedBy: actor };
-        if (index >= 0) nextAttendance[index] = record; else nextAttendance.push(record);
+      rosterMembersForEvent(event, group).forEach((member) => {
+        if (!memberOnLeaveForDate(member, event.date)) return;
+        const key = `${String(event.id ?? '')}::${String(member.id ?? '')}::${String(group)}::${String(mode)}`;
+        const keptIndex = (indexesByKey.get(key) || []).find((index) => !removeIndexes.has(index));
+        const existing = keptIndex == null ? null : (updateByIndex.get(keptIndex) || current[keptIndex]);
+        if (existing?.status === 'Excused' && existing?.loaAutoExcused) return;
+        const next = {
+          ...(existing || {}), eventId: event.id, memberId: member.id,
+          attendanceGroup: group, rosterModeAtEdit: mode,
+          status: 'Excused', loaAutoExcused: true,
+          remarks: 'Automatically marked Excused because the member was on approved LOA for this attendance date.',
+          createdAt: existing?.createdAt || now, updatedAt: now, updatedBy: actor
+        };
+        if (keptIndex == null) {
+          current.push(next);
+          indexesByKey.set(key, [current.length - 1]);
+        } else updateByIndex.set(keptIndex, next);
+        loaCorrectionCount += 1;
       });
     });
-    const attendanceSaved = window.LSOOperations?.replaceAttendance?.(nextAttendance);
-    if (attendanceSaved === false) {
-      return window.LSOApp?.showToast?.('The finalized attendance records could not be saved. No archive was created.', true);
-    }
-    events.forEach((event) => {
-      const nextEvent = clone(event);
-      const workflows = nextEvent.attendanceWorkflows && typeof nextEvent.attendanceWorkflows === 'object' ? clone(nextEvent.attendanceWorkflows) : {};
-      const key = workflowKey();
-      const workflow = normalizeWorkflow(workflows[key]);
-      workflow.state = 'Finalized'; workflow.finalizedAt = now; workflow.finalizedBy = actor; workflow.revision += 1;
-      workflow.history.unshift(periodAudit('Event included in monthly finalization', `${event.title} • ${month}`));
-      workflow.history = workflow.history.slice(0, 100); workflows[key] = workflow; nextEvent.attendanceWorkflows = workflows;
-      window.LSOOperations?.updateEventRecord?.(nextEvent);
+
+    // Apply updates before removing duplicates so update indexes continue to
+    // refer to the original array positions. Filtering first would shift the
+    // indexes and could apply an LOA correction to the wrong member record.
+    const attendance = current
+      .map((record, index) => updateByIndex.get(index) || record)
+      .filter((_, index) => !removeIndexes.has(index));
+    return { attendance, events, duplicateCount, loaCorrectionCount, changed: duplicateCount > 0 || loaCorrectionCount > 0 };
+  }
+
+  function buildMonthValidation(month = activeMonth(), semester = activeSemester(), group = activeGroup(), mode = activeMode(), attendanceOverride = null) {
+    const cacheKey = attendanceOverride ? '' : validationScopeCacheKey(month, semester, group, mode);
+    if (cacheKey && validationCache.has(cacheKey)) return validationCache.get(cacheKey);
+    const events = scopedMonthEvents(month, semester, group);
+    const eventIds = new Set(events.map((event) => String(event.id ?? '')));
+    const records = (attendanceOverride || getAttendance()).filter((record) => recordBelongsToMonthScope(record, eventIds, group, mode));
+    const recordsByKey = new Map();
+    records.forEach((record) => {
+      const key = attendanceScopeRecordKey(record);
+      if (!recordsByKey.has(key)) recordsByKey.set(key, []);
+      recordsByKey.get(key).push(record);
     });
+    let missingCount = 0;
+    let invalidCount = 0;
+    let duplicateCount = 0;
+    let loaMismatchCount = 0;
+    let expectedRecordCount = 0;
+    let excusedCount = 0;
+    const validStatuses = new Set(['Present', 'Late', 'Absent', 'Excused', 'Not Required']);
+    recordsByKey.forEach((items) => { if (items.length > 1) duplicateCount += items.length - 1; });
+
+    events.forEach((event) => {
+      rosterMembersForEvent(event, group).forEach((member) => {
+        expectedRecordCount += 1;
+        const key = `${String(event.id ?? '')}::${String(member.id ?? '')}::${String(group)}::${String(mode)}`;
+        const items = recordsByKey.get(key) || [];
+        const record = [...items].sort((a, b) => recordMutationTime(b) - recordMutationTime(a))[0] || null;
+        const onLeave = memberOnLeaveForDate(member, event.date);
+        if (onLeave) {
+          if (!record || record.status !== 'Excused') loaMismatchCount += 1;
+          else excusedCount += 1;
+          return;
+        }
+        if (!record || !record.status) { missingCount += 1; return; }
+        if (!validStatuses.has(record.status)) invalidCount += 1;
+      });
+    });
+
+    const snapshot = calculateMonthSnapshot(month, semester, group, mode, attendanceOverride || getAttendance());
+    const ratedCount = Number(snapshot?.counts?.Present || 0) + Number(snapshot?.counts?.Late || 0) + Number(snapshot?.counts?.Absent || 0);
+    const checks = [
+      { id: 'activities', label: 'Completed activities available', value: events.length, ready: events.length > 0, helper: events.length ? `${events.length} activit${events.length === 1 ? 'y' : 'ies'} in this month` : 'Create or select at least one completed activity.' },
+      { id: 'roster', label: 'All roster entries recorded', value: missingCount, ready: missingCount === 0, helper: missingCount ? `${missingCount} attendance entr${missingCount === 1 ? 'y is' : 'ies are'} still missing.` : `${expectedRecordCount} expected roster entries are complete.` },
+      { id: 'statuses', label: 'All attendance statuses are valid', value: invalidCount, ready: invalidCount === 0, helper: invalidCount ? `${invalidCount} attendance entr${invalidCount === 1 ? 'y has' : 'ies have'} an unsupported status.` : 'Present, Late, Absent, Excused, and Not Required statuses are valid.' },
+      { id: 'loa', label: 'LOA records verified as Excused', value: loaMismatchCount, ready: loaMismatchCount === 0, helper: loaMismatchCount ? `${loaMismatchCount} LOA entr${loaMismatchCount === 1 ? 'y needs' : 'ies need'} correction.` : `${excusedCount} Excused entr${excusedCount === 1 ? 'y' : 'ies'} verified.` },
+      { id: 'duplicates', label: 'No duplicate attendance records', value: duplicateCount, ready: duplicateCount === 0, helper: duplicateCount ? `${duplicateCount} duplicate entr${duplicateCount === 1 ? 'y' : 'ies'} detected.` : 'No duplicate event/member records detected.' },
+      { id: 'rating', label: 'Monthly rating can be computed', value: snapshot.groupRate, ready: ratedCount > 0 || (expectedRecordCount > 0 && excusedCount === expectedRecordCount), helper: ratedCount > 0 ? `Working rating: ${snapshot.groupRate ?? '—'}%` : (excusedCount === expectedRecordCount && expectedRecordCount > 0 ? 'All records are Excused; no numeric rating will be assigned.' : 'No rated attendance records are available yet.') }
+    ];
+    const result = {
+      month, semester, attendanceGroup: group, rosterMode: mode,
+      ready: checks.every((check) => check.ready), checks,
+      eventCount: events.length, expectedRecordCount, missingCount, invalidCount, duplicateCount, loaMismatchCount,
+      excusedCount, ratedCount, groupRate: snapshot.groupRate, snapshot, checkedAt: new Date().toISOString()
+    };
+    if (cacheKey) validationCache.set(cacheKey, result);
+    return result;
+  }
+
+  function reviewMonth() {
+    if (activeMode() !== 'Current') return window.LSOApp?.showToast?.('Return to Current Attendance to review a month.', true);
+    if (!canFinalizeAttendance()) return window.LSOApp?.showToast?.('Your role is not assigned to review and finalize attendance.', true);
+    const month = activeMonth();
+    const current = monthState(month);
+    if (current.state === 'Finalized') return window.LSOApp?.showToast?.('This month is already finalized. Reopen it before making a revision.', true);
+    if (current.state === 'In Review') return window.LSOApp?.showToast?.('This month is already in review and ready for finalization.');
+    const prepared = prepareMonthAttendance(month);
+    if (prepared.changed && window.LSOOperations?.replaceAttendance?.(prepared.attendance) === false) {
+      return window.LSOApp?.showToast?.('Attendance corrections required for review could not be saved.', true);
+    }
+    if (prepared.changed) markValidationDirty();
+    const validation = buildMonthValidation(month, activeSemester(), activeGroup(), activeMode(), prepared.attendance);
+    if (!validation.ready) {
+      window.LSOApp?.showToast?.(`Month review found ${validation.missingCount + validation.invalidCount + validation.loaMismatchCount + validation.duplicateCount} item(s) that require correction.`, true);
+      scheduleRender(0, true);
+      return;
+    }
+    const now = new Date().toISOString();
+    const actor = periodActor();
     const data = loadPeriodGovernance(true);
     const key = monthScopeKey(month);
+    data.monthFinalizations[key] = {
+      ...current, state: 'In Review', reviewedAt: now, reviewedBy: actor,
+      validation: { ...validation, snapshot: undefined }, snapshot: null,
+      history: [periodAudit('Monthly attendance reviewed', `${validation.eventCount} activities and ${validation.expectedRecordCount} roster entries validated.`), ...current.history].slice(0, 100)
+    };
+    if (!savePeriodGovernance(data, { source: 'attendance-month-reviewed' })) return window.LSOApp?.showToast?.('The monthly review state could not be saved.', true);
+    window.LSOOperations?.logActivity?.('Reviewed monthly attendance', 'Attendance Audit', `${month} • ${activeSemester()} • ${activeGroup()}`);
+    window.LSOApp?.showToast?.('Monthly attendance passed validation and is ready to finalize.');
+    scheduleRender(0, true);
+  }
+
+  function returnMonthToCorrections() {
+    if (!canUnlockAttendance()) return window.LSOApp?.showToast?.('Only an authorized Administrator can return a reviewed month for corrections.', true);
+    const month = activeMonth();
     const current = monthState(month);
+    if (current.state !== 'In Review') return;
+    const nextState = current.revision > 0 ? 'Reopened' : 'Draft';
+    const data = loadPeriodGovernance(true);
+    const key = monthScopeKey(month);
+    data.monthFinalizations[key] = {
+      ...current, state: nextState, reviewedAt: '', reviewedBy: '', validation: null,
+      history: [periodAudit('Monthly review returned for corrections', `${month} returned to ${nextState}.`), ...current.history].slice(0, 100)
+    };
+    if (!savePeriodGovernance(data, { source: 'attendance-month-returned' })) return window.LSOApp?.showToast?.('The month could not be returned for corrections.', true);
+    window.LSOApp?.showToast?.('Monthly attendance is editable again.');
+    scheduleRender(0, true);
+  }
+
+
+  function finalizeMonth() {
+    if (activeMode() !== 'Current') return window.LSOApp?.showToast?.('Finalized archive copies are view-only. Return to Current Attendance to finalize a month.', true);
+    if (!canFinalizeAttendance()) return window.LSOApp?.showToast?.('Your role is not assigned to finalize a monthly attendance period.', true);
+    if (window.LSOCloud?.getSessionToken?.() && window.LSOCloud?.canWrite?.('settings') === false) {
+      return window.LSOApp?.showToast?.('This role cannot save finalized attendance archives. Assign System Settings data access in Role Management before finalizing.', true);
+    }
+    const month = activeMonth();
+    const current = monthState(month);
+    if (current.state === 'Finalized') return window.LSOApp?.showToast?.('This monthly attendance period is already finalized.', true);
+    if (current.state !== 'In Review') return window.LSOApp?.showToast?.('Review and validate the selected month before finalizing it.', true);
+    const prepared = prepareMonthAttendance(month);
+    if (prepared.changed) markValidationDirty();
+    const validation = buildMonthValidation(month, activeSemester(), activeGroup(), activeMode(), prepared.attendance);
+    if (!validation.ready) {
+      return window.LSOApp?.showToast?.('The month changed after review. Return it for corrections, resolve the validation items, and review it again.', true);
+    }
+    const events = prepared.events;
+    if (!events.length) return window.LSOApp?.showToast?.('There are no completed activities in this calendar month to finalize.', true);
+    if (!window.confirm(`Finalize the validated ${month} attendance for ${activeGroup()}? This creates a locked archive copy and uses it for the semester rating.`)) return;
+    if (prepared.changed && window.LSOOperations?.replaceAttendance?.(prepared.attendance) === false) {
+      return window.LSOApp?.showToast?.('The validated attendance records could not be saved. No archive was created.', true);
+    }
+    const nextAttendance = prepared.attendance;
+    const now = new Date().toISOString();
+    const actor = periodActor();
+    // The month lifecycle is the single source of truth. Avoid writing every
+    // event during finalization; this prevents a burst of cloud saves and keeps
+    // the validated archive transaction stable across slower devices.
+    const data = loadPeriodGovernance(true);
+    const key = monthScopeKey(month);
     const frozenSnapshot = calculateMonthSnapshot(month, activeSemester(), activeGroup(), activeMode(), nextAttendance);
     const archivedEventIds = new Set(events.map((event) => String(event.id)));
     const originalRecords = nextAttendance
@@ -872,23 +1088,39 @@
       .filter((entry) => archiveScopeKey(entry) === key)
       .reduce((max, entry) => Math.max(max, Number(entry?.revision) || 0), 0);
     const nextRevision = Math.max(current.revision, highestArchivedRevision) + 1;
-    data.monthFinalizations[key] = { state: 'Finalized', revision: nextRevision, finalizedAt: now, finalizedBy: actor, reopenedAt: '', reopenedBy: '', snapshot: frozenSnapshot, history: [periodAudit('Monthly attendance finalized', `${events.length} activit${events.length === 1 ? 'y' : 'ies'} locked and rated.`), ...current.history].slice(0, 100) };
+    data.monthFinalizations[key] = {
+      ...current, state: 'Finalized', revision: nextRevision, finalizedAt: now, finalizedBy: actor,
+      reviewedAt: current.reviewedAt || now, reviewedBy: current.reviewedBy || actor,
+      reopenedAt: current.reopenedAt || '', reopenedBy: current.reopenedBy || '',
+      validation: { ...validation, snapshot: undefined }, snapshot: frozenSnapshot,
+      history: [periodAudit('Validated monthly attendance finalized', `${events.length} activit${events.length === 1 ? 'y' : 'ies'} and ${originalRecords.length} records locked and archived.`), ...current.history].slice(0, 100)
+    };
     data.archives = data.archives
       .filter((entry) => !(archiveScopeKey(entry) === key && Number(entry?.revision || 1) === nextRevision))
       .map((entry) => archiveScopeKey(entry) === key ? { ...entry, isCurrentFinalizedCopy: false } : entry);
-    const finalizedArchive = { id: archiveId(), scopeKey: key, month, semester: activeSemester(), attendanceGroup: activeGroup(), rosterMode: 'Current', revision: nextRevision, finalizedAt: now, finalizedBy: actor, snapshot: compactArchiveSnapshot(frozenSnapshot, events, originalRecords), locked: true, source: 'live-finalized-month', isCurrentFinalizedCopy: true, integrityStatus: 'verified' };
+    const finalizedArchive = {
+      id: archiveId(), scopeKey: key, month, semester: activeSemester(), attendanceGroup: activeGroup(), rosterMode: 'Current',
+      revision: nextRevision, finalizedAt: now, finalizedBy: actor, reviewedAt: current.reviewedAt || now, reviewedBy: current.reviewedBy || actor,
+      snapshot: compactArchiveSnapshot(frozenSnapshot, events, originalRecords), locked: true,
+      source: 'validated-month-workflow', isCurrentFinalizedCopy: true, integrityStatus: 'verified'
+    };
     data.archives.unshift(finalizedArchive);
     data.archives = data.archives.slice(0, 240);
-    // A changed month invalidates an older semestral snapshot.
     const semesterKey = periodScopeKey();
-    if (data.semesterFinalizations[semesterKey]?.state === 'Finalized') data.semesterFinalizations[semesterKey] = { ...data.semesterFinalizations[semesterKey], state: 'Draft', reopenedAt: now, reopenedBy: actor, updatedAt: now, stateVersion: Math.max(Number(data.semesterFinalizations[semesterKey]?.stateVersion) || 0, Number(data.semesterFinalizations[semesterKey]?.revision) || 0) + 1, mutationId: uid('semester-invalidated'), snapshot: null, history: [periodAudit('Semester snapshot invalidated', `Monthly attendance ${month} was finalized or revised.`), ...(data.semesterFinalizations[semesterKey].history || [])].slice(0, 100) };
-    if (!savePeriodGovernance(data)) {
-      return window.LSOApp?.showToast?.('Attendance was saved, but the finalized archive could not be stored. Check this role’s System Settings data access, then finalize again.', true);
+    if (data.semesterFinalizations[semesterKey]?.state === 'Finalized') data.semesterFinalizations[semesterKey] = {
+      ...data.semesterFinalizations[semesterKey], state: 'Draft', reopenedAt: now, reopenedBy: actor, updatedAt: now,
+      stateVersion: Math.max(Number(data.semesterFinalizations[semesterKey]?.stateVersion) || 0, Number(data.semesterFinalizations[semesterKey]?.revision) || 0) + 1,
+      mutationId: uid('semester-invalidated'), snapshot: null,
+      history: [periodAudit('Semester snapshot invalidated', `Validated month ${month} was finalized or revised.`), ...(data.semesterFinalizations[semesterKey].history || [])].slice(0, 100)
+    };
+    if (!savePeriodGovernance(data, { source: 'attendance-month-finalized' })) {
+      return window.LSOApp?.showToast?.('Attendance records were prepared, but the finalized archive could not be stored. Check System Settings access and try again.', true);
     }
-    window.LSOOperations?.logActivity?.('Finalized monthly attendance', 'Attendance Audit', `${month} • ${activeSemester()} • ${activeGroup()} • ${events.length} activities • ${originalRecords.length} archived records`);
+    window.LSOOperations?.logActivity?.('Finalized validated monthly attendance', 'Attendance Audit', `${month} • ${activeSemester()} • ${activeGroup()} • ${events.length} activities • ${originalRecords.length} archived records`);
     selectArchiveId(finalizedArchive.id);
     window.LSOOperations?.setAttendanceRosterMode?.('Archive');
-    window.LSOApp?.showToast?.('Monthly attendance finalized, computed, and moved to Attendance Archive.');
+    window.LSOAttendanceWorkspace?.setTab?.('archive', { preserveSelection: true });
+    window.LSOApp?.showToast?.('Validated month finalized and added to Monthly Archive.');
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('lso:attendance-refresh-request', { detail: { source: 'attendance-month-finalized', archiveId: finalizedArchive.id } }));
       render();
@@ -897,26 +1129,38 @@
   }
 
   function reopenMonth() {
-    if (!canUnlockAttendance()) return window.LSOApp?.showToast?.('Only the Administrator can reopen a finalized month.', true);
+    if (!canUnlockAttendance()) return window.LSOApp?.showToast?.('Only an authorized Administrator can reopen a finalized month.', true);
     const month = activeMonth(); const current = monthState(month);
     if (current.state !== 'Finalized') return;
     const reason = window.prompt('Enter the reason for reopening this finalized month:');
-    if (reason === null) return; if (reason.trim().length < 3) return window.LSOApp?.showToast?.('A clear correction reason is required.', true);
+    if (reason === null) return;
+    if (reason.trim().length < 3) return window.LSOApp?.showToast?.('A clear correction reason is required.', true);
     const now = new Date().toISOString(); const actor = periodActor();
-    scopedMonthEvents(month).forEach((event) => {
-      const nextEvent = clone(event); const workflows = nextEvent.attendanceWorkflows && typeof nextEvent.attendanceWorkflows === 'object' ? clone(nextEvent.attendanceWorkflows) : {};
-      const key = workflowKey(); const workflow = normalizeWorkflow(workflows[key]); workflow.state = 'Draft'; workflow.unlockedAt = now; workflow.unlockedBy = actor;
-      workflow.history.unshift(periodAudit('Event reopened with month', event.title, reason.trim())); workflow.history = workflow.history.slice(0, 100); workflows[key] = workflow; nextEvent.attendanceWorkflows = workflows;
-      window.LSOOperations?.updateEventRecord?.(nextEvent);
-    });
+    // Reopening the month changes one governed state instead of rewriting
+    // every activity. workflowState() releases any legacy event lock while the
+    // monthly state is Reopened.
     const data = loadPeriodGovernance(true); const key = monthScopeKey(month);
-    data.monthFinalizations[key] = { ...current, state: 'Draft', reopenedAt: now, reopenedBy: actor, snapshot: null, history: [periodAudit('Monthly attendance reopened', `${month} reopened for correction.`, reason.trim()), ...current.history].slice(0, 100) };
+    data.monthFinalizations[key] = {
+      ...current, state: 'Reopened', reopenedAt: now, reopenedBy: actor, reopenReason: reason.trim(),
+      reviewedAt: '', reviewedBy: '', validation: null, snapshot: null,
+      history: [periodAudit('Monthly attendance reopened', `${month} reopened for correction.`, reason.trim()), ...current.history].slice(0, 100)
+    };
     data.archives = data.archives.map((entry) => archiveScopeKey(entry) === key && entry?.isCurrentFinalizedCopy
       ? { ...entry, isCurrentFinalizedCopy: false, liveMonthReopenedAt: now, liveMonthReopenedBy: actor }
       : entry);
     const semesterKey = periodScopeKey();
-    if (data.semesterFinalizations[semesterKey]) data.semesterFinalizations[semesterKey] = { ...data.semesterFinalizations[semesterKey], state: 'Draft', snapshot: null, reopenedAt: now, reopenedBy: actor, updatedAt: now, stateVersion: Math.max(Number(data.semesterFinalizations[semesterKey]?.stateVersion) || 0, Number(data.semesterFinalizations[semesterKey]?.revision) || 0) + 1, mutationId: uid('semester-invalidated'), history: [periodAudit('Semester snapshot invalidated', `Month ${month} was reopened.`, reason.trim()), ...(data.semesterFinalizations[semesterKey].history || [])].slice(0, 100) };
-    savePeriodGovernance(data); window.LSOOperations?.logActivity?.('Reopened monthly attendance', 'Attendance Audit', `${month} • ${activeGroup()} • ${reason.trim()}`); window.LSOApp?.showToast?.('Monthly attendance reopened for correction.'); setTimeout(() => { window.dispatchEvent(new CustomEvent('lso:attendance-refresh-request')); render(); }, 80);
+    if (data.semesterFinalizations[semesterKey]) data.semesterFinalizations[semesterKey] = {
+      ...data.semesterFinalizations[semesterKey], state: 'Draft', snapshot: null, reopenedAt: now, reopenedBy: actor, updatedAt: now,
+      stateVersion: Math.max(Number(data.semesterFinalizations[semesterKey]?.stateVersion) || 0, Number(data.semesterFinalizations[semesterKey]?.revision) || 0) + 1,
+      mutationId: uid('semester-invalidated'),
+      history: [periodAudit('Semester snapshot invalidated', `Month ${month} was reopened.`, reason.trim()), ...(data.semesterFinalizations[semesterKey].history || [])].slice(0, 100)
+    };
+    if (!savePeriodGovernance(data, { source: 'attendance-month-reopened' })) return window.LSOApp?.showToast?.('The finalized month could not be reopened.', true);
+    window.LSOOperations?.setAttendanceRosterMode?.('Current');
+    window.LSOAttendanceWorkspace?.setTab?.('current');
+    window.LSOOperations?.logActivity?.('Reopened monthly attendance', 'Attendance Audit', `${month} • ${activeGroup()} • ${reason.trim()}`);
+    window.LSOApp?.showToast?.('Monthly attendance reopened. Correct the records, review the month again, then create a new finalized revision.');
+    setTimeout(() => { window.dispatchEvent(new CustomEvent('lso:attendance-refresh-request')); render(); }, 80);
   }
 
   function saveSemesterEndDate() {
@@ -1158,24 +1402,19 @@
         ...live,
         state: 'Draft',
         snapshot: null,
-        reopenedAt: now,
-        reopenedBy: actor,
+        finalizedAt: '',
+        finalizedBy: '',
+        reviewedAt: '',
+        reviewedBy: '',
+        validation: null,
+        reopenedAt: '',
+        reopenedBy: '',
+        reopenReason: '',
         history: [periodAudit('Validated attendance archive deleted', `${entry.month} was returned to Draft.`, reason.trim()), ...(live.history || [])].slice(0, 100)
       };
-      scopedMonthEvents(entry.month, entry.semester, entry.attendanceGroup).forEach((event) => {
-        const nextEvent = clone(event);
-        const workflows = nextEvent.attendanceWorkflows && typeof nextEvent.attendanceWorkflows === 'object' ? clone(nextEvent.attendanceWorkflows) : {};
-        const key = workflowKey(entry.attendanceGroup, entry.rosterMode || 'Current');
-        const workflow = normalizeWorkflow(workflows[key]);
-        workflow.state = 'Draft';
-        workflow.unlockedAt = now;
-        workflow.unlockedBy = actor;
-        workflow.history.unshift(periodAudit('Month returned to Draft after archive deletion', event.title || entry.month, reason.trim()));
-        workflow.history = workflow.history.slice(0, 100);
-        workflows[key] = workflow;
-        nextEvent.attendanceWorkflows = workflows;
-        window.LSOOperations?.updateEventRecord?.(nextEvent);
-      });
+      // The governed monthly state is authoritative. Do not rewrite every
+      // activity here; that created a burst of duplicate saves and could race
+      // with shared-database synchronization on slower devices.
       const semesterKey = periodScopeKey(entry.semester, entry.attendanceGroup, entry.rosterMode || 'Current');
       if (data.semesterFinalizations[semesterKey]?.state === 'Finalized') {
         data.semesterFinalizations[semesterKey] = {
@@ -1201,19 +1440,74 @@
     scheduleRender(0, true);
   }
 
+  function renderReviewChecklist(validation, state) {
+    const container = el('attendanceMonthReviewChecklist');
+    const badge = el('attendanceMonthReviewBadge');
+    const summary = el('attendanceMonthReviewSummary');
+    if (!container) return;
+    container.innerHTML = validation.checks.map((check) => `
+      <div class="attendance-review-check ${check.ready ? 'is-ready' : 'needs-action'}">
+        <span aria-hidden="true">${check.ready ? '✓' : '!'}</span>
+        <div><strong>${safeText(check.label)}</strong><small>${safeText(check.helper)}</small></div>
+      </div>`).join('');
+    if (badge) {
+      const label = state === 'Finalized' ? 'Finalized' : state === 'In Review' ? 'Ready to finalize' : validation.ready ? 'Ready for review' : 'Needs attention';
+      badge.textContent = label;
+      badge.className = `badge ${state === 'Finalized' ? 'badge-green' : state === 'In Review' || validation.ready ? 'badge-blue' : 'badge-gold'}`;
+    }
+    if (summary) {
+      summary.textContent = state === 'Finalized'
+        ? 'This validation was frozen with the current finalized archive copy.'
+        : state === 'In Review'
+          ? `Reviewed by ${monthState().reviewedBy || 'Administrator'} on ${dateLabel(monthState().reviewedAt, true)}. Return for corrections or finalize the validated month.`
+          : validation.ready
+            ? 'All validation checks currently pass. Select Review Month to lock the month for final verification.'
+            : 'Resolve every item marked for attention before moving the month into Review.';
+    }
+  }
+
   function renderPeriodCenter() {
     const panel = el('attendancePeriodFinalizationCenter'); if (!panel) return;
     renderAttendanceArchive();
     const archiveMode = activeMode() === 'Archive';
     panel.classList.toggle('hidden', archiveMode);
     if (archiveMode) return;
-    const month = monthState(); const data = loadPeriodGovernance(); const semester = semesterState(); const preview = semester.state === 'Finalized' && semester.snapshot ? semester.snapshot : calculateSemesterSnapshot(activeSemester(), activeGroup(), activeMode(), data.semesterEndDates[activeSemester()] || '');
+    const month = monthState();
+    const data = loadPeriodGovernance();
+    const semester = semesterState();
+    const preview = semester.state === 'Finalized' && semester.snapshot ? semester.snapshot : calculateSemesterSnapshot(activeSemester(), activeGroup(), activeMode(), data.semesterEndDates[activeSemester()] || '');
     const monthSnapshot = month.state === 'Finalized' && month.snapshot ? month.snapshot : calculateMonthSnapshot();
-    if (el('attendanceMonthFinalizationBadge')) { el('attendanceMonthFinalizationBadge').textContent = month.state; el('attendanceMonthFinalizationBadge').className = `badge ${month.state === 'Finalized' ? 'badge-green' : 'badge-gold'}`; }
+    const validation = buildMonthValidation();
+    const monthBadge = el('attendanceMonthFinalizationBadge');
+    if (monthBadge) {
+      monthBadge.textContent = month.state;
+      monthBadge.className = `badge ${month.state === 'Finalized' ? 'badge-green' : month.state === 'In Review' ? 'badge-blue' : month.state === 'Reopened' ? 'badge-red' : 'badge-gold'}`;
+    }
     if (el('attendanceMonthFinalizationTitle')) el('attendanceMonthFinalizationTitle').textContent = `${activeMonth()} • ${activeGroup()}`;
-    if (el('attendanceMonthFinalizationMeta')) el('attendanceMonthFinalizationMeta').textContent = month.state === 'Finalized' ? `Final rating ${monthSnapshot.groupRate ?? '—'}% • ${monthSnapshot.eventCount} activities • Revision ${month.revision}` : `${monthSnapshot.eventCount} activities • Draft monthly rating ${monthSnapshot.groupRate ?? '—'}%`;
-    setStateOwnedVisibility(el('finalizeAttendanceMonthButton'), month.state !== 'Finalized' && canFinalizeAttendance());
+    if (el('attendanceMonthFinalizationMeta')) {
+      const rateText = monthSnapshot.groupRate == null ? 'No rated attendance' : `${monthSnapshot.groupRate}%`;
+      el('attendanceMonthFinalizationMeta').textContent = month.state === 'Finalized'
+        ? `Verified rating ${rateText} • ${monthSnapshot.eventCount} activities • Revision ${month.revision}`
+        : month.state === 'In Review'
+          ? `Validation passed • ${validation.eventCount} activities • Working rating ${rateText}`
+          : month.state === 'Reopened'
+            ? `Reopened for correction • Revision ${month.revision} preserved in archive • Working rating ${rateText}`
+            : `${monthSnapshot.eventCount} activities • Working monthly rating ${rateText}`;
+    }
+    setStateOwnedVisibility(el('reviewAttendanceMonthButton'), monthStateIsEditable(month.state) && canFinalizeAttendance());
+    setStateOwnedVisibility(el('returnAttendanceMonthToDraftButton'), month.state === 'In Review' && canUnlockAttendance());
+    setStateOwnedVisibility(el('finalizeAttendanceMonthButton'), month.state === 'In Review' && canFinalizeAttendance());
     setStateOwnedVisibility(el('reopenAttendanceMonthButton'), month.state === 'Finalized' && canUnlockAttendance());
+    renderReviewChecklist(month.state === 'Finalized' && month.validation ? { ...validation, ...month.validation, checks: validation.checks } : validation, month.state);
+
+    document.querySelectorAll('[data-attendance-stage]').forEach((node) => {
+      const stage = node.dataset.attendanceStage;
+      const active = stage === month.state || (month.state === 'Reopened' && stage === 'Draft');
+      const complete = month.state === 'Finalized' || (month.state === 'In Review' && stage === 'Draft');
+      node.classList.toggle('active', active);
+      node.classList.toggle('complete', complete && !active);
+    });
+
     const endDate = data.semesterEndDates[activeSemester()] || '';
     const endDateInput = el('attendanceSemesterEndDate');
     if (endDateInput) {
@@ -1231,9 +1525,7 @@
     }
     if (el('attendanceSemesterRatingValue')) el('attendanceSemesterRatingValue').textContent = preview.groupRate == null ? '—' : `${preview.groupRate}%`;
     if (el('attendanceSemesterRatingMeta')) {
-      const audit = semester.state === 'Finalized' && semester.finalizedAt
-        ? ` • Finalized ${dateLabel(semester.finalizedAt, true)} • Revision ${semester.revision}`
-        : '';
+      const audit = semester.state === 'Finalized' && semester.finalizedAt ? ` • Finalized ${dateLabel(semester.finalizedAt, true)} • Revision ${semester.revision}` : '';
       el('attendanceSemesterRatingMeta').textContent = `${preview.monthCount || 0} finalized month${preview.monthCount === 1 ? '' : 's'} • Average of monthly ratings${endDate ? ` • Ends ${dateLabel(endDate)}` : ' • End date not set'}${audit}`;
     }
     const saveDateButton = el('saveAttendanceSemesterEndDate');
@@ -1255,7 +1547,7 @@
       if (reopenSemesterButton) { reopenSemesterButton.disabled = false; reopenSemesterButton.textContent = 'Reopen Semester'; }
     }
     const table = el('attendanceSemesterMonthlyRatesBody');
-    if (table) table.innerHTML = preview.months?.length ? preview.months.map((item) => `<tr><td>${safeText(item.month)}</td><td>${safeText(item.eventCount)}</td><td><span class="badge ${item.groupRate == null ? 'badge-gray' : item.groupRate >= 80 ? 'badge-green' : item.groupRate >= 60 ? 'badge-gold' : 'badge-red'}">${item.groupRate == null ? 'No rate' : `${item.groupRate}%`}</span></td><td>Finalized</td></tr>`).join('') : '<tr><td colspan="4"><div class="empty-state compact-empty"><h4>No finalized monthly ratings</h4><p>Finalize each calendar month before completing the semester.</p></div></td></tr>';
+    if (table) table.innerHTML = preview.months?.length ? preview.months.map((item) => `<tr><td>${safeText(item.month)}</td><td>${safeText(item.eventCount)}</td><td><span class="badge ${item.groupRate == null ? 'badge-gray' : item.groupRate >= 80 ? 'badge-green' : item.groupRate >= 60 ? 'badge-gold' : 'badge-red'}">${item.groupRate == null ? 'No rated attendance' : `${item.groupRate}%`}</span></td><td>Finalized</td></tr>`).join('') : '<tr><td colspan="4"><div class="empty-state compact-empty"><h4>No finalized monthly ratings</h4><p>Review and finalize each calendar month before completing the semester.</p></div></td></tr>';
   }
 
   function renderGovernance() {
@@ -1267,24 +1559,28 @@
 
     const workflow = getWorkflow(event);
     const eventMonth = String(event.date || '').slice(0, 7);
-    const monthlyLocked = Boolean(eventMonth) && monthState(eventMonth, event.semester || activeSemester(), activeGroup(), activeMode()).state === 'Finalized';
-    const finalized = monthlyLocked || workflow.state === 'Finalized';
+    const monthlyState = Boolean(eventMonth) ? monthState(eventMonth, event.semester || activeSemester(), activeGroup(), activeMode()) : { state: 'Draft' };
+    const monthlyLocked = monthStateLocksEditing(monthlyState.state);
+    const effectiveWorkflowState = workflowState(event, activeGroup(), activeMode());
+    const finalized = effectiveWorkflowState === 'Finalized';
     const badge = el('attendanceWorkflowStatusBadge');
     if (badge) {
-      badge.textContent = workflow.state;
-      badge.className = `badge ${finalized ? 'badge-green' : 'badge-gold'}`;
+      badge.textContent = monthlyLocked ? monthlyState.state : workflow.state;
+      badge.className = `badge ${monthlyState.state === 'Finalized' || finalized ? 'badge-green' : monthlyState.state === 'In Review' ? 'badge-blue' : monthlyState.state === 'Reopened' ? 'badge-red' : 'badge-gold'}`;
     }
     if (el('attendanceWorkflowStatusTitle')) {
-      el('attendanceWorkflowStatusTitle').textContent = monthlyLocked ? 'This entire attendance month is finalized and locked' : finalized ? 'Attendance is finalized and locked' : 'Attendance is open as a draft';
+      el('attendanceWorkflowStatusTitle').textContent = monthlyState.state === 'In Review' ? 'This month is in Review and editing is paused' : monthlyState.state === 'Finalized' ? 'This entire attendance month is finalized and archived' : finalized ? 'This activity is finalized and locked' : 'Activity attendance is editable';
     }
     if (el('attendanceWorkflowStatusMeta')) {
-      el('attendanceWorkflowStatusMeta').textContent = monthlyLocked
-        ? `Monthly rating finalized for ${eventMonth}. Reopen the whole month to correct this activity.`
+      el('attendanceWorkflowStatusMeta').textContent = monthlyState.state === 'In Review'
+        ? `Monthly validation passed for ${eventMonth}. Return the month for corrections before editing this activity.`
+        : monthlyState.state === 'Finalized'
+        ? `Monthly rating finalized for ${eventMonth}. Reopen the whole month to create a corrected revision.`
         : finalized
           ? `Finalized by ${workflow.finalizedBy || 'Administrator'} on ${dateLabel(workflow.finalizedAt, true)} • Revision ${workflow.revision}`
           : workflow.unlockedAt
           ? `Unlocked by ${workflow.unlockedBy || 'Administrator'} on ${dateLabel(workflow.unlockedAt, true)} • Save corrections and finalize again.`
-          : 'Changes remain editable until an Administrator finalizes this roster.';
+          : 'Save this activity roster, then complete the monthly Review and Finalize workflow.';
     }
 
     const finalizeButton = el('finalizeAttendanceButton');
@@ -1295,15 +1591,42 @@
     ['markAllPresent', 'saveAttendanceButton'].forEach((id) => {
       const button = el(id);
       if (!button) return;
-      button.disabled = finalized;
-      button.setAttribute('aria-disabled', finalized ? 'true' : 'false');
-      button.title = finalized ? 'Unlock this attendance roster before editing.' : '';
+      button.disabled = monthlyLocked || finalized;
+      button.setAttribute('aria-disabled', monthlyLocked || finalized ? 'true' : 'false');
+      button.title = monthlyState.state === 'In Review' ? 'Return the reviewed month for corrections before editing.' : finalized ? 'Reopen the finalized month before editing.' : '';
     });
     document.querySelectorAll('.attendance-status, .attendance-remarks').forEach((control) => {
-      control.disabled = finalized || !canSaveDraftAttendance();
-      control.classList.toggle('attendance-locked-control', finalized);
-      control.title = finalized ? 'Finalized attendance is locked. An Administrator may unlock it for corrections.' : '';
+      const loaLocked = control.closest('[data-loa-excused="true"]') !== null;
+      const workflowLocked = monthlyLocked || finalized || !canSaveDraftAttendance();
+      control.disabled = loaLocked || workflowLocked;
+      if (control.matches('.attendance-remarks')) control.readOnly = loaLocked || workflowLocked;
+      control.classList.toggle('attendance-locked-control', loaLocked || workflowLocked);
+      control.title = loaLocked
+        ? 'Approved LOA is automatically Excused and excluded from attendance computation.'
+        : monthlyState.state === 'In Review'
+          ? 'The month is in Review. Return it for corrections to edit.'
+          : finalized
+            ? 'Finalized attendance is locked. Reopen the month for corrections.'
+            : '';
     });
+    ['addEventButton', 'createEventOnSelectedDate', 'editEventButton', 'deleteEventButton'].forEach((id) => {
+      const control = el(id);
+      if (!control) return;
+      control.disabled = monthlyLocked;
+      control.setAttribute('aria-disabled', monthlyLocked ? 'true' : 'false');
+      control.title = monthlyState.state === 'In Review' ? 'Return the month for corrections before changing activities.' : monthlyState.state === 'Finalized' ? 'Reopen the month before changing activities.' : '';
+    });
+    const recordingState = el('attendanceRecordingState');
+    if (recordingState) {
+      recordingState.className = `attendance-recording-state state-${String(monthlyState.state).toLowerCase().replace(/\s+/g, '-')}`;
+      recordingState.innerHTML = monthlyState.state === 'In Review'
+        ? '<span>Month in Review</span><small>Activity records are read-only while monthly validation is being confirmed.</small>'
+        : monthlyState.state === 'Finalized'
+          ? '<span>Finalized and archived</span><small>Reopen the month to make a corrected revision.</small>'
+          : monthlyState.state === 'Reopened'
+            ? '<span>Reopened revision</span><small>Save corrections, then review the whole month again.</small>'
+            : '<span>Draft activity</span><small>Changes are saved only when you select Save Attendance.</small>';
+    }
 
     const history = el('attendanceAuditHistory');
     const empty = el('attendanceAuditEmpty');
@@ -1471,18 +1794,42 @@
         const mode = record.rosterModeAtEdit || 'Current';
         return [`${group}::${mode}`, { group, mode }];
       })).values()];
-      const drafts = pairs.filter(({ group, mode }) => workflowState(event, group, mode) !== 'Finalized');
+      const drafts = pairs.filter(({ group, mode }) => {
+        const eventMonth = String(event.date || '').slice(0, 7);
+        const monthlyState = eventMonth ? monthState(eventMonth, event.semester || activeSemester(), group, mode).state : 'Draft';
+        // Once a month is under review or finalized, its event-level draft state is
+        // represented by the monthly workflow and must not create duplicate alerts.
+        if (monthlyState === 'In Review' || monthlyState === 'Finalized') return false;
+        return workflowState(event, group, mode) !== 'Finalized';
+      });
       if (drafts.length) {
         const workflows = drafts.map(({ group, mode }) => getWorkflow(event, group, mode));
         const reopened = workflows.some((workflow) => workflow.unlockedAt && workflow.history[0]?.action === 'Unlocked for editing');
         const draftLabels = drafts.map(({ group, mode }) => `${group}${mode === 'Archive' ? ' Archive' : ''}`);
         alerts.push({
           type: 'attendance', severity: reopened || ageDays >= 7 ? 'high' : 'medium',
-          title: reopened ? `${event.title} was unlocked and needs re-finalization` : `${event.title} attendance remains Draft`,
-          detail: `${dateLabel(event.date)} • ${draftLabels.join(', ')}${reopened ? ' • Corrections are still open.' : ' • Finalize to verify and lock the records.'}`,
+          title: reopened ? `${event.title} was reopened and needs monthly review` : `${event.title} attendance remains Draft`,
+          detail: `${dateLabel(event.date)} • ${draftLabels.join(', ')}${reopened ? ' • Corrections are still open.' : ' • Complete the roster, review the month, then finalize.'}`,
           eventId: event.id
         });
       }
+    });
+    const selectedMonthState = monthState();
+    const selectedValidation = buildMonthValidation();
+    if (selectedMonthState.state === 'In Review') alerts.push({
+      type: 'attendance', severity: 'medium', title: `${activeMonth()} attendance is ready to finalize`,
+      detail: `${activeGroup()} • Monthly validation passed. Finalize to create the locked archive copy.`,
+      action: 'attendance-month-review', attendanceGroup: activeGroup(), semester: activeSemester(), month: activeMonth()
+    });
+    else if (selectedMonthState.state === 'Reopened') alerts.push({
+      type: 'attendance', severity: 'high', title: `${activeMonth()} attendance was reopened`,
+      detail: `${activeGroup()} • Correct the records and review the month again before finalization.`,
+      action: 'attendance-month-review', attendanceGroup: activeGroup(), semester: activeSemester(), month: activeMonth()
+    });
+    else if (selectedMonthState.state === 'Draft' && selectedValidation.eventCount > 0 && selectedValidation.ready) alerts.push({
+      type: 'attendance', severity: 'low', title: `${activeMonth()} attendance is ready for review`,
+      detail: `${activeGroup()} • All current validation checks pass.`,
+      action: 'attendance-month-review', attendanceGroup: activeGroup(), semester: activeSemester(), month: activeMonth()
     });
     return alerts;
   }
@@ -1567,12 +1914,16 @@
   function interceptLockedEdits(event) {
     const target = event.target;
     const eventRecord = selectedEvent();
-    if (!eventRecord || workflowState(eventRecord) !== 'Finalized') return;
-    const blocked = target.closest?.('#saveAttendanceButton, #markAllPresent, .attendance-status, .attendance-remarks');
+    if (!eventRecord) return;
+    const eventMonth = String(eventRecord.date || '').slice(0, 7);
+    const monthly = monthState(eventMonth, eventRecord.semester || activeSemester(), activeGroup(), activeMode());
+    const locked = monthStateLocksEditing(monthly.state) || workflowState(eventRecord) === 'Finalized';
+    if (!locked) return;
+    const blocked = target.closest?.('#saveAttendanceButton, #markAllPresent, .attendance-status, .attendance-remarks, #addEventButton, #createEventOnSelectedDate, #editEventButton, #deleteEventButton');
     if (!blocked) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    window.LSOApp?.showToast?.('This attendance roster is finalized. Use “Unlock for Editing” before making corrections.', true);
+    window.LSOApp?.showToast?.(monthly.state === 'In Review' ? 'This month is in Review. Return it for corrections before editing.' : 'This month is finalized. Reopen it before making a corrected revision.', true);
   }
 
   let renderTimer = 0;
@@ -1670,6 +2021,8 @@
     el('exportAttendanceAnalyticsCsv')?.addEventListener('click', exportOverallAnalytics);
     el('exportIndividualAttendanceCsv')?.addEventListener('click', exportIndividualAnalytics);
 
+    el('reviewAttendanceMonthButton')?.addEventListener('click', reviewMonth);
+    el('returnAttendanceMonthToDraftButton')?.addEventListener('click', returnMonthToCorrections);
     el('finalizeAttendanceMonthButton')?.addEventListener('click', finalizeMonth);
     el('reopenAttendanceMonthButton')?.addEventListener('click', reopenMonth);
     el('refreshAttendanceArchiveButton')?.addEventListener('click', () => {
@@ -1700,7 +2053,7 @@
       const button = event.target.closest?.('#saveAttendanceButton');
       if (!button) return;
       const eventRecord = selectedEvent();
-      if (!eventRecord || workflowState(eventRecord) === 'Finalized') return;
+      if (!eventRecord || workflowState(eventRecord) === 'Finalized' || monthState(String(eventRecord.date || '').slice(0, 7), eventRecord.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') return;
       beforeSaveSnapshot = clone(scopedAttendanceRecords());
       clearTimeout(saveAuditTimer);
       saveAuditTimer = setTimeout(() => {
@@ -1735,6 +2088,7 @@
       }
       if (['lso:operations-changed', 'lso:members-changed', 'lso:cloud-state-changed'].includes(name)) {
         markArchiveDirty();
+        markValidationDirty();
         scheduleFinalizedArchiveSync(name === 'lso:cloud-state-changed' ? 900 : 420);
       }
     }));
@@ -1752,6 +2106,8 @@
     });
 
     window.addEventListener('lso:monthly-report-changed', () => {
+      monthlyReportsCacheRaw = null;
+      markValidationDirty();
       markArchiveDirty();
       scheduleFinalizedArchiveSync(420);
       scheduleRender(260);
@@ -1932,7 +2288,10 @@
     render,
     finalizeAttendance,
     unlockAttendance,
+    reviewMonth,
+    returnMonthToCorrections,
     finalizeMonth,
+    getMonthValidation: buildMonthValidation,
     getMonthlyArchives: () => clone(attendanceArchives()),
     getVisibleMonthlyArchives: () => clone(visibleAttendanceArchives()),
     getSelectedArchive: () => clone(selectedAttendanceArchive()),
@@ -1950,6 +2309,7 @@
     getSemesterSnapshot: (semester, group, mode) => semesterState(semester, group, mode).snapshot || calculateSemesterSnapshot(semester, group, mode),
     calculateMonthSnapshot,
     calculateSemesterSnapshot,
+    isMemberOnLeaveForDate: (member, date) => memberOnLeaveForDate(member, date),
     synchronizeFinalizedArchives: () => reconcileFinalizedLoaRecords()
   };
 

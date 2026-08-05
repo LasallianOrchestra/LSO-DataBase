@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  window.__LSO_CLOUD_SAVE_VERSION__ = 'v57-semantic-deduplication';
 
   const TABLE_ROW_ID = 1;
   const POLL_INTERVAL_MS = (() => {
@@ -42,6 +43,10 @@
   let flushTimer = null;
   let flushing = false;
   const dirtyVersions = new Map();
+  const dirtyFingerprints = new Map();
+  const serverFingerprints = new Map();
+  let lastStatusSignature = '';
+  let lastStatusAt = 0;
   const legacySnapshot = {};
 
   try {
@@ -68,6 +73,11 @@
   }
 
   function status(kind, message) {
+    const signature = `${kind}::${message}`;
+    const now = Date.now();
+    if (signature === lastStatusSignature && now - lastStatusAt < 1200) return;
+    lastStatusSignature = signature;
+    lastStatusAt = now;
     emit('lso:cloud-status', { kind, message });
   }
 
@@ -118,6 +128,44 @@
     } catch {
       return fallback;
     }
+  }
+
+  function stableJsonValue(value, seen = new WeakSet()) {
+    if (value === null || typeof value !== 'object') {
+      if (typeof value === 'number' && !Number.isFinite(value)) return null;
+      return value;
+    }
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    if (Array.isArray(value)) {
+      const normalized = value.map((item) => stableJsonValue(item, seen));
+      seen.delete(value);
+      return normalized;
+    }
+    const normalized = {};
+    Object.keys(value).sort().forEach((key) => {
+      const item = value[key];
+      if (item === undefined || typeof item === 'function' || typeof item === 'symbol') return;
+      normalized[key] = stableJsonValue(item, seen);
+    });
+    seen.delete(value);
+    return normalized;
+  }
+
+  function stableSerialize(value) {
+    try { return JSON.stringify(stableJsonValue(value)); }
+    catch { return JSON.stringify(value); }
+  }
+
+  function semanticEqual(left, right) {
+    if (left === right) return true;
+    return stableSerialize(left) === stableSerialize(right);
+  }
+
+  function semanticRawEqual(leftRaw, rightRaw) {
+    if (String(leftRaw ?? '') === String(rightRaw ?? '')) return true;
+    try { return semanticEqual(JSON.parse(String(leftRaw ?? 'null')), JSON.parse(String(rightRaw ?? 'null'))); }
+    catch { return false; }
   }
 
   function defaultForColumn(column) {
@@ -254,10 +302,14 @@
     const localArchiveIds = new Set((localGovernance.archives || []).map(archiveKey));
     const remoteArchiveIds = new Set((remoteGovernance.archives || []).map(archiveKey));
     const remoteArchiveMap = new Map((remoteGovernance.archives || []).map((entry) => [archiveKey(entry), entry]));
+    // Supabase stores JSON as jsonb and may return object keys in a different order. A plain
+    // JSON.stringify comparison treated the same archive as different and re-queued Settings
+    // after every poll. Only a genuinely missing or newer local archive now requires a push.
     const localArchiveWon = [...localArchiveIds].some((id) => !remoteArchiveIds.has(id)) ||
       (localGovernance.archives || []).some((entry) => {
         const remoteEntry = remoteArchiveMap.get(archiveKey(entry));
-        return remoteEntry && governanceEntryTimestamp(entry) >= governanceEntryTimestamp(remoteEntry) && JSON.stringify(entry) !== JSON.stringify(remoteEntry);
+        if (!remoteEntry || semanticEqual(entry, remoteEntry)) return false;
+        return governanceEntryTimestamp(entry) > governanceEntryTimestamp(remoteEntry);
       });
 
     const localUpdated = Date.parse(localGovernance.updatedAt || '') || 0;
@@ -307,15 +359,32 @@
     const changedKeys = [];
     let attendanceGovernanceNeedsPush = false;
     Object.entries(KEY_TO_COLUMN).forEach(([key, column]) => {
-      if (dirtyVersions.has(column)) return;
       let columnValue = stateColumn(nextState, column);
       if (column === 'settings') {
         const merged = mergeRemoteSettingsWithLocal(columnValue);
         columnValue = merged.value;
         attendanceGovernanceNeedsPush = attendanceGovernanceNeedsPush || merged.needsPush;
       }
+      const remoteFingerprint = stableSerialize(serverPayloadForColumn(nextState, column));
+      serverFingerprints.set(column, remoteFingerprint);
+
+      // A pending marker can survive a closed tab even after the prior request reached the
+      // server. Clear it as soon as the local and remote payloads are semantically identical.
+      if (dirtyVersions.has(column)) {
+        const localFingerprint = stableSerialize(payloadForColumn(column));
+        const expectedFingerprint = dirtyFingerprints.get(column);
+        if (localFingerprint === remoteFingerprint && (!expectedFingerprint || expectedFingerprint === localFingerprint)) {
+          dirtyVersions.delete(column);
+          dirtyFingerprints.delete(column);
+          persistDirtyMarkers();
+        } else {
+          return;
+        }
+      }
+
       const serialized = JSON.stringify(columnValue);
-      if (storageGetItem(key) !== serialized) {
+      const currentRaw = storageGetItem(key);
+      if (!semanticRawEqual(currentRaw, serialized)) {
         if (setLocal(key, serialized)) {
           changedKeys.push(key);
           dispatchDomainChange(key, source, false);
@@ -327,9 +396,7 @@
     });
     if (changedKeys.length) emit('lso:cloud-state-changed', { key: changedKeys.length === 1 ? changedKeys[0] : '', keys: changedKeys, source });
     if (attendanceGovernanceNeedsPush && sessionToken && canWriteColumn('settings')) {
-      dirtyVersions.set('settings', (dirtyVersions.get('settings') || 0) + 1);
-      persistDirtyMarkers();
-      scheduleFlush(320);
+      markDirty('settings', { delay: 320 });
     }
 
     loaded = true;
@@ -447,6 +514,26 @@
     };
   }
 
+  function serverPayloadForColumn(stateObject, column) {
+    if (column === 'settings' || column === MONTHLY_COMPAT_COLUMN) {
+      return {
+        ...stateColumn(stateObject, 'settings'),
+        [MONTHLY_SETTINGS_KEY]: stateColumn(stateObject, MONTHLY_COMPAT_COLUMN)
+      };
+    }
+    return stateColumn(stateObject, column);
+  }
+
+  function refreshServerFingerprints(stateObject) {
+    if (!stateObject || typeof stateObject !== 'object') return;
+    const sharedSettingsFingerprint = stableSerialize(serverPayloadForColumn(stateObject, 'settings'));
+    serverFingerprints.set('settings', sharedSettingsFingerprint);
+    serverFingerprints.set(MONTHLY_COMPAT_COLUMN, sharedSettingsFingerprint);
+    [...ARRAY_COLUMNS].forEach((column) => serverFingerprints.set(column, stableSerialize(stateColumn(stateObject, column))));
+    [...OBJECT_COLUMNS].filter((column) => column !== 'settings' && column !== MONTHLY_COMPAT_COLUMN)
+      .forEach((column) => serverFingerprints.set(column, stableSerialize(stateColumn(stateObject, column))));
+  }
+
   function persistDirtyMarkers() {
     try {
       if (dirtyVersions.size) nativeStorage.setItem(PENDING_KEY, JSON.stringify([...dirtyVersions.keys()]));
@@ -461,32 +548,71 @@
     flushTimer = setTimeout(() => flushDirty().catch(() => undefined), delay);
   }
 
-  function markDirty(column) {
+  function payloadForColumn(column) {
+    return column === MONTHLY_COMPAT_COLUMN || column === 'settings'
+      ? settingsPayloadWithMonthlyCompatibility()
+      : currentValueForColumn(column);
+  }
+
+  function markDirty(column, options = {}) {
     if (!canWriteColumn(column)) {
       emitReadOnlyDenied(column);
-      return;
+      return false;
     }
+    const fingerprint = stableSerialize(payloadForColumn(column));
+    if (serverFingerprints.get(column) === fingerprint) {
+      dirtyVersions.delete(column);
+      dirtyFingerprints.delete(column);
+      persistDirtyMarkers();
+      return false;
+    }
+    if (dirtyFingerprints.get(column) === fingerprint && dirtyVersions.has(column)) return false;
+    dirtyFingerprints.set(column, fingerprint);
     dirtyVersions.set(column, (dirtyVersions.get(column) || 0) + 1);
     persistDirtyMarkers();
-    scheduleFlush();
+    scheduleFlush(Number(options.delay) >= 0 ? Number(options.delay) : 180);
+    return true;
   }
 
   async function flushDirty() {
     if (flushing || !sessionToken || !dirtyVersions.size) return;
     for (const column of [...dirtyVersions.keys()]) {
-      if (!canWriteColumn(column)) dirtyVersions.delete(column);
+      if (!canWriteColumn(column)) {
+        dirtyVersions.delete(column);
+        dirtyFingerprints.delete(column);
+      }
+    }
+    // Remove stale pending markers that already match the last server state.
+    for (const column of [...dirtyVersions.keys()]) {
+      const fingerprint = stableSerialize(payloadForColumn(column));
+      dirtyFingerprints.set(column, fingerprint);
+      if (serverFingerprints.get(column) === fingerprint) {
+        dirtyVersions.delete(column);
+        dirtyFingerprints.delete(column);
+      }
     }
     persistDirtyMarkers();
-    if (!dirtyVersions.size) return;
+    if (!dirtyVersions.size) {
+      status('online', 'All changes saved to the shared database');
+      emit('lso:cloud-saved', { pending: 0 });
+      return;
+    }
     flushing = true;
     status('syncing', `Saving ${dirtyVersions.size} change${dirtyVersions.size === 1 ? '' : 's'}…`);
 
     try {
       for (const [column, version] of [...dirtyVersions.entries()]) {
+        if (!dirtyVersions.has(column)) continue;
+        const currentBeforeSend = stableSerialize(payloadForColumn(column));
+        if (serverFingerprints.get(column) === currentBeforeSend) {
+          dirtyVersions.delete(column);
+          dirtyFingerprints.delete(column);
+          persistDirtyMarkers();
+          continue;
+        }
         const serverColumn = column === MONTHLY_COMPAT_COLUMN ? 'settings' : column;
-        const serverValue = column === MONTHLY_COMPAT_COLUMN || column === 'settings'
-          ? settingsPayloadWithMonthlyCompatibility()
-          : currentValueForColumn(column);
+        const serverValue = payloadForColumn(column);
+        const sentFingerprint = stableSerialize(serverValue);
         const nextState = await rpc('lso_update_state', {
           p_token: sessionToken,
           p_column: serverColumn,
@@ -495,18 +621,26 @@
         online = true;
         state = nextState;
         lastServerUpdate = String(nextState?.updated_at || '');
-        if (dirtyVersions.get(column) === version) {
+        refreshServerFingerprints(nextState);
+        const currentFingerprint = stableSerialize(payloadForColumn(column));
+        if (dirtyVersions.get(column) === version && currentFingerprint === sentFingerprint) {
           dirtyVersions.delete(column);
+          dirtyFingerprints.delete(column);
           persistDirtyMarkers();
         }
       }
       applyState(state, 'cloud-save');
-      status('online', 'All changes saved to the shared database');
+      if (dirtyVersions.size) {
+        status('syncing', `Saving ${dirtyVersions.size} newer change${dirtyVersions.size === 1 ? '' : 's'}…`);
+        scheduleFlush(220);
+      } else {
+        status('online', 'All changes saved to the shared database');
+      }
       emit('lso:cloud-saved', { pending: dirtyVersions.size });
     } catch (error) {
       online = false;
       status('offline', `${error.message} Changes remain queued on this device.`);
-      scheduleFlush(5000);
+      scheduleFlush(8000);
       throw error;
     } finally {
       flushing = false;
@@ -542,6 +676,10 @@
         nextValue = value;
       }
     }
+    const currentValue = getLocal(key);
+    // Many modules defensively call save after rendering or reconciliation. Do not queue a
+    // cloud write when the persisted JSON is already the same, including jsonb key reordering.
+    if (semanticRawEqual(currentValue, nextValue)) return true;
     const saved = setLocal(key, nextValue);
     if (!saved) {
       status('error', 'This browser could not save the latest change because its site storage is full or blocked.');
@@ -572,7 +710,8 @@
     const nextState = await rpc('lso_get_state', { p_token: sessionToken });
     online = true;
     applyState(nextState, 'cloud');
-    if (!quiet) status('online', 'Shared database connected');
+    if ([...dirtyVersions.keys()].some((column) => canWriteColumn(column))) scheduleFlush(300);
+    if (!quiet && !dirtyVersions.size) status('online', 'Shared database connected');
     return cloneState();
   }
 
@@ -621,6 +760,7 @@
       p_state: legacy
     });
     dirtyVersions.clear();
+    dirtyFingerprints.clear();
     persistDirtyMarkers();
     applyState(nextState, 'migration');
     status('online', 'Existing records moved to the shared database');
@@ -656,7 +796,6 @@
     sessionAccount = account || null;
     if (sessionToken) {
       startPolling();
-      if ([...dirtyVersions.keys()].some((column) => canWriteColumn(column))) scheduleFlush(500);
       const role = sessionAccount?.role || 'Staff Account';
       status('online', role === 'Administrator'
         ? 'Shared database connected • Full access'
@@ -683,6 +822,7 @@
     state = null;
     loaded = false;
     dirtyVersions.clear();
+    dirtyFingerprints.clear();
     status('offline', 'Signed out from the shared database');
   }
 
@@ -841,6 +981,7 @@
   async function restoreRecoveryPoint(recoveryId) {
     const nextState = await rpc('lso_restore_recovery_point', { p_token: sessionToken, p_recovery_id: recoveryId });
     dirtyVersions.clear();
+    dirtyFingerprints.clear();
     persistDirtyMarkers();
     applyState(nextState, 'recovery-restore');
     status('online', 'Recovery point restored successfully');
@@ -915,6 +1056,7 @@
     listSystemErrors,
     resolveSystemError,
     flush: flushDirty,
+    getPendingChanges: () => [...dirtyVersions.keys()],
     pollNow: pollState,
     canWrite: canWriteColumn,
     canReviewDuty: canReviewDutyPunches

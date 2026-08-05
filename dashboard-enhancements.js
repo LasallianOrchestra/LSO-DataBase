@@ -163,7 +163,10 @@
     let actionType = 'alerts';
     let targetId = alert.targetId || '';
 
-    if (alert.routeType === 'attendance-member' || (alert.type === 'attendance' && alert.memberId)) {
+    if (alert.routeType === 'attendance-month-workflow' && alert.targetId) {
+      actionType = 'attendance-month-workflow';
+      targetId = alert.targetId;
+    } else if (alert.routeType === 'attendance-member' || (alert.type === 'attendance' && alert.memberId)) {
       actionType = 'attendance-member';
       targetId = alert.memberId || alert.targetId || '';
     } else if (alert.routeType === 'duty-punch' || (alert.viewId === 'dutyHoursView' && alert.targetId)) {
@@ -374,6 +377,17 @@
 
   function performNotificationAction(action, targetId) {
     toggleNotificationPopover(false);
+    if (action === 'attendance-month-workflow' && targetId) {
+      const [semester, group, month] = String(targetId).split('::');
+      if (semester) window.LSOOperations?.setAttendanceSemester?.(semester);
+      if (group) window.LSOOperations?.setAttendanceGroup?.(group);
+      if (month) window.LSOOperations?.setAttendanceMonth?.(month);
+      window.LSOOperations?.setAttendanceRosterMode?.('Current');
+      window.LSOAttendanceWorkspace?.setTab?.('current', { silent: true });
+      showView('attendanceView');
+      setTimeout(() => document.getElementById('attendanceMonthReviewCard')?.scrollIntoView({ block: 'center', behavior: 'auto' }), 90);
+      return;
+    }
     if (action === 'attendance-member' && targetId) {
       if (!window.LSOOperations?.openAttendanceMember?.(targetId)) showView('attendanceView');
       return;
