@@ -179,7 +179,7 @@
     });
 
     ['lso:members-changed', 'lso:operations-changed', 'lso:accounts-changed', 'lso:auth-changed', 'lso:cloud-state-changed'].forEach((name) => {
-      window.addEventListener(name, () => setTimeout(render, 30));
+      window.addEventListener(name, () => window.LSORuntimeStability?.schedule?.('dashboard-intelligence', render, 80, { viewId: 'dashboardView' }));
     });
 
     document.querySelectorAll('[data-view="dashboardView"]').forEach((button) => {
@@ -191,8 +191,8 @@
     wire();
     render();
     window.setInterval(() => {
-      if (!el('appShell')?.classList.contains('hidden')) render();
-    }, 60_000);
+      if (!el('appShell')?.classList.contains('hidden') && window.LSORuntimeStability?.isViewActive?.('dashboardView')) render();
+    }, 90_000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });

@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v38.js';
-  const ACTIVE_CACHE_MARKER = 'enterprise-v48-smart-notifications1';
+  const ACTIVE_CACHE_MARKER = 'enterprise-v56-attendance-archive-workflow1';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;
@@ -78,7 +78,7 @@
         if (!worker) return;
         worker.addEventListener('statechange', () => {
           if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-            banner('A notification-routing update is ready. Applying it now…', 'online');
+            banner('A runtime stability and browser compatibility update is ready. Applying it now…', 'online');
             worker.postMessage({ type: 'SKIP_WAITING' });
           }
         });

@@ -16,6 +16,7 @@
   let lastLocalSaveAt = 0;
   let pendingRemoteRefresh = false;
   let deferredRefreshTimer = null;
+  let pdfContext = null;
 
   function uid(prefix = 'row') {
     return window.crypto?.randomUUID ? window.crypto.randomUUID() : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -65,7 +66,8 @@
       version: 1,
       reports: value.reports && typeof value.reports === 'object' && !Array.isArray(value.reports) ? value.reports : {},
       civilStatusByMember: value.civilStatusByMember && typeof value.civilStatusByMember === 'object' && !Array.isArray(value.civilStatusByMember) ? value.civilStatusByMember : {},
-      traineeFiles: value.traineeFiles && typeof value.traineeFiles === 'object' && !Array.isArray(value.traineeFiles) ? value.traineeFiles : {}
+      traineeFiles: value.traineeFiles && typeof value.traineeFiles === 'object' && !Array.isArray(value.traineeFiles) ? value.traineeFiles : {},
+      archives: Array.isArray(value.archives) ? value.archives : []
     };
   }
 
@@ -110,6 +112,7 @@
   }
 
   function currentReport() {
+    if (pdfContext?.report) return pdfContext.report;
     if (!state.reports[activeReportKey]) state.reports[activeReportKey] = blankReport(activeReportKey);
     const report = state.reports[activeReportKey];
     report.workflowStatus = report.workflowStatus === 'Finalized' ? 'Finalized' : 'Draft';
@@ -221,6 +224,7 @@
   }
 
   function members() {
+    if (Array.isArray(pdfContext?.roster)) return pdfContext.roster;
     if (window.LSOApp?.getMembers) return window.LSOApp.getMembers();
     try {
       const parsed = JSON.parse(window.LSOStorage.getItem('lso_member_database_v1') || '[]');
@@ -353,7 +357,8 @@
   }
 
   function civilStatus(member) {
-    return state.civilStatusByMember[member.id] || member.civilStatus || '';
+    const civilMap = pdfContext?.civilStatusByMember || state.civilStatusByMember;
+    return civilMap?.[member.id] || member.civilStatus || '';
   }
 
   function memberById(id) {
@@ -605,6 +610,7 @@
     renderTraineeFile();
     renderQuitted();
     renderRemaining();
+    renderArchive();
     renderTabs();
     window.LSOPermissions?.apply?.();
   }
@@ -732,7 +738,7 @@
   }
 
   function validateReport() {
-    updateReportFromFields();
+    if (!pdfContext) updateReportFromFields();
     const report = currentReport();
     const missing = [];
     if (!report.month) missing.push('Report Month');
@@ -1250,6 +1256,191 @@
     return output.save();
   }
 
+
+  function cloneValue(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function archiveActor() {
+    const account = window.LSOAuth?.getActiveAccount?.() || window.LSOCurrentAccount || {};
+    return account.displayName || account.username || 'Authorized user';
+  }
+
+  function canControlArchive() {
+    return window.LSORoleAccess?.can?.('finalizeMonthlyReport') ?? (window.LSOAuth?.getActiveAccount?.() || window.LSOCurrentAccount)?.role === 'Administrator';
+  }
+
+  function saveArchiveState(message = '') {
+    lastLocalSaveAt = Date.now();
+    const saved = window.LSOStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (saved === false) return false;
+    window.dispatchEvent(new CustomEvent('lso:monthly-report-changed', { detail: { key: activeReportKey, source: 'monthly-archive' } }));
+    if (message) status(message, 'saved');
+    return true;
+  }
+
+  function archiveCurrentReport(source = 'Generated PDF') {
+    if (!canModify() && !canControlArchive()) return null;
+    if (canModify()) updateReportFromFields();
+    const report = cloneValue(currentReport());
+    const roster = cloneValue(reportRoster());
+    const createdAt = new Date().toISOString();
+    const entry = {
+      id: uid('monthly-archive'),
+      month: report.month || activeReportKey,
+      semester: report.semester || '',
+      academicYear: report.academicYear || '',
+      workflowStatus: report.workflowStatus || 'Draft',
+      revision: Math.max(0, Number(report.revision) || 0),
+      generatedAt: createdAt,
+      generatedBy: archiveActor(),
+      source,
+      locked: report.workflowStatus === 'Finalized',
+      lockedAt: report.workflowStatus === 'Finalized' ? createdAt : '',
+      lockedBy: report.workflowStatus === 'Finalized' ? archiveActor() : '',
+      snapshot: {
+        report,
+        roster,
+        civilStatusByMember: cloneValue(state.civilStatusByMember || {}),
+        comparativeCounts: cloneValue(comparativeCounts())
+      }
+    };
+    state.archives = Array.isArray(state.archives) ? state.archives : [];
+    state.archives.unshift(entry);
+    state.archives = state.archives.slice(0, 180);
+    saveArchiveState();
+    renderArchive();
+    logActivity('Archived Monthly Report output', `${monthLabel(entry.month)} • ${source} • ${entry.locked ? 'Locked final output' : 'Open for cross-checking'}`);
+    return entry;
+  }
+
+  function backfillFinalizedReportArchives() {
+    state.archives = Array.isArray(state.archives) ? state.archives : [];
+    let changed = false;
+    const previousContext = pdfContext;
+    try {
+      Object.entries(state.reports || {}).forEach(([key, report]) => {
+        if (report?.workflowStatus !== 'Finalized') return;
+        const revision = Math.max(1, Number(report.revision) || 1);
+        if (state.archives.some((entry) => entry.month === key && Number(entry.revision || 1) === revision && (entry.workflowStatus || entry.snapshot?.report?.workflowStatus) === 'Finalized')) return;
+        pdfContext = { report, roster: cloneValue(window.LSOApp?.getMembers?.() || []) };
+        const roster = cloneValue(reportRoster());
+        pdfContext = { report, roster };
+        const generatedAt = report.finalizedAt || report.updatedAt || new Date().toISOString();
+        state.archives.push({
+          id: uid('monthly-archive-migrated'), month: report.month || key, semester: report.semester || '', academicYear: report.academicYear || '',
+          workflowStatus: 'Finalized', revision, generatedAt, generatedBy: report.finalizedBy || 'Administrator', source: 'Existing finalized report',
+          locked: true, lockedAt: generatedAt, lockedBy: report.finalizedBy || 'Administrator', migratedFromFinalizedReport: true,
+          snapshot: { report: cloneValue(report), roster, civilStatusByMember: cloneValue(state.civilStatusByMember || {}), comparativeCounts: cloneValue(comparativeCounts()) }
+        });
+        changed = true;
+      });
+    } finally {
+      pdfContext = previousContext;
+    }
+    if (changed) {
+      state.archives = state.archives.sort((a, b) => String(b.generatedAt || '').localeCompare(String(a.generatedAt || ''))).slice(0, 180);
+      saveArchiveState();
+    }
+    return changed;
+  }
+
+  function archiveEntries() {
+    const search = normalize(el('monthlyArchiveSearch')?.value || '');
+    const statusFilter = el('monthlyArchiveStatusFilter')?.value || '';
+    return (Array.isArray(state.archives) ? state.archives : [])
+      .filter((entry) => !statusFilter || (statusFilter === 'locked' ? entry.locked : !entry.locked))
+      .filter((entry) => !search || normalize(`${entry.month} ${entry.semester} ${entry.academicYear} ${entry.generatedBy} ${entry.source}`).includes(search))
+      .sort((a, b) => String(b.generatedAt || '').localeCompare(String(a.generatedAt || '')));
+  }
+
+  function renderArchive() {
+    const container = el('monthlyReportArchiveList');
+    if (!container) return;
+    const rows = archiveEntries();
+    const count = el('monthlyReportArchiveCount');
+    if (count) count.textContent = `${rows.length} archived output${rows.length === 1 ? '' : 's'}`;
+    container.innerHTML = rows.length ? rows.map((entry) => {
+      const counts = entry.snapshot?.comparativeCounts || {};
+      const report = entry.snapshot?.report || {};
+      const controls = canControlArchive() ? `<button class="button button-secondary" data-monthly-archive-lock="${safeText(entry.id)}" type="button">${entry.locked ? 'Unlock Archive' : 'Lock Final Output'}</button><button class="button button-danger" data-monthly-archive-delete="${safeText(entry.id)}" type="button">Delete Archive</button>` : '';
+      return `<article class="monthly-archive-card ${entry.locked ? 'is-locked' : 'is-open'}">
+        <div class="monthly-archive-card-header"><div><span>${safeText(monthLabel(entry.month))}</span><strong>${safeText(entry.semester || 'Semester not recorded')} • ${safeText(entry.academicYear || 'Academic year not recorded')}</strong><small>Generated ${safeText(dateLabel(entry.generatedAt, { short: true }))} by ${safeText(entry.generatedBy || 'Authorized user')} • Revision ${safeText(entry.revision || 0)}</small></div><span class="badge ${entry.locked ? 'badge-green' : 'badge-gold'}">${entry.locked ? 'Locked Final Output' : 'Cross-checking'}</span></div>
+        <div class="monthly-archive-metrics"><div><span>Total Complement</span><strong>${safeText(counts.total ?? entry.snapshot?.roster?.length ?? 0)}</strong></div><div><span>Official</span><strong>${safeText((counts.officer || 0) + (counts.member || 0))}</strong></div><div><span>Trainee / Probationary</span><strong>${safeText(counts.trainee || 0)}</strong></div><div><span>Workflow</span><strong>${safeText(entry.workflowStatus || report.workflowStatus || 'Draft')}</strong></div></div>
+        <details class="monthly-archive-snapshot"><summary>View archived filing summary</summary><div class="monthly-archive-detail-grid"><div><span>As-of Date</span><strong>${safeText(dateLabel(report.asOfDate))}</strong></div><div><span>Prepared By</span><strong>${safeText(report.preparedBy || '—')}</strong></div><div><span>Noted By</span><strong>${safeText(report.notedBy || '—')}</strong></div><div><span>Source</span><strong>${safeText(entry.source || 'Generated report')}</strong></div><div><span>Leave Rows</span><strong>${safeText(report.loaRows?.length || 0)}</strong></div><div><span>Trainee Filing Rows</span><strong>${safeText(report.traineeRows?.length || 0)}</strong></div></div></details>
+        <div class="monthly-archive-actions"><button class="button button-primary" data-monthly-archive-download="${safeText(entry.id)}" type="button">Download Archived PDF</button><button class="button button-secondary" data-monthly-archive-open="${safeText(entry.id)}" type="button">Open Source Month</button>${controls}</div>
+      </article>`;
+    }).join('') : '<div class="monthly-archive-empty"><span>ARCHIVE</span><strong>No generated Monthly Reports are archived yet.</strong><p>Each PDF download and report finalization will create a cross-checking record here.</p></div>';
+  }
+
+  function archiveById(id) {
+    return (state.archives || []).find((entry) => String(entry.id) === String(id)) || null;
+  }
+
+  async function downloadArchivedPdf(id) {
+    const entry = archiveById(id);
+    if (!entry?.snapshot?.report) return toast('The archived report snapshot is unavailable.', true);
+    const previousContext = pdfContext;
+    try {
+      status('Rebuilding archived PDF from its frozen snapshot…', 'working');
+      pdfContext = cloneValue(entry.snapshot);
+      const bytes = await buildPdfBytes();
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `LSO_Archived_Monthly_Report_${entry.month}_${String(entry.generatedAt || '').replace(/[:.]/g, '-')}.pdf`;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1200);
+      status('Archived Monthly Report PDF downloaded.', 'saved');
+      logActivity('Downloaded archived Monthly Report', `${monthLabel(entry.month)} • ${entry.generatedAt}`);
+    } catch (error) {
+      status(error.message || 'Unable to rebuild the archived PDF.', 'error');
+      toast(error.message || 'Unable to rebuild the archived PDF.', true);
+    } finally {
+      pdfContext = previousContext;
+    }
+  }
+
+  function toggleArchiveLock(id) {
+    if (!canControlArchive()) return toast('Administrator finalization access is required to lock or unlock an archive.', true);
+    const entry = archiveById(id); if (!entry) return;
+    const action = entry.locked ? 'unlock' : 'lock as the final output';
+    if (!window.confirm(`Are you sure you want to ${action} this archived report?`)) return;
+    entry.locked = !entry.locked;
+    entry.lockedAt = entry.locked ? new Date().toISOString() : '';
+    entry.lockedBy = entry.locked ? archiveActor() : '';
+    saveArchiveState(entry.locked ? 'Archived report locked as final output.' : 'Archived report unlocked for controlled review.');
+    renderArchive();
+  }
+
+  function deleteArchive(id) {
+    if (!canControlArchive()) return toast('Administrator finalization access is required to delete an archive.', true);
+    const entry = archiveById(id); if (!entry) return;
+    const stateLabel = entry.locked ? 'locked final output' : 'cross-checking archive';
+    const warning = entry.locked
+      ? 'This is a locked or finalized archived report. Deleting it permanently removes the frozen archive copy, but does not delete the live Monthly Report source data.'
+      : 'Deleting this archive permanently removes its frozen cross-checking copy, but does not delete the live Monthly Report source data.';
+    if (!window.confirm(`${warning}
+
+Continue deleting ${monthLabel(entry.month)}?`)) return;
+    const reason = window.prompt(`Enter the reason for deleting this ${stateLabel}:`);
+    if (reason === null) return;
+    if (reason.trim().length < 3) return toast('A clear deletion reason is required.', true);
+    state.archives = (state.archives || []).filter((item) => String(item.id) !== String(id));
+    saveArchiveState('Archived report deleted.');
+    logActivity('Deleted Monthly Report archive', `${monthLabel(entry.month)} • ${stateLabel} • ${reason.trim()}`);
+    renderArchive();
+    toast('Monthly Report archive deleted. The live source report was not changed.');
+  }
+
+  function openArchiveSource(id) {
+    const entry = archiveById(id); if (!entry) return;
+    activeTab = 'setup';
+    handleMonthChange(entry.month);
+    renderTabs();
+    el('monthlyReportWorkflowPanel')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
   async function previewPdf() {
     try {
       status('Generating PDF preview…', 'working');
@@ -1286,6 +1477,7 @@
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1200);
+      archiveCurrentReport('PDF download');
       logActivity('Downloaded Overall Monthly Report', `${monthLabel(activeReportKey)} • ${comparativeCounts().total} comparative manpower complement`);
       status('Official Monthly Report PDF downloaded.', 'saved');
       toast('Overall Monthly Report PDF downloaded.');
@@ -1308,6 +1500,8 @@
     el('monthlyReportSaveButton')?.addEventListener('click', () => { updateReportFromFields(); saveState(); });
     el('monthlyReportPreviewButton')?.addEventListener('click', previewPdf);
     el('monthlyReportDownloadButton')?.addEventListener('click', downloadPdf);
+    el('monthlyArchiveSearch')?.addEventListener('input', renderArchive);
+    el('monthlyArchiveStatusFilter')?.addEventListener('change', renderArchive);
     el('monthlyManpowerSearch')?.addEventListener('input', renderManpowerRoster);
     el('monthlyFillBlankSingle')?.addEventListener('click', fillBlankCivilAsSingle);
     el('monthlySyncLoa')?.addEventListener('click', syncLoaRows);
@@ -1344,10 +1538,14 @@
       if (target.dataset.monthlyDeleteTrainee) removeRow('trainee', target.dataset.monthlyDeleteTrainee);
       if (target.dataset.monthlyDeleteQuitted) removeRow('quitted', target.dataset.monthlyDeleteQuitted);
       if (target.dataset.monthlyDeleteRemaining) removeRow('remaining', target.dataset.monthlyDeleteRemaining);
+      if (target.dataset.monthlyArchiveDownload) downloadArchivedPdf(target.dataset.monthlyArchiveDownload);
+      if (target.dataset.monthlyArchiveOpen) openArchiveSource(target.dataset.monthlyArchiveOpen);
+      if (target.dataset.monthlyArchiveLock) toggleArchiveLock(target.dataset.monthlyArchiveLock);
+      if (target.dataset.monthlyArchiveDelete) deleteArchive(target.dataset.monthlyArchiveDelete);
     });
 
-    document.querySelector('[data-view="monthlyReportView"]')?.addEventListener('click', () => setTimeout(renderAll, 20));
-    window.addEventListener('lso:members-changed', () => setTimeout(renderAll, 40));
+    document.querySelector('[data-view="monthlyReportView"]')?.addEventListener('click', () => window.LSORuntimeStability?.schedule?.('monthly-report', renderAll, 80, { viewId: 'monthlyReportView', force: true }));
+    window.addEventListener('lso:members-changed', () => window.LSORuntimeStability?.schedule?.('monthly-report', renderAll, 100, { viewId: 'monthlyReportView' }));
     window.addEventListener('lso:cloud-state-changed', (event) => {
       if (event.detail?.key && event.detail.key !== STORAGE_KEY && event.detail.key !== 'lso_member_database_v1') return;
       const source = String(event.detail?.source || '');
@@ -1358,13 +1556,13 @@
         return;
       }
       state = loadState();
-      setTimeout(renderAll, 30);
+      window.LSORuntimeStability?.schedule?.('monthly-report', renderAll, 100, { viewId: 'monthlyReportView' });
     });
     document.addEventListener('focusout', (event) => {
       if (!event.target.closest?.('#monthlyReportView')) return;
       applyDeferredSharedRefresh();
     });
-    window.addEventListener('lso:auth-changed', () => setTimeout(renderAll, 30));
+    window.addEventListener('lso:auth-changed', () => window.LSORuntimeStability?.schedule?.('monthly-report', renderAll, 100, { viewId: 'monthlyReportView' }));
   }
 
   function initialize() {
@@ -1372,6 +1570,7 @@
     if (!monthInput) return;
     activeReportKey = monthInput.value || currentMonthKey();
     currentReport().month = activeReportKey;
+    backfillFinalizedReportArchives();
     renderAll();
     wireEvents();
     status(`Viewing ${monthLabel(activeReportKey)} report draft.`, '');
@@ -1384,8 +1583,18 @@
     getState: () => JSON.parse(JSON.stringify(state)),
     getCurrentReport: () => JSON.parse(JSON.stringify(currentReport())),
     getActiveReportKey: () => activeReportKey,
+    openReport: (key, tab = 'setup') => {
+      const normalizedKey = /^\d{4}-\d{2}$/.test(String(key || '')) ? String(key) : currentMonthKey();
+      activeTab = ['setup', 'manpower', 'status', 'trainees', 'preview', 'archive'].includes(tab) ? tab : 'setup';
+      handleMonthChange(normalizedKey);
+      renderTabs();
+      return true;
+    },
     isFinalized: () => currentReport().workflowStatus === 'Finalized',
-    _buildPdfBytes: buildPdfBytes
+    _buildPdfBytes: buildPdfBytes,
+    archiveCurrent: archiveCurrentReport,
+    renderArchive,
+    getArchives: () => cloneValue(state.archives || [])
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });

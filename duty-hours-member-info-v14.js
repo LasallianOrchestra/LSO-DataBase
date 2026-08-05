@@ -2,7 +2,7 @@
   'use strict';
 
   const DUTY_KEY = 'lso_duty_hours_v1';
-  window.__LSO_DUTY_HOURS_VERSION__ = 'v14-archive-staff-current';
+  window.__LSO_DUTY_HOURS_VERSION__ = 'v15-live-roster-device-performance';
   const SEMESTERS = ['First Semester', 'Second Semester'];
   const PERIODS = ['Trainee Period', 'Probationary Period'];
   const PUNCH_STATUSES = ['Not Submitted', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
@@ -962,7 +962,8 @@
 
   function renderOverall() {
     const data = loadData();
-    const members = rosterMembers(data, overallPeriod, false, 'All');
+    const members = rosterMembers(data, overallPeriod, false, 'Active')
+      .filter((member) => member.periodGroup === overallPeriod && !isMembershipPeriod(member));
     const metrics = el('dutyOverallMetrics');
     const body = el('dutyOverallTableBody');
     const caption = el('dutyOverallCaption');
@@ -970,18 +971,18 @@
     const summaries = members.map((member) => ({ member, summary: calculatePeriod(data, member.id, activeSemester, overallPeriod), lifecycle: periodLifecycle(member, overallPeriod, data) }));
     const totals = combineSummaries(summaries.map((item) => item.summary));
     const completed = summaries.filter((item) => item.summary.committed > 0 && item.summary.balance <= 0).length;
-    const archived = summaries.filter((item) => item.lifecycle.archived).length;
+    const pending = summaries.reduce((sum, item) => sum + item.summary.pendingEntries.length, 0);
     const outstanding = summaries.reduce((sum, item) => sum + Math.max(0, item.summary.balance), 0);
 
     metrics.innerHTML = [
-      ['Tracked Records', members.length, `${overallPeriod} active + archive`],
-      ['Archived', archived, 'Completed or skipped periods'],
+      ['Live Roster', members.length, `Current ${overallPeriod.replace(' Period', '')} members`],
+      ['Pending Punches', pending, 'Awaiting review'],
       ['Committed', durationLabel(totals.committed), activeSemester],
-      ['Rendered', durationLabel(totals.rendered), 'Actual service'],
+      ['Rendered', durationLabel(totals.rendered), 'Approved service'],
       ['Completed', completed, 'Met required time'],
       ['Outstanding', durationLabel(outstanding), 'Still to render']
     ].map(([label, value, helper]) => `<div class="attendance-kpi"><span>${safeText(label)}</span><strong>${safeText(value)}</strong><small>${safeText(helper)}</small></div>`).join('');
-    caption.textContent = `${activeSemester} • ${overallPeriod} • active and archived records`;
+    caption.textContent = `${activeSemester} • Live ${overallPeriod} roster only • Official Members excluded`;
     body.innerHTML = summaries.length ? summaries.map(({ member, summary, lifecycle }) => `<tr>
       <td><strong>${safeText(member.fullName)}</strong><small class="table-subtext">${safeText(member.membershipId || member.studentNumber || 'No ID')}</small></td>
       <td>${lifecycleBadge(lifecycle)}</td>
@@ -991,7 +992,7 @@
       <td>${safeText(durationLabel(summary.credited))}</td>
       <td>${balanceBadge(summary)}</td>
       <td><div class="table-progress"><span style="width:${summary.progress}%"></span></div><small>${summary.progress}%</small></td>
-    </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state compact-empty"><h4>No duty records</h4><p>No active or archived records match this semester and period.</p></div></td></tr>';
+    </tr>`).join('') : '<tr><td colspan="8"><div class="empty-state compact-empty"><h4>No live roster records</h4><p>No current Trainee or Probationary members match this semester and period.</p></div></td></tr>';
   }
 
   function parseTimeInputs(hoursId, minutesId) {
@@ -1374,7 +1375,7 @@ This will record the secure server time for the session that started on ${dateLa
   }
 
   function printStyles(orientation = 'portrait') {
-    return `@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17211d;margin:0}.summary{display:grid}.period-table{margin:14px 0}.positive{color:#126443}.negative{color:#9b1c1c}.sign{display:grid;grid-template-columns:1fr 1fr}.footer{font-size:8px;text-align:center}${window.LSOBrand?.printCss || ''}`;
+    return `@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17211d;margin:0}.summary{display:grid}.period-table{margin:14px 0}.positive{color:#126443}.negative{color:#9b1c1c}.sign{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:38px}.sign>div{display:grid;gap:5px;padding-top:7px;border-top:1px solid #263b33;text-align:center}.sign>div strong{font-size:10px;color:#17211d}.sign>div span{font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:#66766f}.footer{font-size:8px;text-align:center}${window.LSOBrand?.printCss || ''}`;
   }
 
   function openPrint(html) {
@@ -1387,10 +1388,44 @@ This will record the secure server time for the session that started on ${dateLa
     popup.document.close();
   }
 
+  function collectPrintSignatories(reportName) {
+    const account = currentAccount?.() || {};
+    const defaultPrepared = account.displayName || account.fullName || account.username || '';
+    const preparedInput = el('dutyPrintPreparedBy');
+    const authorizedInput = el('dutyPrintAuthorizedBy');
+    if (preparedInput && authorizedInput) {
+      if (!preparedInput.value.trim() && defaultPrepared) preparedInput.value = defaultPrepared;
+      if (!preparedInput.value.trim()) {
+        window.LSOApp?.showToast?.(`Enter Prepared By before generating ${reportName}.`, true);
+        preparedInput.focus();
+        return null;
+      }
+      if (!authorizedInput.value.trim()) {
+        window.LSOApp?.showToast?.(`Enter Authorized By before generating ${reportName}.`, true);
+        authorizedInput.focus();
+        return null;
+      }
+      return { preparedBy: preparedInput.value.trim(), authorizedBy: authorizedInput.value.trim() };
+    }
+
+    // Compatibility fallback for a device that still has an older cached HTML shell.
+    const preparedBy = window.prompt(`Prepared By for ${reportName}:`, defaultPrepared);
+    if (preparedBy === null || !preparedBy.trim()) return null;
+    const authorizedBy = window.prompt(`Authorized By for ${reportName}:`, '');
+    if (authorizedBy === null || !authorizedBy.trim()) return null;
+    return { preparedBy: preparedBy.trim(), authorizedBy: authorizedBy.trim() };
+  }
+
+  function signatoryHtml(signatories) {
+    return `<div class="sign sign-filled"><div><strong>${safeText(signatories.preparedBy)}</strong><span>Prepared By</span></div><div><strong>${safeText(signatories.authorizedBy)}</strong><span>Authorized By</span></div></div>`;
+  }
+
   function printIndividual() {
     const data = loadData();
     const member = selectedMember();
     if (!member) return;
+    const signatories = collectPrintSignatories(`${member.fullName} Individual Duty Hours Report`);
+    if (!signatories) return;
     const focus = calculatePeriod(data, member.id, activeSemester, selectedPeriod);
     const lifecycle = periodLifecycle(member, selectedPeriod, data);
     const year = calculateMember(data, member.id);
@@ -1406,7 +1441,7 @@ This will record the secure server time for the session that started on ${dateLa
       ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>
       <table class="period-table"><thead><tr><th>Academic Period</th><th>Committed</th><th>Rendered</th><th>Incentives</th><th>Credited</th><th>Balance</th></tr></thead><tbody>${yearRows}</tbody></table>
       <table><thead><tr><th>Date</th><th>Clock In–Out</th><th>Entry</th><th>Computed Time</th><th>Status</th><th>Description / Basis</th><th>Member/s Approved</th><th>Recorded By</th></tr></thead><tbody>${ledgerRows || '<tr><td colspan="8">No entries in the selected semester and period.</td></tr>'}</tbody></table>
-      <div class="sign"><div>Member Signature</div><div>Authorized Officer</div></div><div class="footer">Rendered duty is calculated automatically from Time In and Time Out and stored in exact minutes.</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
+      ${signatoryHtml(signatories)}<div class="footer">Rendered duty is calculated automatically from Time In and Time Out and stored in exact minutes.</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
     openPrint(html);
   }
 
@@ -1478,23 +1513,20 @@ This will record the secure server time for the session that started on ${dateLa
       window.LSOApp?.showToast?.(`No current ${normalizedPeriod} members are available to print.`, true);
       return;
     }
+    const signatories = collectPrintSignatories(`Current ${normalizedPeriod} Members Duty Hours Report`);
+    if (!signatories) return;
 
     const totals = combineSummaries(records.map((item) => item.summary));
     const outstanding = records.reduce((sum, item) => sum + Math.max(0, item.summary.balance), 0);
     const completed = records.filter((item) => item.summary.committed > 0 && item.summary.balance <= 0).length;
-    const rows = records.map(({ member, lifecycle, summary }) => `<tr>
+    const rows = records.map(({ member, summary }) => `<tr>
       <td><strong>${safeText(member.fullName)}</strong><br><span class="muted">${safeText(member.membershipId || 'No Membership ID')} • ${safeText(member.studentNumber || 'No Student No.')}</span></td>
-      <td>${memberAcademicDetails(member)}</td>
-      <td>${memberContactDetails(member)}</td>
-      <td>${safeText(member.periodGroup || member.membershipStage || '—')}</td>
-      <td><strong>${safeText(lifecycle.label)}</strong></td>
-      <td>${safeText(periodStartValue(member, normalizedPeriod))}</td>
+      <td>${safeText(member.periodGroup || member.membershipStage || normalizedPeriod)}</td>
       <td>${safeText(durationLabel(summary.committed))}</td>
       <td>${safeText(durationLabel(summary.rendered))}</td>
       <td class="${summary.incentives < 0 ? 'negative' : 'positive'}">${safeText(durationLabel(summary.incentives, true))}</td>
       <td>${safeText(durationLabel(summary.credited))}</td>
       <td>${safeText(balanceText(summary.balance, summary.committed, summary.credited))}</td>
-      <td>${summary.entries.length}</td>
       <td>${summary.progress}%</td>
     </tr>`).join('');
 
@@ -1506,8 +1538,8 @@ This will record the secure server time for the session that started on ${dateLa
         ['Current Members', records.length], ['Completed', completed], ['Committed', durationLabel(totals.committed)], ['Rendered', durationLabel(totals.rendered)], ['Credited', durationLabel(totals.credited)], ['Outstanding', durationLabel(outstanding)]
       ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>
       <div class="report-note"><strong>Report scope:</strong> This report lists only members who are currently in the ${safeText(normalizedPeriod)}. It is separate from the selected-name Individual Duty Hours Report and excludes archived or completed-period records.</div>
-      <table class="roster-detail-table"><thead><tr><th>Member / IDs</th><th>Academic Information</th><th>Contact</th><th>Current Stage</th><th>Duty Status</th><th>Period Start</th><th>Committed</th><th>Rendered</th><th>Incentives</th><th>Credited</th><th>Balance</th><th>Entries</th><th>Progress</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="sign"><div>Prepared by</div><div>Authorized Officer</div></div><div class="footer">Rendered duty is calculated automatically from clock-based Time In and Time Out and stored in exact minutes.</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
+      <table class="roster-detail-table"><thead><tr><th>Member / IDs</th><th>Current Stage</th><th>Committed</th><th>Rendered</th><th>Incentives</th><th>Credited</th><th>Balance</th><th>Progress</th></tr></thead><tbody>${rows}</tbody></table>
+      ${signatoryHtml(signatories)}<div class="footer">Rendered duty is calculated automatically from clock-based Time In and Time Out and stored in exact minutes.</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
     openPrint(html);
   }
 
@@ -1527,6 +1559,8 @@ This will record the secure server time for the session that started on ${dateLa
       window.LSOApp?.showToast?.(`No current ${normalizedPeriod} members are available for the monthly report.`, true);
       return;
     }
+    const signatories = collectPrintSignatories(`${monthName} ${normalizedPeriod} Duty Hours Report`);
+    if (!signatories) return;
 
     const membersWithEntries = records.filter((item) => item.monthSummary.entries.length > 0).length;
     const monthlyRendered = records.reduce((sum, item) => sum + item.monthSummary.rendered, 0);
@@ -1536,8 +1570,6 @@ This will record the secure server time for the session that started on ${dateLa
 
     const rows = records.map(({ member, summary, monthSummary }) => `<tr>
       <td><strong>${safeText(member.fullName)}</strong><br><span class="muted">${safeText(member.membershipId || 'No Membership ID')} • ${safeText(member.studentNumber || 'No Student No.')}</span></td>
-      <td>${memberAcademicDetails(member)}</td>
-      <td>${safeText(periodStartValue(member, normalizedPeriod))}</td>
       <td>${monthSummary.dutyEntries}</td>
       <td>${safeText(durationLabel(monthSummary.rendered))}</td>
       <td class="${monthSummary.incentives < 0 ? 'negative' : 'positive'}">${safeText(durationLabel(monthSummary.incentives, true))}</td>
@@ -1559,10 +1591,10 @@ This will record the secure server time for the session that started on ${dateLa
         ['Current Members', records.length], ['With Entries', membersWithEntries], ['Duty Sessions', dutySessions], ['Monthly Rendered', durationLabel(monthlyRendered)], ['Net Incentives', durationLabel(monthlyIncentives, true)], ['Monthly Credited', durationLabel(monthlyCredited)]
       ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>
       <div class="report-note"><strong>Monthly scope:</strong> Only ${safeText(monthName)} entries from ${safeText(activeSemester)} are included. Semester commitment, credited-to-date, and balance columns are shown for context and are not recalculated as monthly commitments.</div>
-      <table class="monthly-roster"><thead><tr><th>Member / IDs</th><th>Academic Information</th><th>Period Start</th><th>Duty Sessions</th><th>Monthly Rendered</th><th>Monthly Incentives</th><th>Monthly Credited</th><th>Semester Committed</th><th>Semester Credited to Date</th><th>Semester Balance</th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="monthly-roster"><thead><tr><th>Member / IDs</th><th>Duty Sessions</th><th>Monthly Rendered</th><th>Monthly Incentives</th><th>Monthly Credited</th><th>Semester Committed</th><th>Semester Credited to Date</th><th>Semester Balance</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="section-title page-break"><h2>Monthly Duty Ledger</h2><span>${ledgerRows ? `${records.reduce((sum, item) => sum + item.monthSummary.entries.length, 0)} entries` : 'No entries'}</span></div>
       <table><thead><tr><th>Date</th><th>Member</th><th>ID</th><th>Clock In–Out</th><th>Entry</th><th>Computed Time</th><th>Status</th><th>Description / Basis</th><th>Member/s Approved</th></tr></thead><tbody>${ledgerRows || '<tr><td colspan="9">No rendered-duty or incentive entries were recorded for this month.</td></tr>'}</tbody></table>
-      <div class="sign"><div>Prepared by</div><div>Authorized Officer</div></div><div class="footer">This monthly report is separate for the ${safeText(normalizedPeriod)} and does not combine Trainee and Probationary records.</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
+      ${signatoryHtml(signatories)}<div class="footer">This monthly report is separate for the ${safeText(normalizedPeriod)} and does not combine Trainee and Probationary records.</div>${window.LSOBrand.printRuntimeScript}</body></html>`;
     openPrint(html);
   }
 
@@ -1593,6 +1625,31 @@ This will record the secure server time for the session that started on ${dateLa
     const completed = rows.filter((item) => item.committed > 0 && item.balance <= 0).length;
     const progress = totals.committed > 0 ? Math.max(0, Math.min(100, Math.round(totals.credited / totals.committed * 100))) : 0;
     return { semester: normalizeSemester(semester), tracked: rows.length, completed, remaining, remainingLabel: remaining ? `${durationLabel(remaining)} left` : rows.length ? 'All complete' : 'No records', progress };
+  }
+
+  let renderAllTimer = 0;
+  let renderAllFrame = 0;
+  let dutyRenderPending = false;
+
+  function dutyViewActive() {
+    const view = el('dutyHoursView');
+    return Boolean(view && !view.classList.contains('hidden') && view.classList.contains('active'));
+  }
+
+  function scheduleRenderAll(delay = 35, force = false) {
+    clearTimeout(renderAllTimer);
+    renderAllTimer = window.setTimeout(() => {
+      if (!force && !dutyViewActive()) {
+        dutyRenderPending = true;
+        return;
+      }
+      dutyRenderPending = false;
+      if (renderAllFrame) window.cancelAnimationFrame(renderAllFrame);
+      renderAllFrame = window.requestAnimationFrame(() => {
+        renderAllFrame = 0;
+        renderAll();
+      });
+    }, delay);
   }
 
   function renderAll() {
@@ -1682,8 +1739,12 @@ This will record the secure server time for the session that started on ${dateLa
     el('printDutyProbationaryMembers')?.addEventListener('click', () => printPeriodMembers('Probationary Period'));
     el('printDutyProbationaryMonthly')?.addEventListener('click', () => printMonthlyPeriodReport('Probationary Period'));
     ['lso:members-changed', 'lso:duty-hours-changed', 'lso:cloud-state-changed', 'lso:auth-changed'].forEach((name) => {
-      window.addEventListener(name, () => setTimeout(renderAll, 25));
+      window.addEventListener(name, () => scheduleRenderAll(name === 'lso:cloud-state-changed' ? 70 : 35));
     });
+    document.querySelectorAll('[data-view="dutyHoursView"]').forEach((button) => button.addEventListener('click', () => {
+      if (dutyRenderPending || !dutyViewActive()) scheduleRenderAll(100, true);
+      else scheduleRenderAll(45, true);
+    }));
   }
 
   function initialize() {
@@ -1719,9 +1780,21 @@ This will record the secure server time for the session that started on ${dateLa
     printPeriodMembers,
     printMonthlyPeriodReport,
     setSemester,
+    openRecord: (memberId, period, semester = activeSemester, entryId = '') => {
+      setSemester(semester);
+      recordMode = 'All';
+      setSelected(memberId, period);
+      setTimeout(() => {
+        const row = entryId ? [...document.querySelectorAll('[data-duty-delete]')].find((button) => String(button.dataset.dutyDelete) === String(entryId))?.closest('tr') : null;
+        row?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        row?.classList.add('notification-target-highlight');
+        if (row) setTimeout(() => row.classList.remove('notification-target-highlight'), 2400);
+      }, 80);
+      return true;
+    },
     setRecordMode: (mode) => { recordMode = isStaffAccount() ? 'Active' : mode === 'Archive' ? 'Archive' : 'Active'; renderAll(); },
     deleteArchivedPeriod,
-    refresh: renderAll,
+    refresh: () => scheduleRenderAll(0, true),
     refreshFromServer: () => refreshDutyState({ announce: false })
   };
 

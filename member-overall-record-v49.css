@@ -1,0 +1,135 @@
+/* Members Overall Record V49 - responsive, accessible, data-first layout */
+#lookupView{min-width:0}
+.overall-record-shell{display:grid;grid-template-columns:minmax(270px,340px) minmax(0,1fr);gap:18px;align-items:start;min-width:0}
+.overall-record-search-panel,.overall-record-panel{min-width:0}
+.overall-record-search-panel{position:sticky;top:16px;max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden}
+.overall-record-search-field{margin-top:4px}
+.overall-search-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0 10px;color:var(--muted,#667085);font-size:.78rem}
+.overall-search-meta span{font-weight:800;color:var(--ink,#1f2933)}
+.overall-live-badge{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:6px 11px;border:1px solid rgba(22,122,91,.22);border-radius:999px;background:rgba(22,122,91,.08);color:#106347;font-size:.75rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.overall-live-badge span{width:8px;height:8px;border-radius:50%;background:#18864b;box-shadow:0 0 0 4px rgba(24,134,75,.13)}
+.overall-lookup-results{flex:1;min-height:170px;max-height:none;overflow:auto;overscroll-behavior:contain;padding-right:4px;scrollbar-gutter:stable}
+.overall-lookup-results .lookup-result{width:100%;text-align:left;border:1px solid transparent}
+.overall-lookup-results .lookup-result:hover,.overall-lookup-results .lookup-result.active{border-color:rgba(22,122,91,.22);background:rgba(22,122,91,.07)}
+.overall-record-placeholder{min-height:520px;display:grid;place-content:center;text-align:center}
+.overall-record-header{align-items:flex-start;gap:16px;border-bottom:1px solid var(--border,#d9e0e6);padding-bottom:16px}
+.overall-record-header .record-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.overall-record-metrics{display:grid;grid-template-columns:repeat(5,minmax(110px,1fr));gap:10px;margin:16px 0}
+.overall-record-metric{min-width:0;padding:13px 14px;border:1px solid var(--border,#d9e0e6);border-radius:14px;background:linear-gradient(180deg,#fff,#f8faf9)}
+.overall-record-metric span{display:block;color:var(--muted,#667085);font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.045em}
+.overall-record-metric strong{display:block;margin-top:4px;color:var(--ink,#1f2933);font-size:1.3rem;line-height:1.1;overflow-wrap:anywhere}
+.overall-record-metric small{display:block;margin-top:4px;color:var(--muted,#667085);font-size:.72rem;line-height:1.35}
+.overall-record-tabs{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;padding:5px;margin:0 0 14px;border:1px solid var(--border,#d9e0e6);border-radius:15px;background:#f4f6f8}
+.overall-record-tab{flex:0 0 auto;min-height:40px;border:0;border-radius:11px;padding:9px 13px;background:transparent;color:#52616b;font:inherit;font-size:.8rem;font-weight:800;cursor:pointer;white-space:nowrap}
+.overall-record-tab span{display:inline-grid;place-items:center;min-width:21px;height:21px;margin-left:5px;padding:0 5px;border-radius:999px;background:rgba(18,63,51,.08);font-size:.68rem}
+.overall-record-tab.active{background:#fff;color:#123f33;box-shadow:0 2px 8px rgba(20,44,35,.08)}
+.overall-record-tab:focus-visible{outline:3px solid rgba(47,111,179,.35);outline-offset:2px}
+.overall-record-tab-panel{display:none;min-width:0}
+.overall-record-tab-panel.active{display:block;animation:overallRecordReveal .24s ease-out both}
+@keyframes overallRecordReveal{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.overall-record-section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:3px 0 13px}
+.overall-record-section-heading h4{margin:2px 0 3px;font-size:1.03rem;color:var(--ink,#1f2933)}
+.overall-record-section-heading small{display:block;max-width:720px;color:var(--muted,#667085);line-height:1.45}
+.overall-lifecycle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.overall-lifecycle-step{position:relative;padding:13px 14px 13px 43px;border:1px solid var(--border,#d9e0e6);border-radius:14px;background:#fff}
+.overall-lifecycle-step::before{content:attr(data-step);position:absolute;left:13px;top:13px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#e7f4ee;color:#106347;font-size:.72rem;font-weight:900}
+.overall-lifecycle-step.current{border-color:rgba(22,122,91,.45);box-shadow:0 0 0 3px rgba(22,122,91,.08)}
+.overall-lifecycle-step strong{display:block;color:var(--ink,#1f2933);font-size:.86rem}
+.overall-lifecycle-step small{display:block;margin-top:4px;color:var(--muted,#667085);font-size:.75rem;line-height:1.4}
+.overall-record-list{display:grid;gap:10px;min-width:0}
+.overall-record-card{min-width:0;border:1px solid var(--border,#d9e0e6);border-radius:15px;background:#fff;overflow:hidden}
+.overall-record-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:13px 14px;background:#f8faf9;border-bottom:1px solid var(--border,#d9e0e6)}
+.overall-record-card-title{min-width:0}
+.overall-record-card-title strong{display:block;color:var(--ink,#1f2933);font-size:.9rem;overflow-wrap:anywhere}
+.overall-record-card-title small{display:block;margin-top:3px;color:var(--muted,#667085);font-size:.74rem;line-height:1.4}
+.overall-record-card-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+.overall-record-card-body{padding:13px 14px;min-width:0}
+.overall-record-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.overall-record-detail{min-width:0;padding:9px 10px;border-radius:10px;background:#f6f8f7}
+.overall-record-detail span{display:block;color:var(--muted,#667085);font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.overall-record-detail strong{display:block;margin-top:3px;color:var(--ink,#1f2933);font-size:.8rem;line-height:1.4;overflow-wrap:anywhere}
+.overall-empty{padding:30px 20px;border:1px dashed #cbd5d1;border-radius:15px;text-align:center;background:#fbfcfc;color:var(--muted,#667085)}
+.overall-empty strong{display:block;color:var(--ink,#1f2933);margin-bottom:5px}
+.overall-empty p{margin:0;font-size:.82rem;line-height:1.5}
+.overall-inline-editor{margin:0 0 12px;border:1px solid rgba(22,122,91,.2);border-radius:15px;background:rgba(231,244,238,.42);overflow:hidden}
+.overall-inline-editor:empty{display:none}
+.overall-editor-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:46px;padding:10px 13px;border:0;background:transparent;color:#123f33;font:inherit;font-weight:800;cursor:pointer;text-align:left}
+.overall-editor-toggle::after{content:'+';font-size:1.25rem;line-height:1}
+.overall-inline-editor.open .overall-editor-toggle::after{content:'−'}
+.overall-editor-body{display:none;padding:0 13px 13px}
+.overall-inline-editor.open .overall-editor-body{display:block}
+.overall-editor-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.overall-editor-grid .span-2{grid-column:span 2}
+.overall-editor-grid .span-4{grid-column:1/-1}
+.overall-editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.overall-record-card input,.overall-record-card select,.overall-record-card textarea,.overall-inline-editor input,.overall-inline-editor select,.overall-inline-editor textarea{width:100%;max-width:100%;min-height:40px;padding:8px 10px;border:1px solid #cfd8d4;border-radius:10px;background:#fff;color:var(--ink,#1f2933);font:inherit;font-size:.8rem}
+.overall-record-card textarea,.overall-inline-editor textarea{min-height:72px;resize:vertical}
+.overall-record-card input:focus,.overall-record-card select:focus,.overall-record-card textarea:focus,.overall-inline-editor input:focus,.overall-inline-editor select:focus,.overall-inline-editor textarea:focus{outline:3px solid rgba(47,111,179,.18);border-color:#2f6fb3}
+.overall-record-edit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.overall-record-edit-grid .span-2{grid-column:span 2}
+.overall-record-edit-grid .span-4{grid-column:1/-1}
+.overall-small-button{min-height:34px;padding:7px 10px;border:1px solid #cbd5d1;border-radius:9px;background:#fff;color:#123f33;font:inherit;font-size:.73rem;font-weight:800;cursor:pointer}
+.overall-small-button:hover{border-color:#167a5b;background:#f1f8f5}
+.overall-small-button.primary{border-color:#167a5b;background:#167a5b;color:#fff}
+.overall-small-button.danger{border-color:rgba(196,61,61,.3);color:#a82f2f;background:#fff8f8}
+.overall-small-button[disabled]{opacity:.55;cursor:not-allowed}
+.overall-phase-badge,.overall-status-badge{display:inline-flex;align-items:center;min-height:25px;padding:4px 8px;border-radius:999px;font-size:.67rem;font-weight:900;letter-spacing:.025em;white-space:nowrap}
+.overall-phase-badge.official{background:#e7f4ee;color:#106347}.overall-phase-badge.trainee{background:#eaf2fb;color:#2f6fb3}.overall-phase-badge.probationary{background:#fff4db;color:#9a6200}
+.overall-status-badge.approved,.overall-status-badge.finalized,.overall-status-badge.present{background:#e7f4ee;color:#106347}
+.overall-status-badge.pending,.overall-status-badge.draft,.overall-status-badge.late{background:#fff4db;color:#9a6200}
+.overall-status-badge.rejected,.overall-status-badge.absent{background:#fdebea;color:#b53636}
+.overall-status-badge.active,.overall-status-badge.excused{background:#eaf2fb;color:#2f6fb3}
+.overall-status-badge.neutral{background:#eef1f3;color:#5d6870}
+.overall-contract-note{padding:10px 12px;border-left:3px solid #c49a3a;border-radius:8px;background:#fff9eb;color:#6e5415;font-size:.76rem;line-height:1.45}
+.overall-duty-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:12px}
+.overall-duty-summary-card{padding:11px 12px;border:1px solid var(--border,#d9e0e6);border-radius:12px;background:#f8faf9}
+.overall-duty-summary-card span{display:block;color:var(--muted,#667085);font-size:.68rem;font-weight:800;text-transform:uppercase}
+.overall-duty-summary-card strong{display:block;margin-top:3px;color:var(--ink,#1f2933);font-size:1rem}
+.overall-inline-message{margin:8px 0 0;padding:9px 11px;border-radius:10px;background:#f4f6f8;color:#52616b;font-size:.75rem;line-height:1.45}
+.overall-inline-message.error{background:#fff0ef;color:#a82f2f}
+.overall-row-locked{opacity:.82}
+.overall-row-locked .overall-record-card-header{background:#f3f4f5}
+.overall-scroll-note{display:none}
+
+@media(max-width:1180px){
+  .overall-record-shell{grid-template-columns:minmax(245px,300px) minmax(0,1fr)}
+  .overall-record-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .overall-record-detail-grid,.overall-record-edit-grid,.overall-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .overall-editor-grid .span-4{grid-column:1/-1}
+  .overall-duty-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  .overall-record-shell{grid-template-columns:1fr}
+  .overall-record-search-panel{position:relative;top:auto;max-height:none}
+  .overall-lookup-results{max-height:260px}
+  .overall-record-placeholder{min-height:300px}
+  .overall-record-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .overall-lifecycle{grid-template-columns:1fr}
+}
+@media(max-width:620px){
+  .overall-record-header{display:grid}
+  .overall-record-header .record-actions{justify-content:stretch}
+  .overall-record-header .record-actions .button{flex:1 1 150px}
+  .overall-record-metrics{grid-template-columns:1fr 1fr;gap:8px}
+  .overall-record-metric{padding:11px 12px}
+  .overall-record-tabs{margin-inline:-2px}
+  .overall-record-section-heading{display:grid}
+  .overall-record-detail-grid,.overall-record-edit-grid,.overall-editor-grid{grid-template-columns:1fr}
+  .overall-record-edit-grid .span-2,.overall-record-edit-grid .span-4,.overall-editor-grid .span-2,.overall-editor-grid .span-4{grid-column:auto}
+  .overall-record-card-header{display:grid}
+  .overall-record-card-actions{justify-content:flex-start}
+  .overall-duty-summary-grid{grid-template-columns:1fr 1fr}
+  .overall-search-meta{align-items:flex-start;flex-direction:column;gap:2px}
+}
+@media(max-width:400px){
+  .overall-record-metrics,.overall-duty-summary-grid{grid-template-columns:1fr}
+  .overall-record-tab{padding-inline:11px}
+}
+@media(prefers-reduced-motion:reduce){
+  .overall-record-tab-panel.active{animation:none}
+  .overall-lookup-results{scroll-behavior:auto}
+}
+@media print{
+  #lookupView .overall-record-search-panel,.overall-record-tabs,.overall-inline-editor,.overall-record-card-actions,.record-actions{display:none!important}
+  .overall-record-shell{display:block}.overall-record-tab-panel{display:block!important}.overall-record-card{break-inside:avoid}
+}

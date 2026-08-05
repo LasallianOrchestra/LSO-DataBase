@@ -204,7 +204,7 @@
       return;
     }
     const failed = (health.checks || []).filter((check) => !check.ok).length;
-    const unresolved = Number(health.counts?.unresolvedErrors || 0);
+    const unresolved = effectiveUnresolvedErrors(health);
     if (!failed && !unresolved) {
       summary.textContent = 'All verified checks passed and no unresolved server errors were reported.';
       summary.dataset.state = 'healthy';
@@ -248,7 +248,7 @@
   function renderHealthCounts(health = null) {
     const container = el('healthCountGrid'); if (!container) return;
     const c = health?.counts || {};
-    const items = [['Members', c.members || 0], ['Activities', c.events || 0], ['Attendance Marks', c.attendance || 0], ['Duty Entries', c.dutyEntries || 0], ['Accounts', c.accounts || 0], ['Recovery Points', c.recoveryPoints || 0], ['Unresolved Errors', c.unresolvedErrors || 0], ['State Updated', health?.stateUpdatedAt ? dateTimeLabel(health.stateUpdatedAt) : '—']];
+    const items = [['Members', c.members || 0], ['Activities', c.events || 0], ['Attendance Marks', c.attendance || 0], ['Duty Entries', c.dutyEntries || 0], ['Accounts', c.accounts || 0], ['Recovery Points', c.recoveryPoints || 0], ['Unresolved Errors', effectiveUnresolvedErrors(health)], ['State Updated', health?.stateUpdatedAt ? dateTimeLabel(health.stateUpdatedAt) : '—']];
     container.innerHTML = items.map(([label, value]) => `<div class="health-count-card"><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
     renderHealthWorkflowSummary(health);
   }
@@ -261,7 +261,7 @@
     head.innerHTML = `<tr><th scope="col">Permission</th>${roles.map((roleName)=>`<th scope="col">${safeText(roleName)}</th>`).join('')}</tr>`;
     const rows=[];
     rows.push(`<tr class="permission-category-row"><th colspan="${roles.length+1}">Module access</th></tr>`);
-    const viewLabels={dashboardView:'Dashboard',membersView:'Members',lookupView:'Member Lookup',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',alertsView:'Action Center',accountsView:'Accounts',systemHealthView:'System Health',dataView:'Data & Recovery'};
+    const viewLabels={dashboardView:'Dashboard',membersView:'Members',lookupView:'Members Overall Record',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',alertsView:'Action Center',accountsView:'Accounts',systemHealthView:'System Health',dataView:'Data & Recovery'};
     const allViews=[...new Set(Object.values(manifest.views||{}).flat())];
     allViews.forEach((viewId)=>rows.push(`<tr><th scope="row">${safeText(viewLabels[viewId]||viewId)}</th>${roles.map((roleName)=>{const granted=(manifest.views?.[roleName]||[]).includes(viewId);return `<td><span class="${granted?'permission-granted':'permission-denied'}" aria-label="${granted?'Allowed':'Not allowed'}">${granted?'Yes':'—'}</span></td>`;}).join('')}</tr>`));
     rows.push(`<tr class="permission-category-row"><th colspan="${roles.length+1}">Action permissions</th></tr>`);
@@ -270,7 +270,7 @@
   }
   function exportPermissionMatrix() {
     const roles=Object.values(CORE.ROLES||{});const manifest=window.LSORoleAccess?.permissionManifest?.()||CORE.PERMISSIONS||{actions:{},views:{}};const rows=[['Category','Permission',...roles]];
-    const viewLabels={dashboardView:'Dashboard',membersView:'Members',lookupView:'Member Lookup',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',alertsView:'Action Center',accountsView:'Accounts',systemHealthView:'System Health',dataView:'Data & Recovery'};
+    const viewLabels={dashboardView:'Dashboard',membersView:'Members',lookupView:'Members Overall Record',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',alertsView:'Action Center',accountsView:'Accounts',systemHealthView:'System Health',dataView:'Data & Recovery'};
     [...new Set(Object.values(manifest.views||{}).flat())].forEach((viewId)=>rows.push(['Module',viewLabels[viewId]||viewId,...roles.map((roleName)=>(manifest.views?.[roleName]||[]).includes(viewId)?'Allowed':'Not allowed')]));
     Object.entries(manifest.actions||{}).forEach(([action,allowedRoles])=>rows.push(['Action',permissionLabels[action]||action,...roles.map((roleName)=>(allowedRoles||[]).includes(roleName)?'Allowed':'Not allowed')]));
     download(`LSO_Role_Permission_Matrix_${todayPH()}.csv`,rows.map((row)=>row.map(csvEscape).join(',')).join('\n'),'text/csv');
@@ -304,6 +304,11 @@
     return [...server, ...local].sort((a, b) => String(b.created_at || b.createdAt || '').localeCompare(String(a.created_at || a.createdAt || ''))).slice(0, 100);
   }
   function errorResolved(record) { return Boolean(record.resolved_at || record.resolvedAt || record._override?.resolvedAt); }
+  function effectiveUnresolvedErrors(health = lastHealth) {
+    const combined = combinedSystemErrors();
+    if (combined.length) return combined.filter((record) => !errorResolved(record)).length;
+    return Math.max(0, Number(health?.counts?.unresolvedErrors || 0));
+  }
   function renderSystemErrors() {
     const container = el('systemErrorLog'); if (!container) return;
     const all = combinedSystemErrors();
@@ -337,8 +342,12 @@
         saveResolutionOverride(id, trimmedNote);
         try { serverErrors = await window.LSOCloud.listSystemErrors(100); } catch { /* Keep current list and local confirmation. */ }
       }
+      const unresolved = effectiveUnresolvedErrors(lastHealth);
+      if (lastHealth) lastHealth = { ...lastHealth, counts: { ...(lastHealth.counts || {}), unresolvedErrors: unresolved } };
       renderSystemErrors();
+      renderHealthCounts(lastHealth);
       renderHealthWorkflowSummary(lastHealth);
+      window.dispatchEvent(new CustomEvent('lso:system-health-changed', { detail: clone(lastHealth || { counts: { unresolvedErrors: unresolved } }) }));
       toast('System error marked resolved.');
     } catch (error) {
       console.error('Unable to resolve system error:', error);
@@ -520,7 +529,7 @@
     if(!can('finalizeMonthlyReport')) return toast('Only an Administrator can finalize a Monthly Report.',true);
     const state=monthlyState();const key=activeReportKey();const report=state.reports?.[key];const missing=monthlyMissing(report);if(missing.length)return toast(`Complete these fields before finalizing: ${missing.join(', ')}.`,true);
     if(!window.confirm('Finalize and lock this Monthly Report? It can be reopened only by an Administrator with a correction reason.'))return;
-    report.workflowStatus='Finalized';report.revision=Math.max(0,Number(report.revision)||0)+1;report.finalizedAt=new Date().toISOString();report.finalizedBy=monthlyActor();report.reopenedAt='';report.reopenedBy='';report.workflowHistory=Array.isArray(report.workflowHistory)?report.workflowHistory:[];report.workflowHistory.unshift(monthlyAudit('Monthly Report finalized',`Revision ${report.revision}`));report.workflowHistory=report.workflowHistory.slice(0,100);report.updatedAt=new Date().toISOString();saveMonthlyState(state);renderMonthlyWorkflow();toast('Monthly Report finalized and locked.');
+    report.workflowStatus='Finalized';report.revision=Math.max(0,Number(report.revision)||0)+1;report.finalizedAt=new Date().toISOString();report.finalizedBy=monthlyActor();report.reopenedAt='';report.reopenedBy='';report.workflowHistory=Array.isArray(report.workflowHistory)?report.workflowHistory:[];report.workflowHistory.unshift(monthlyAudit('Monthly Report finalized',`Revision ${report.revision}`));report.workflowHistory=report.workflowHistory.slice(0,100);report.updatedAt=new Date().toISOString();saveMonthlyState(state);renderMonthlyWorkflow();setTimeout(()=>window.LSOMonthlyReport?.archiveCurrent?.('Finalized report'),40);toast('Monthly Report finalized, locked, and added to the archive.');
   }
   function reopenMonthlyReport() {
     if(!can('reopenMonthlyReport')) return toast('Only an Administrator can reopen a Monthly Report.',true);
@@ -556,7 +565,7 @@
       });
     }
 
-    if(isAdmin()&&lastHealth&&((lastHealth.counts?.unresolvedErrors||0)>0||(lastHealth.checks||[]).some((check)=>!check.ok)))notifications.push({id:'enterprise-system-health',category:'System Health',severity:'high',title:'System Health needs attention',detail:`${lastHealth.counts?.unresolvedErrors||0} unresolved errors or compatibility checks require review.`,timestamp:new Date().toISOString(),actionType:'system-health',targetId:'',icon:'!'});
+    const unresolvedHealthErrors=effectiveUnresolvedErrors(lastHealth);const failedHealthChecks=(lastHealth?.checks||[]).filter((check)=>!check.ok).length;if(isAdmin()&&lastHealth&&(unresolvedHealthErrors>0||failedHealthChecks>0))notifications.push({id:'enterprise-system-health',category:'System Health',severity:'high',title:'System Health needs attention',detail:`${unresolvedHealthErrors} unresolved error${unresolvedHealthErrors===1?'':'s'} and ${failedHealthChecks} compatibility check${failedHealthChecks===1?'':'s'} require review.`,timestamp:lastHealth.stateUpdatedAt||lastHealth.checkedAt||'',actionType:'system-health',targetId:'',icon:'!'});
     return notifications;
   }
 
@@ -596,8 +605,8 @@
     document.addEventListener('input',(event)=>{if(event.target.closest?.('#monthlyReportView')&&event.target.matches?.('[data-monthly-edit]')&&monthlyReport()?.workflowStatus==='Finalized'){event.preventDefault();event.stopImmediatePropagation();window.LSOMonthlyReport?.refresh?.();toast('This Monthly Report is finalized and locked.',true);}},true);
     document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click',()=>setTimeout(()=>refreshSystemHealth({quiet:true}),50));
     document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>refreshRecoveryPoints({quiet:true}),50));
-    ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>setTimeout(renderDutyEnhancements,40)));
-    ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>setTimeout(renderMonthlyWorkflow,50)));
+    ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-duty-enhancements',renderDutyEnhancements,120,{viewId:'dutyHoursView'})));
+    ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-monthly-workflow',renderMonthlyWorkflow,120,{viewId:'monthlyReportView'})));
     window.addEventListener('lso:system-error',(event)=>{if(loggingServerError&&event.detail?.rpc==='lso_log_system_error')return;reportError(event.detail||{});});
     window.addEventListener('error',(event)=>{if(!event.error&&!event.message)return;const technical=String(event.error?.stack||event.message||'Unknown JavaScript error');if(/renderAll is not defined/i.test(technical)&&/workflow-attendance-month-v2\.js/i.test(technical)){event.preventDefault?.();window.LSORenderCompatibility?.refreshAttendance?.();window.renderAll?.();closeErrorDialog();console.warn('Obsolete attendance cache recovered without blocking the website.');return;}reportError({module:'Website',publicMessage:'A website component stopped unexpectedly. Your shared records were not intentionally changed.',technicalMessage:technical}, {show:true});});
     window.addEventListener('unhandledrejection',(event)=>{const reason=event.reason;reportError({module:'Website',publicMessage:'A background operation could not be completed.',technicalMessage:reason?.stack||reason?.message||String(reason||'Unknown promise rejection')},{show:true});});

@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v6-separated-calendars-monthly-ratings';
+  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v7-validated-archive-workflow';
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -133,6 +133,19 @@
 
   function attendanceRosterModeLabel(mode = activeAttendanceRosterMode()) {
     return normalizeAttendanceRosterMode(mode) === 'Archive' ? 'Attendance Archive' : 'Current Roster';
+  }
+
+  function archiveModeActive() {
+    return activeAttendanceRosterMode() === 'Archive';
+  }
+
+  function selectedValidatedArchive() {
+    return window.LSOAttendanceGovernance?.getSelectedArchive?.() || null;
+  }
+
+  function selectedArchiveRows() {
+    const entry = selectedValidatedArchive();
+    return entry ? (window.LSOAttendanceGovernance?.getArchiveRows?.(entry.id) || []) : [];
   }
 
   function currentMemberAttendanceGroup(member) {
@@ -392,10 +405,43 @@
     return `<div class="attendance-kpi"><span>${safeText(label)}</span><strong>${safeText(value)}</strong><small>${safeText(helper)}</small></div>`;
   }
 
+  function renderValidatedArchiveOverall(metrics, tableBody) {
+    const entry = selectedValidatedArchive();
+    if (!entry) {
+      metrics.innerHTML = metricMarkup('Validated Archives', 0, `${attendanceGroupShortLabel()} • ${activeSemester()}`);
+      tableBody.innerHTML = '<tr><td colspan="7"><div class="empty-state compact-empty"><h4>No validated archive selected</h4><p>Finalize a Current Roster month or select a finalized copy from Attendance Archive.</p></div></td></tr>';
+      if (el('overallAttendanceCaption')) el('overallAttendanceCaption').textContent = `No validated ${attendanceGroupShortLabel().toLowerCase()} archive is available for ${activeSemester()}.`;
+      if (el('attendanceGroupHeading')) el('attendanceGroupHeading').textContent = `Validated Archive — ${attendanceGroupShortLabel()}`;
+      return;
+    }
+    const snapshot = entry.snapshot || {};
+    const counts = snapshot.counts || {};
+    const members = Object.entries(snapshot.members || {}).map(([id, item]) => ({ id, ...(item || {}) })).sort((a, b) => String(a.memberName || '').localeCompare(String(b.memberName || '')));
+    const recordCount = Number(snapshot.recordCount) || selectedArchiveRows().length;
+    metrics.innerHTML = [
+      metricMarkup('Validated Month', entry.month || '—', `Revision ${entry.revision || 1}`),
+      metricMarkup('Archived Members', members.length, attendanceGroupShortLabel()),
+      metricMarkup('Activities', snapshot.eventCount || 0, `${recordCount} frozen records`),
+      metricMarkup('Present', counts.Present || 0),
+      metricMarkup('Excused', counts.Excused || 0, 'Excluded from rating'),
+      metricMarkup('Verified Rating', snapshot.groupRate == null ? '—' : `${snapshot.groupRate}%`, 'Computed at finalization')
+    ].join('');
+    if (el('overallAttendanceCaption')) el('overallAttendanceCaption').textContent = `${entry.month} • ${entry.semester} • Finalized ${dateLabel(entry.finalizedAt, { short: true })} • Revision ${entry.revision || 1} • ${recordCount} frozen records`;
+    if (el('attendanceGroupHeading')) el('attendanceGroupHeading').textContent = `Validated Archive — ${attendanceGroupShortLabel()}`;
+    tableBody.innerHTML = members.length ? members.map((member) => {
+      const memberCounts = member.counts || {};
+      return `<tr><td><strong>${safeText(member.memberName || member.id)}</strong><small class="table-subtext">Validated ${safeText(entry.month)} • Revision ${safeText(entry.revision || 1)}</small></td><td>${safeText(member.eventCount || 0)}</td><td>${safeText(memberCounts.Present || 0)}</td><td>${safeText(memberCounts.Late || 0)}</td><td>${safeText(memberCounts.Absent || 0)}</td><td>${safeText(memberCounts.Excused || 0)}</td><td><span class="badge ${member.rate == null ? 'badge-gray' : member.rate >= 80 ? 'badge-green' : member.rate >= 60 ? 'badge-gold' : 'badge-red'}">${member.rate == null ? 'No rated attendance' : `${safeText(member.rate)}%`}</span></td></tr>`;
+    }).join('') : '<tr><td colspan="7"><div class="empty-state compact-empty"><h4>No member records in this archive</h4><p>The selected finalized copy contains no rated member rows.</p></div></td></tr>';
+  }
+
   function renderOverallAttendance() {
     const metrics = el('overallAttendanceMetrics');
     const tableBody = el('attendanceOverallTableBody');
     if (!metrics || !tableBody) return;
+    if (archiveModeActive()) {
+      renderValidatedArchiveOverall(metrics, tableBody);
+      return;
+    }
 
     const allEvents = monthlyActivityEvents();
     const members = membersForAttendanceGroup(monthlyRehearsalEvents());
@@ -441,6 +487,14 @@
     const select = el('attendanceIndividualSelect');
     if (!select) return;
     const current = selectedAttendanceMemberId || select.value;
+    if (archiveModeActive()) {
+      const entry = selectedValidatedArchive();
+      const members = Object.entries(entry?.snapshot?.members || {}).map(([id, item]) => ({ id, name: item?.memberName || id })).sort((a, b) => a.name.localeCompare(b.name));
+      select.innerHTML = '<option value="">Choose an archived member…</option>' + members.map((member) => `<option value="${safeText(member.id)}">${safeText(member.name)} — ${safeText(entry?.month || 'Validated archive')}</option>`).join('');
+      if (members.some((member) => String(member.id) === String(current))) select.value = current;
+      else selectedAttendanceMemberId = '';
+      return;
+    }
     const members = membersForAttendanceGroup(monthlyRehearsalEvents());
     select.innerHTML = '<option value="">Choose a member…</option>' + members.map((member) =>
       `<option value="${safeText(member.id)}">${safeText(member.fullName)} — ${safeText(member.periodGroup)}</option>`
@@ -453,6 +507,24 @@
     const history = el('individualAttendanceHistory');
     const actions = el('individualReportActions');
     if (!container || !history || !actions) return;
+
+    if (archiveModeActive()) {
+      const entry = selectedValidatedArchive();
+      const member = entry?.snapshot?.members?.[selectedAttendanceMemberId];
+      if (!entry || !member) {
+        container.innerHTML = '<div class="dashboard-empty-state"><span>⌕</span><strong>Select an archived member</strong><small>The validated monthly totals and frozen attendance rows will appear here.</small></div>';
+        history.innerHTML = '';
+        actions.classList.add('hidden');
+        return;
+      }
+      const counts = member.counts || {};
+      const name = member.memberName || selectedAttendanceMemberId;
+      container.innerHTML = `<div class="individual-member-heading"><div class="member-avatar">${safeText(String(name).split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase())}</div><div><strong>${safeText(name)}</strong><small>Validated ${safeText(entry.month)} • ${safeText(entry.attendanceGroup)} • Revision ${safeText(entry.revision || 1)}</small></div></div><div class="individual-stat-grid">${metricMarkup('Archived Activities', member.eventCount || 0, entry.month)}${metricMarkup('Present', counts.Present || 0)}${metricMarkup('Late', counts.Late || 0)}${metricMarkup('Absent', counts.Absent || 0)}${metricMarkup('Excused', counts.Excused || 0)}${metricMarkup('Verified Rating', member.rate == null ? '—' : `${member.rate}%`, 'Excused excluded')}</div>`;
+      const rows = selectedArchiveRows().filter((record) => String(record.memberId) === String(selectedAttendanceMemberId));
+      history.innerHTML = rows.length ? `<div class="individual-history-header"><strong>${safeText(entry.month)} Validated Attendance</strong><span>${rows.length} frozen records</span></div>${rows.map((record) => { const badge = record.status === 'Present' ? 'badge-green' : record.status === 'Absent' ? 'badge-red' : record.status === 'Excused' || record.status === 'Late' ? 'badge-gold' : 'badge-gray'; return `<div class="attendance-history-row"><div><strong>${safeText(record.eventTitle || 'Attendance activity')}</strong><small>${safeText(dateLabel(record.eventDate, { short: true }))}</small></div><span class="badge ${badge}">${safeText(record.status || '—')}</span><span class="badge badge-green">Validated</span><small>${safeText(record.remarks || '')}</small></div>`; }).join('')}` : '<div class="dashboard-empty-state"><span>□</span><strong>No frozen attendance rows</strong><small>This archive contains a rating snapshot without record-level rows.</small></div>';
+      actions.classList.add('hidden');
+      return;
+    }
 
     const member = membersForAttendanceGroup(monthlyRehearsalEvents()).find((item) => item.id === selectedAttendanceMemberId);
     if (!member) {
@@ -486,7 +558,7 @@
 
   function renderCalendar() {
     const grid = el('attendanceCalendarGrid');
-    if (!grid) return;
+    if (!grid || archiveModeActive()) return;
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
     const monthStart = new Date(year, month, 1);
@@ -868,13 +940,48 @@
       button.classList.toggle('active', button.dataset.attendanceRosterMode === activeAttendanceRosterMode());
     });
     const modeLabel = attendanceRosterModeLabel();
-    if (el('attendanceRosterModeLabel')) el('attendanceRosterModeLabel').textContent = activeAttendanceRosterMode() === 'Archive' ? 'Archived stage records' : 'Current roster';
+    if (el('attendanceRosterModeLabel')) el('attendanceRosterModeLabel').textContent = activeAttendanceRosterMode() === 'Archive' ? 'Validated finalized months' : 'Current roster';
     if (el('attendanceGroupLabel')) el('attendanceGroupLabel').textContent = attendanceGroupShortLabel();
-    if (el('attendanceGroupPrintButton')) el('attendanceGroupPrintButton').textContent = activeAttendanceRosterMode() === 'Archive' ? 'Print Archived Roster' : 'Print Current Roster';
-    if (el('printOverallAttendance')) el('printOverallAttendance').textContent = 'Print Semestral Rating';
-    if (el('printMonthlyAttendance')) el('printMonthlyAttendance').textContent = 'Print Final Monthly Rating';
+    const archiveMode = activeAttendanceRosterMode() === 'Archive';
+    if (el('attendanceGroupPrintButton')) {
+      el('attendanceGroupPrintButton').textContent = 'Print Current Roster';
+      el('attendanceGroupPrintButton').classList.toggle('hidden', archiveMode);
+    }
+    if (el('printOverallAttendance')) el('printOverallAttendance').classList.toggle('hidden', archiveMode);
+    if (el('printMonthlyAttendance')) el('printMonthlyAttendance').classList.toggle('hidden', archiveMode);
+    if (el('addEventButton')) el('addEventButton').classList.toggle('hidden', archiveMode);
     if (el('attendanceRosterGroupLabel')) el('attendanceRosterGroupLabel').textContent = `${modeLabel}: ${attendanceGroupShortLabel()}`;
-    if (el('attendanceArchiveNotice')) el('attendanceArchiveNotice').classList.toggle('hidden', activeAttendanceRosterMode() !== 'Archive');
+    if (el('attendanceArchiveNotice')) el('attendanceArchiveNotice').classList.toggle('hidden', !archiveMode);
+    if (el('attendanceFinalizedArchiveBlock')) el('attendanceFinalizedArchiveBlock').classList.toggle('hidden', !archiveMode);
+    if (el('attendancePeriodFinalizationCenter')) el('attendancePeriodFinalizationCenter').classList.toggle('hidden', archiveMode);
+    document.querySelector('.attendance-calendar-panel')?.classList.toggle('hidden', archiveMode);
+    document.querySelector('.attendance-management-layout')?.classList.toggle('hidden', archiveMode);
+    el('attendanceView')?.classList.toggle('attendance-archive-mode', archiveMode);
+  }
+
+  let renderEverythingTimer = 0;
+  let renderEverythingFrame = 0;
+  let attendanceRenderPending = false;
+
+  function attendanceViewActive() {
+    const view = el('attendanceView');
+    return Boolean(view && !view.classList.contains('hidden') && view.classList.contains('active'));
+  }
+
+  function scheduleRenderEverything(delay = 35, force = false) {
+    clearTimeout(renderEverythingTimer);
+    renderEverythingTimer = window.setTimeout(() => {
+      if (!force && !attendanceViewActive()) {
+        attendanceRenderPending = true;
+        return;
+      }
+      attendanceRenderPending = false;
+      if (renderEverythingFrame) window.cancelAnimationFrame(renderEverythingFrame);
+      renderEverythingFrame = window.requestAnimationFrame(() => {
+        renderEverythingFrame = 0;
+        renderEverything();
+      });
+    }, delay);
   }
 
   function renderEverything() {
@@ -942,6 +1049,8 @@
       selectedAttendanceMemberId = '';
       if (el('attendanceIndividualSelect')) el('attendanceIndividualSelect').value = '';
       window.LSOOperations?.setAttendanceRosterMode?.(window.LSOAttendanceRosterMode);
+      if (window.LSOAttendanceRosterMode === 'Archive') window.LSOAttendanceGovernance?.getSelectedArchive?.();
+      window.LSOAttendanceGovernance?.renderMonthlyArchives?.();
       renderEverything();
     });
     el('attendanceGroupPrintButton')?.addEventListener('click', printCurrentAttendanceGroupRoster);
@@ -978,11 +1087,14 @@
     }, true);
 
     ['lso:members-changed', 'lso:operations-changed', 'lso:duty-hours-changed', 'lso:attendance-semester-changed', 'lso:attendance-month-changed', 'lso:attendance-group-changed', 'lso:attendance-roster-mode-changed', 'lso:attendance-period-changed', 'lso:cloud-state-changed', 'lso:auth-changed'].forEach((name) => {
-      window.addEventListener(name, () => setTimeout(renderEverything, 30));
+      window.addEventListener(name, () => scheduleRenderEverything(name === 'lso:cloud-state-changed' ? 70 : 35));
     });
+    document.querySelectorAll('[data-view="attendanceView"]').forEach((button) => button.addEventListener('click', () => {
+      scheduleRenderEverything(attendanceRenderPending ? 90 : 55, true);
+    }));
 
     // The existing attendance manager saves first, then this refresh updates analytics and calendar.
-    el('saveAttendanceButton')?.addEventListener('click', () => setTimeout(renderEverything, 80));
+    el('saveAttendanceButton')?.addEventListener('click', () => scheduleRenderEverything(85, true));
     el('eventForm')?.addEventListener('submit', () => setTimeout(() => {
       selectedCalendarDate = el('eventDate')?.value || selectedCalendarDate;
       window.LSOAttendanceSelectedDate = selectedCalendarDate;
@@ -992,11 +1104,11 @@
     }, 100));
   }
 
-  window.addEventListener('lso:auth-changed', () => setTimeout(() => { activeAttendanceGroup(); renderEverything(); }, 0));
-  window.addEventListener('lso:attendance-refresh-request', () => setTimeout(() => renderEverything(), 0));
+  window.addEventListener('lso:auth-changed', () => { activeAttendanceGroup(); scheduleRenderEverything(20); });
+  window.addEventListener('lso:attendance-refresh-request', () => scheduleRenderEverything(0, true));
 
   window.LSOAttendanceMonthWorkspace = Object.freeze({
-    refresh: () => renderEverything(),
+    refresh: () => scheduleRenderEverything(0, true),
     getMonth: () => String(window.LSOAttendanceMonth || ''),
     getSelectedDate: () => String(window.LSOAttendanceSelectedDate || ''),
     getGroupCalendarState: () => ({ group: activeAttendanceGroup(), semester: activeSemester(), month: calendarMonthKey(), selectedDate: selectedCalendarDate })
@@ -1012,7 +1124,7 @@
     wireEvents();
     renderEverything();
     window.setInterval(() => {
-      if (!el('appShell')?.classList.contains('hidden')) renderEverything();
+      if (!document.hidden && !el('appShell')?.classList.contains('hidden') && attendanceViewActive()) scheduleRenderEverything(0, true);
     }, 60_000);
   }
 

@@ -128,18 +128,31 @@
     return new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric' }).format(new Date(timestamp));
   }
 
-  function readNotificationIds() {
+  function notificationFingerprint(notification) {
+    return [notification.category, notification.actionType, notification.targetId, notification.title]
+      .map((value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' '))
+      .join('::');
+  }
+
+  function readNotificationState() {
     try {
       const parsed = JSON.parse(window.LSOStorage.getItem(READ_KEY) || '[]');
-      return new Set(Array.isArray(parsed) ? parsed : []);
+      if (Array.isArray(parsed)) return { ids: new Set(parsed), fingerprints: new Set() };
+      return {
+        ids: new Set(Array.isArray(parsed?.ids) ? parsed.ids : []),
+        fingerprints: new Set(Array.isArray(parsed?.fingerprints) ? parsed.fingerprints : [])
+      };
     } catch {
-      return new Set();
+      return { ids: new Set(), fingerprints: new Set() };
     }
   }
 
-  function saveNotificationIds(readIds) {
+  function saveNotificationState(state) {
     try {
-      window.LSOStorage.setItem(READ_KEY, JSON.stringify([...readIds].slice(-800)));
+      window.LSOStorage.setItem(READ_KEY, JSON.stringify({
+        ids: [...state.ids].slice(-1000),
+        fingerprints: [...state.fingerprints].slice(-1000)
+      }));
     } catch {
       // The dashboard remains functional even when storage is unavailable.
     }
@@ -232,10 +245,11 @@
     if (Array.isArray(enterpriseNotifications)) notifications.push(...enterpriseNotifications);
 
     const severityOrder = { high: 0, medium: 1, low: 2 };
-    const readIds = readNotificationIds();
+    const readState = readNotificationState();
     return notifications
-      .filter((notification, index, all) => all.findIndex((item) => item.id === notification.id) === index)
-      .map((notification) => ({ ...notification, read: readIds.has(notification.id) }))
+      .map((notification) => ({ ...notification, fingerprint: notificationFingerprint(notification) }))
+      .filter((notification, index, all) => all.findIndex((item) => item.id === notification.id || item.fingerprint === notification.fingerprint) === index)
+      .map((notification) => ({ ...notification, read: readState.ids.has(notification.id) || readState.fingerprints.has(notification.fingerprint) }))
       .sort((a, b) => Number(a.read) - Number(b.read)
         || (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)
         || String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
@@ -302,16 +316,21 @@
   }
 
   function markNotificationRead(id) {
-    const readIds = readNotificationIds();
-    readIds.add(id);
-    saveNotificationIds(readIds);
+    const state = readNotificationState();
+    const notification = buildNotifications().find((item) => item.id === id);
+    state.ids.add(id);
+    if (notification?.fingerprint) state.fingerprints.add(notification.fingerprint);
+    saveNotificationState(state);
     renderNotifications();
   }
 
   function markAllNotificationsRead() {
-    const readIds = readNotificationIds();
-    buildNotifications().forEach((notification) => readIds.add(notification.id));
-    saveNotificationIds(readIds);
+    const state = readNotificationState();
+    buildNotifications().forEach((notification) => {
+      state.ids.add(notification.id);
+      if (notification.fingerprint) state.fingerprints.add(notification.fingerprint);
+    });
+    saveNotificationState(state);
     renderNotifications();
   }
 
@@ -551,10 +570,12 @@
   }
 
   function renderDashboardModules() {
-    renderGreeting();
-    renderUpcomingEvents();
-    renderAttendancePulse();
-    renderRecentActivity();
+    if (window.LSORuntimeStability?.isViewActive?.('dashboardView')) {
+      renderGreeting();
+      renderUpcomingEvents();
+      renderAttendancePulse();
+      renderRecentActivity();
+    }
     renderNotifications();
   }
 
@@ -636,7 +657,7 @@
     }));
 
     ['lso:members-changed', 'lso:operations-changed', 'lso:duty-hours-changed', 'lso:accounts-changed', 'lso:auth-changed', 'lso:cloud-state-changed', 'lso:enterprise-ready', 'lso:monthly-report-changed', 'lso:system-health-changed'].forEach((eventName) => {
-      window.addEventListener(eventName, () => setTimeout(renderDashboardModules, 0));
+      window.addEventListener(eventName, () => window.LSORuntimeStability?.schedule?.('dashboard-notifications', renderDashboardModules, 100));
     });
 
     window.addEventListener('storage', (event) => {
@@ -653,7 +674,7 @@
 
     window.setInterval(() => {
       if (!el('appShell')?.classList.contains('hidden')) renderDashboardModules();
-    }, 60_000);
+    }, 90_000);
   }
 
   function initialize() {

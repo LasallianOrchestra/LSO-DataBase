@@ -1,0 +1,187 @@
+/* V53 Attendance stability and archive-integrity presentation.
+   Attendance-only: removes hover movement, prevents stretched cards, and
+   presents one verified archive per month with older revisions grouped. */
+
+#attendanceView .attendance-period-grid {
+  align-items: start;
+}
+
+#attendanceView .attendance-period-card {
+  align-self: start;
+  height: auto;
+  min-height: 0;
+}
+
+/* The Attendance workspace should remain visually stable under the pointer. */
+@media (hover: hover) and (pointer: fine) {
+  #attendanceView :is(
+    .panel,
+    .attendance-period-card,
+    .attendance-archive-card,
+    .attendance-archive-revision,
+    .metric-card,
+    .event-card,
+    .button,
+    .table-action,
+    .segment-button
+  ):hover {
+    transform: none !important;
+  }
+
+  #attendanceView :is(
+    .panel,
+    .attendance-period-card,
+    .attendance-archive-card,
+    .attendance-archive-revision
+  ):hover {
+    box-shadow: inherit !important;
+  }
+
+  #attendanceView table tbody tr:hover,
+  #attendanceView .attendance-table tbody tr:hover,
+  #attendanceView .attendance-table tbody tr:hover td,
+  #attendanceView .attendance-table tbody tr:hover td:first-child {
+    background: inherit !important;
+  }
+}
+
+#attendanceView .attendance-finalized-archive-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+#attendanceView .attendance-finalized-archive-heading > div {
+  display: grid;
+  gap: .2rem;
+  min-width: 0;
+}
+
+#attendanceView .attendance-finalized-archive-heading span {
+  color: #167a5b;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+#attendanceView .attendance-finalized-archive-heading strong {
+  color: #1f2933;
+  font-size: clamp(1rem, 1.6vw, 1.22rem);
+  line-height: 1.25;
+}
+
+#attendanceView .attendance-finalized-archive-heading small {
+  color: #667085;
+  line-height: 1.5;
+  max-width: 76ch;
+}
+
+#attendanceView .attendance-archive-card.is-verified {
+  align-items: start;
+  border-left: 4px solid #167a5b;
+  background: #fff;
+}
+
+#attendanceView .attendance-archive-card-copy {
+  display: grid;
+  gap: .22rem;
+  min-width: 0;
+}
+
+#attendanceView .attendance-archive-card-copy > em {
+  width: fit-content;
+  margin-top: .35rem;
+  padding: .28rem .55rem;
+  border: 1px solid #c9ddd1;
+  border-radius: 999px;
+  background: #e7f4ee;
+  color: #106347;
+  font-size: .72rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+#attendanceView .attendance-archive-revisions {
+  grid-column: 1 / -1;
+  border-top: 1px solid #e4e8ec;
+  padding-top: .72rem;
+}
+
+#attendanceView .attendance-archive-revisions > summary {
+  width: fit-content;
+  color: #425466;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+#attendanceView .attendance-archive-revision-list {
+  display: grid;
+  gap: .75rem;
+  margin-top: .75rem;
+}
+
+#attendanceView .attendance-archive-revision {
+  display: grid;
+  grid-template-columns: minmax(180px, .75fr) minmax(260px, 1fr);
+  gap: .75rem 1rem;
+  align-items: start;
+  padding: .85rem;
+  border: 1px solid #d9e0e6;
+  border-radius: 12px;
+  background: #f8faf9;
+}
+
+#attendanceView .attendance-archive-revision > div:first-child {
+  display: grid;
+  gap: .25rem;
+}
+
+#attendanceView .attendance-archive-revision > div:first-child strong {
+  color: #1f2933;
+}
+
+#attendanceView .attendance-archive-revision > div:first-child small {
+  color: #667085;
+  line-height: 1.45;
+}
+
+#attendanceView .attendance-archive-metrics.is-compact {
+  gap: .45rem;
+}
+
+#attendanceView .attendance-archive-revision .attendance-archive-original,
+#attendanceView .attendance-archive-revision .attendance-archive-legacy-note {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  #attendanceView .attendance-archive-revision {
+    grid-template-columns: 1fr;
+  }
+
+  #attendanceView .attendance-finalized-archive-heading .button {
+    width: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  #attendanceView .attendance-finalized-archive-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  #attendanceView .attendance-finalized-archive-heading .button {
+    width: 100%;
+  }
+
+  #attendanceView .attendance-archive-card-copy > em {
+    width: 100%;
+    border-radius: 10px;
+    text-align: center;
+  }
+}

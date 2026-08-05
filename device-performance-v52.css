@@ -1,0 +1,103 @@
+/* V52 cross-device performance layer.
+   This file changes rendering cost and scroll containment only. */
+
+#attendanceView .attendance-roster-scroll,
+#attendanceView .attendance-finalized-archive-list,
+#attendanceView .attendance-archive-original .table-wrap,
+#dutyHoursView .duty-overall-table,
+#dutyHoursView .duty-ledger-table,
+#dutyHoursView .duty-approval-table,
+.table-wrap {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+#attendanceView .attendance-roster-scroll,
+#attendanceView .attendance-archive-original .table-wrap,
+#dutyHoursView .duty-overall-table,
+#dutyHoursView .duty-ledger-table,
+#dutyHoursView .duty-approval-table {
+  contain: layout paint;
+}
+
+#attendanceView .attendance-finalized-archive-list,
+#dutyHoursView .duty-overall-metrics,
+#dutyHoursView .duty-overall-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 900px), (hover: none), (pointer: coarse) {
+  /* Remove expensive visual effects on touch and smaller devices while
+     preserving the same layout, colors, and information hierarchy. */
+  .panel,
+  .modal-card,
+  .accessibility-drawer,
+  .notification-panel,
+  .system-error-card,
+  .attendance-archive-card,
+  .attendance-period-card,
+  .duty-year-card,
+  .dashboard-card,
+  .action-center-card {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: 0 6px 18px rgba(17, 36, 29, 0.08) !important;
+  }
+
+  .panel:hover,
+  .dashboard-card:hover,
+  .attendance-archive-card:hover,
+  .duty-year-card:hover,
+  .action-center-card:hover {
+    transform: none !important;
+  }
+
+  .button,
+  .icon-button,
+  .nav-item,
+  .segment-button,
+  .table-action,
+  .panel,
+  .dashboard-card,
+  .attendance-archive-card,
+  .duty-year-card,
+  .action-center-card {
+    animation-duration: 120ms !important;
+    transition-duration: 120ms !important;
+  }
+
+  html,
+  body,
+  .main-content,
+  .view,
+  .table-wrap,
+  .attendance-roster-scroll,
+  .attendance-finalized-archive-list,
+  .duty-overall-table {
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  #attendanceView .attendance-finalized-archive-list {
+    gap: 10px;
+  }
+
+  #attendanceView .attendance-archive-original .table-wrap,
+  #attendanceView .attendance-roster-scroll,
+  #dutyHoursView .duty-overall-table {
+    max-height: min(58dvh, 560px);
+  }
+
+  #dutyHoursView .duty-overall-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+  }
+}

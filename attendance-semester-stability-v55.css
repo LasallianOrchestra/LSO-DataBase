@@ -1,0 +1,55 @@
+/* V55 — Attendance semester state stability and cross-device control consistency. */
+#attendancePeriodFinalizationCenter .attendance-period-actions {
+  min-height: 3.25rem;
+  align-items: center;
+  gap: .75rem;
+}
+
+#saveAttendanceSemesterEndDate,
+#finalizeAttendanceSemesterButton,
+#reopenAttendanceSemesterButton {
+  min-height: 3rem;
+  white-space: nowrap;
+  animation: none !important;
+  transform: none !important;
+}
+
+#finalizeAttendanceSemesterButton,
+#reopenAttendanceSemesterButton {
+  min-width: 13.5rem;
+}
+
+#attendanceSemesterEndDate:disabled {
+  cursor: not-allowed;
+  opacity: .82;
+  background: var(--surface-muted, #f4f6f8);
+}
+
+#attendanceSemesterFinalizationBadge.badge-blue {
+  min-width: 5.75rem;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  #attendancePeriodFinalizationCenter .attendance-period-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  #saveAttendanceSemesterEndDate,
+  #finalizeAttendanceSemesterButton,
+  #reopenAttendanceSemesterButton {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #attendancePeriodFinalizationCenter *,
+  #attendancePeriodFinalizationCenter *::before,
+  #attendancePeriodFinalizationCenter *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}

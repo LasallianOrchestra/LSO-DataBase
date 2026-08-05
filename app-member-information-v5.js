@@ -317,7 +317,7 @@
     const titleMap = {
       dashboardView: 'Dashboard',
       membersView: 'Members',
-      lookupView: 'Member Lookup',
+      lookupView: 'Members Overall Record',
       contractView: 'Contract Maker',
       monthlyReportView: 'Overall Monthly Report',
       attendanceView: 'Attendance',
@@ -507,8 +507,12 @@
 
   function lookupMatches() {
     const search = normalize(el('lookupSearch').value);
-    const source = search ? members.filter((member) => [member.fullName, member.membershipId, member.studentNumber, member.membershipStage, member.periodGroup].map(normalize).join(' ').includes(search)) : members;
-    return source.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))).slice(0, 30);
+    const source = search ? members.filter((member) => [
+      member.fullName, member.membershipId, member.studentNumber, member.membershipStage, member.periodGroup,
+      member.memberStatus, member.college, member.course, member.yearLevel, member.section, member.cys,
+      member.orchestraSection, member.primaryInstrument, member.organizationPosition, member.organizationRole
+    ].map(normalize).join(' ').includes(search)) : members;
+    return source.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))).slice(0, 100);
   }
 
   function renderLookupResults() {
@@ -679,6 +683,7 @@
       reviewStatus: el('reviewStatus').value,
       remarks: el('remarks').value.trim(),
       createdAt: existing?.createdAt || new Date().toISOString(),
+      contractRecords: Array.isArray(existing?.contractRecords) ? existing.contractRecords : [],
       updatedAt: new Date().toISOString()
     };
     if (!member.cys) member.cys = buildCys(member.course, member.yearLevel, member.section);
@@ -1051,10 +1056,33 @@
     setView
   };
 
+  function activeApplicationView() {
+    return document.querySelector('.view.active:not(.hidden)')?.id || '';
+  }
+
+  function renderVisibleMemberSurface() {
+    const viewId = activeApplicationView();
+    if (viewId === 'dashboardView') renderDashboard();
+    else if (viewId === 'membersView') {
+      renderMembersTable();
+      renderStorage();
+    } else if (viewId === 'lookupView') {
+      renderLookupResults();
+      renderStorage();
+    }
+  }
+
   window.addEventListener('lso:cloud-state-changed', (event) => {
-    if (event.detail?.key && event.detail.key !== STORAGE_KEY) return;
+    const keys = Array.isArray(event.detail?.keys) ? event.detail.keys : [event.detail?.key].filter(Boolean);
+    if (keys.length && !keys.includes(STORAGE_KEY)) return;
     members = loadMembers();
-    renderAll();
+    if (window.LSORuntimeStability?.schedule) {
+      window.LSORuntimeStability.schedule('member-core-visible-render', renderVisibleMemberSurface, 90, {
+        viewId: ['dashboardView', 'membersView', 'lookupView'].includes(activeApplicationView()) ? activeApplicationView() : ''
+      });
+    } else {
+      window.setTimeout(renderVisibleMemberSurface, 90);
+    }
   });
 
   if (typeof window !== 'undefined' && window.__LSO_TEST_MODE__) return;

@@ -1,0 +1,204 @@
+/* V56 Attendance Archive Workflow
+   Presentation-only rules for separating Current Roster work from validated archives. */
+
+#attendanceView.attendance-archive-mode .attendance-group-control-panel {
+  margin-bottom: 1rem;
+}
+
+#attendanceFinalizedArchiveBlock {
+  margin: 0 0 1.25rem;
+  border: 1px solid rgba(18, 63, 51, 0.18);
+  background: #fff;
+}
+
+#attendanceFinalizedArchiveBlock.hidden {
+  display: none !important;
+}
+
+#attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading {
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(18, 63, 51, 0.12);
+}
+
+#attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading > div {
+  min-width: 0;
+}
+
+#attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading span {
+  display: block;
+  margin-bottom: .25rem;
+  color: #167a5b;
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+#attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading strong {
+  display: block;
+  color: #123f33;
+  font-size: clamp(1.1rem, 1.8vw, 1.45rem);
+}
+
+#attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading small {
+  display: block;
+  max-width: 72ch;
+  margin-top: .35rem;
+  color: #667085;
+  line-height: 1.55;
+}
+
+.attendance-archive-card {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.4fr) minmax(330px, 1fr);
+  gap: 1rem 1.25rem;
+  align-items: start;
+}
+
+.attendance-archive-card.is-selected {
+  border-color: rgba(22, 122, 91, .5);
+  box-shadow: 0 0 0 3px rgba(22, 122, 91, .1);
+}
+
+.attendance-archive-card.is-selected .attendance-archive-card-copy em {
+  color: #106347;
+  background: #e7f4ee;
+  border-color: rgba(22, 122, 91, .24);
+}
+
+.attendance-archive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .65rem;
+  grid-column: 2;
+}
+
+.attendance-archive-actions.is-compact {
+  grid-column: auto;
+  justify-content: flex-start;
+  margin-top: .65rem;
+}
+
+.attendance-archive-actions .button {
+  min-height: 42px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.attendance-archive-card > .attendance-archive-original,
+.attendance-archive-card > .attendance-archive-revisions {
+  grid-column: 1 / -1;
+}
+
+.attendance-archive-revision.is-selected {
+  border-color: rgba(22, 122, 91, .42);
+  background: #f7fbf9;
+}
+
+#attendanceView.attendance-archive-mode .attendance-overview-grid {
+  align-items: start;
+}
+
+#attendanceView.attendance-archive-mode .attendance-overall-panel,
+#attendanceView.attendance-archive-mode .individual-attendance-panel {
+  border-color: rgba(18, 63, 51, .14);
+}
+
+#attendanceView.attendance-archive-mode .attendance-verification-heading small {
+  max-width: 68ch;
+}
+
+#attendanceView.attendance-archive-mode .attendance-history-row {
+  grid-template-columns: minmax(180px, 1fr) auto auto minmax(160px, .8fr);
+}
+
+#attendanceView.attendance-archive-mode .attendance-archive-notice {
+  margin-bottom: 1rem;
+}
+
+#attendanceView.attendance-archive-mode .attendance-archive-notice > span {
+  min-width: max-content;
+}
+
+/* Archive view is read-only and should not inherit motion-heavy attendance hovers. */
+#attendanceView.attendance-archive-mode .panel,
+#attendanceView.attendance-archive-mode .attendance-archive-card,
+#attendanceView.attendance-archive-mode .attendance-archive-revision,
+#attendanceView.attendance-archive-mode .button {
+  transform: none !important;
+}
+
+#attendanceView.attendance-archive-mode .attendance-archive-card:hover,
+#attendanceView.attendance-archive-mode .attendance-archive-revision:hover {
+  transform: none !important;
+  box-shadow: inherit;
+}
+
+@media (max-width: 900px) {
+  .attendance-archive-card {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-archive-actions {
+    grid-column: 1;
+    justify-content: flex-start;
+  }
+
+  #attendanceView.attendance-archive-mode .attendance-history-row {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+@media (max-width: 640px) {
+  #attendanceFinalizedArchiveBlock {
+    padding: 1rem;
+  }
+
+  #attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  #attendanceFinalizedArchiveBlock .attendance-finalized-archive-heading .button {
+    width: 100%;
+  }
+
+  .attendance-archive-actions,
+  .attendance-archive-actions.is-compact {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .attendance-archive-actions .button {
+    width: 100%;
+  }
+
+  .attendance-archive-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #attendanceView.attendance-archive-mode *,
+  #attendanceView.attendance-archive-mode *::before,
+  #attendanceView.attendance-archive-mode *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+#attendanceView.attendance-archive-mode #attendancePeriodFinalizationCenter,
+#attendanceView.attendance-archive-mode .attendance-calendar-panel,
+#attendanceView.attendance-archive-mode .attendance-management-layout,
+#attendanceView.attendance-archive-mode #addEventButton,
+#attendanceView.attendance-archive-mode #printOverallAttendance,
+#attendanceView.attendance-archive-mode #printMonthlyAttendance,
+#attendanceView.attendance-archive-mode #attendanceGroupPrintButton {
+  display: none !important;
+}

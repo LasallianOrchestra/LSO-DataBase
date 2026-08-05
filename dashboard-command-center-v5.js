@@ -759,7 +759,7 @@
     document.addEventListener('click', handleClick);
     document.addEventListener('change', handleChange);
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeDetail(); });
-    ['lso:members-changed', 'lso:operations-changed', 'lso:accounts-changed', 'lso:auth-changed', 'lso:cloud-state-changed', 'lso:duty-hours-changed', 'lso:attendance-governance-changed'].forEach((name) => window.addEventListener(name, () => setTimeout(render, 40)));
+    ['lso:members-changed', 'lso:operations-changed', 'lso:accounts-changed', 'lso:auth-changed', 'lso:cloud-state-changed', 'lso:duty-hours-changed', 'lso:attendance-governance-changed'].forEach((name) => window.addEventListener(name, () => window.LSORuntimeStability?.schedule?.('dashboard-command-center', render, 90, { viewId: 'dashboardView' })));
     qsa('[data-view="dashboardView"]').forEach((button) => button.addEventListener('click', () => setTimeout(render, 35)));
   }
 
@@ -768,8 +768,8 @@
     wire();
     render();
     window.setInterval(() => {
-      if (!el('appShell')?.classList.contains('hidden') && el('dashboardView')?.classList.contains('active')) render();
-    }, 60000);
+      if (!el('appShell')?.classList.contains('hidden') && window.LSORuntimeStability?.isViewActive?.('dashboardView')) render();
+    }, 90000);
     window.LSODashboardCommandCenter = { render, getData: dashboardData, hasFullDashboardAccess: () => isAdmin() || isGeneralSecretaryFullDashboard(), setMonth(month) { if (/^\d{4}-\d{2}$/.test(month)) { selectedMonth = month; render(); } } };
   }
 

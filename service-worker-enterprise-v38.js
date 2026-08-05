@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v48-smart-notifications1';
+const CACHE_VERSION = 'lso-website-enterprise-v56-attendance-archive-workflow1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -40,9 +40,18 @@ const CORE_PATHS = [
   './professional-interface-v43.css',
   './cross-device-accessibility-v44.css',
   './smooth-motion-v1.css',
+  './member-overall-record-v49.css',
+  './governance-archives-v50.css',
+  './targeted-repairs-v51.css',
+  './device-performance-v52.css',
+  './attendance-stability-v53.css',
+  './runtime-stability-v54.css',
+  './attendance-semester-stability-v55.css',
+  './attendance-archive-workflow-v56.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',
+  './runtime-stability-v54.js',
   './role-access-v4.js',
   './cloud-staff-v5.js',
   './app-member-information-v5.js',
@@ -60,6 +69,8 @@ const CORE_PATHS = [
   './monthly-report-print-v31.js',
   './contract-template-data.js',
   './contract-maker-membership-v4.js',
+  './official-pdf-assets-v51.js',
+  './member-overall-record-v49.js',
   './dashboard-intelligence-member-info-v3.js',
   './permissions-dynamic-v38.js',
   './dashboard-command-center-v5.js',
@@ -134,7 +145,7 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname.endsWith('.supabase.co')) return;
   if (request.mode === 'navigate') return void event.respondWith(networkFirst(request));
   if (url.hostname === 'cdn.jsdelivr.net') return void event.respondWith(networkFirst(request));
-  if (url.origin === self.location.origin && /\/(?:workflow-attendance-month-v[2-5]|management-attendance-member-info-v3|attendance-governance|duty-hours-member-info-v1[12]|auth-view-controller-v17|cloud-staff-v[34]|role-access-v3|lso-system-core-v3|permissions-staff-v2|system-enterprise-v1)\.js$/i.test(url.pathname)) {
+  if (url.origin === self.location.origin && /\/(?:workflow-attendance-month-v[2-7]|management-attendance-member-info-v3|attendance-governance|duty-hours-member-info-v1[12]|auth-view-controller-v17|cloud-staff-v[34]|role-access-v3|lso-system-core-v3|permissions-staff-v2|system-enterprise-v1)\.js$/i.test(url.pathname)) {
     const redirects = [
       [/workflow-attendance-month/i, './workflow-attendance-month-v6.js'],
       [/management-attendance/i, './management-attendance-member-info-v4.js'],

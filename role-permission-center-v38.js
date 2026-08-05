@@ -9,7 +9,7 @@
   const VIEW_DEFS = [
     ['dashboardView','Dashboard','Summary, alerts, analytics, and operational overview.'],
     ['membersView','Members','Member directory, records, and stage monitoring.'],
-    ['lookupView','Member Lookup','Focused member search and record review.'],
+    ['lookupView','Members Overall Record','Unified profile, contracts, monthly reports, attendance, duty hours, and downloadable PDF overview.'],
     ['contractView','Contract','Membership contract preparation and printing.'],
     ['monthlyReportView','Monthly Report','Monthly filing, report review, and PDF generation.'],
     ['attendanceView','Attendance','Activities, calendars, rosters, ratings, and reports.'],
@@ -77,7 +77,8 @@
   }
   function setBusy(value) {
     busy = Boolean(value);
-    ['permissionRoleSelect','permissionLandingViewSelect','saveRolePermissionsButton','resetRolePermissionsButton'].forEach((id) => { if (el(id)) el(id).disabled = busy; });
+    ['permissionRoleSelect','permissionLandingViewSelect','saveRolePermissionsButton','resetRolePermissionsButton','permissionCopySourceRole','copyRolePermissionsButton'].forEach((id) => { if (el(id)) el(id).disabled = busy; });
+    document.querySelectorAll('[data-permission-bulk]').forEach((button) => { button.disabled = busy || activeRole === ADMIN; });
     el('rolePermissionEditor')?.setAttribute('aria-busy', String(busy));
   }
 
@@ -124,6 +125,15 @@
     }
     if (!ROLES.includes(activeRole)) activeRole = 'Membership';
     select.value = activeRole;
+    const source = el('permissionCopySourceRole');
+    if (source) {
+      const candidates = ROLES.filter((roleName) => roleName !== activeRole);
+      source.innerHTML = candidates.map((roleName) => `<option value="${safe(roleName)}">${safe(roleName)}</option>`).join('');
+      if (!candidates.includes(source.value)) source.value = candidates[0] || '';
+      source.disabled = activeRole === ADMIN || busy;
+    }
+    if (el('copyRolePermissionsButton')) el('copyRolePermissionsButton').disabled = activeRole === ADMIN || busy;
+    document.querySelectorAll('[data-permission-bulk]').forEach((button) => { button.disabled = activeRole === ADMIN || busy; });
   }
 
   function toggleCard(type, key, label, description, granted, roleName) {
@@ -251,6 +261,32 @@
     return true;
   }
 
+  function applyWorkingCopy(sourceRole) {
+    if (!isAdmin() || activeRole === ADMIN || !sourceRole || sourceRole === activeRole) return;
+    const source = roleRow(sourceRole);
+    if (!source) return status('The source role permissions are unavailable.', 'error');
+    const groups = { view: new Set(source.views || []), action: new Set(source.actions || []), attendance: new Set(source.attendanceGroups || []) };
+    document.querySelectorAll('#rolePermissionEditor input[data-permission-kind]').forEach((input) => {
+      if (input.disabled) return;
+      input.checked = groups[input.dataset.permissionKind]?.has(input.value) || false;
+    });
+    updateLandingOptions();
+    const landing = el('permissionLandingViewSelect');
+    if (landing && [...landing.options].some((option) => option.value === source.landingView)) landing.value = source.landingView;
+    updateSummary();
+    status(`${sourceRole} was applied as a working copy for ${activeRole}. Review it, then select Save Role Permissions.`, 'success');
+  }
+
+  function applyBulkPermission(action) {
+    if (!isAdmin() || activeRole === ADMIN) return;
+    const [section, mode] = String(action || '').split('-');
+    const selector = section === 'modules' ? '#permissionModuleOptions' : section === 'actions' ? '#permissionActionOptions' : '#permissionAttendanceOptions';
+    const inputs = [...document.querySelectorAll(`${selector} input:not(:disabled)` )];
+    inputs.forEach((input) => { input.checked = mode === 'all'; });
+    if (section === 'modules') updateLandingOptions(); else updateSummary();
+    status(`${mode === 'all' ? 'Selected' : 'Cleared'} ${section === 'attendance' ? 'attendance groups' : section} for ${activeRole}. Review the working copy before saving.`, 'success');
+  }
+
   async function save() {
     if (!isAdmin() || activeRole === ADMIN || busy) return;
     const views = checked('#permissionModuleOptions input:not(:disabled)');
@@ -296,6 +332,8 @@
     el('permissionLandingViewSelect')?.addEventListener('change', updateSummary);
     el('saveRolePermissionsButton')?.addEventListener('click', save);
     el('resetRolePermissionsButton')?.addEventListener('click', reset);
+    el('copyRolePermissionsButton')?.addEventListener('click', () => applyWorkingCopy(el('permissionCopySourceRole')?.value || ''));
+    el('permissionBulkActions')?.addEventListener('click', (event) => { const button = event.target.closest('[data-permission-bulk]'); if (button) applyBulkPermission(button.dataset.permissionBulk); });
     el('refreshRolePermissionsButton')?.addEventListener('click', () => load({ force: true }));
     document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click', () => {
       requestAnimationFrame(() => { if (!hydrateFromRuntime()) load({ quiet: true }); });

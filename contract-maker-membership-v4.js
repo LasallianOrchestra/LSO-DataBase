@@ -2,6 +2,7 @@
   'use strict';
 
   const TEMPLATE_URL = new URL('lso-contract-template.pdf?v=20260718-contract-v3', document.baseURI).href;
+  const MEMBER_KEY = 'lso_member_database_v1';
   const el = (id) => document.getElementById(id);
   let selectedMemberId = '';
   let templateBytesPromise = null;
@@ -508,6 +509,37 @@
     return String(value || 'Member').trim().replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 70) || 'Member';
   }
 
+  function trackGeneratedContract(data, filename) {
+    try {
+      const records = JSON.parse(window.LSOStorage?.getItem(MEMBER_KEY) || '[]');
+      if (!Array.isArray(records)) return false;
+      const index = records.findIndex((member) => String(member.id) === String(selectedMemberId));
+      if (index < 0) return false;
+      const current = Array.isArray(records[index].contractRecords) ? records[index].contractRecords : [];
+      const entry = {
+        id: window.crypto?.randomUUID ? window.crypto.randomUUID() : `contract-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        filename,
+        generatedAt: new Date().toISOString(),
+        contractDate: data.date || '',
+        semester: data.semester || '',
+        academicYear: data.academicYear || '',
+        officer: data.officer || '',
+        address: data.address || '',
+        generatedBy: (window.LSOAuth?.getActiveAccount?.() || window.LSOCurrentAccount || {}).username || 'Authorized user'
+      };
+      records[index] = { ...records[index], contractRecords: [entry, ...current].slice(0, 100), updatedAt: new Date().toISOString() };
+      const saved = window.LSOStorage?.setItem(MEMBER_KEY, JSON.stringify(records));
+      if (saved === false) return false;
+      window.dispatchEvent(new CustomEvent('lso:members-changed', { detail: { source: 'contract-history', memberId: selectedMemberId } }));
+      window.dispatchEvent(new CustomEvent('lso:cloud-state-changed', { detail: { key: MEMBER_KEY, source: 'contract-history' } }));
+      window.LSOOperations?.logActivity?.('Tracked generated membership contract', 'Contracts', `${data.name} • ${data.semester || 'Semester not set'} • ${data.academicYear || 'Academic year not set'}`);
+      return true;
+    } catch (error) {
+      console.warn('Contract history could not be tracked:', error);
+      return false;
+    }
+  }
+
   async function downloadContract() {
     if (!window.LSOPermissions?.require?.('generateContract', 'Administrator or Membership access is required to generate a membership contract.')) return;
     setMessage();
@@ -517,8 +549,10 @@
     try {
       const data = formData();
       const bytes = await generatePdfBytes({ requireOfficer: true });
-      downloadBlob(`LSO_Membership_Contract_${fileSafeName(data.name)}.pdf`, bytes);
-      setMessage('The completed two-page contract was downloaded.', true);
+      const filename = `LSO_Membership_Contract_${fileSafeName(data.name)}.pdf`;
+      downloadBlob(filename, bytes);
+      trackGeneratedContract(data, filename);
+      setMessage('The completed two-page contract was downloaded and added to the member record.', true);
       window.LSOApp?.showToast?.('Membership contract downloaded.');
     } catch (error) {
       setMessage(error.message || 'The contract could not be generated.');
@@ -569,7 +603,7 @@
     renderMemberList();
     updateButtons();
     window.addEventListener('lso:auth-changed', () => setTimeout(showRoleState, 0));
-    window.addEventListener('lso:members-changed', () => setTimeout(refreshMembers, 30));
+    window.addEventListener('lso:members-changed', () => window.LSORuntimeStability?.schedule?.('contract-members', refreshMembers, 100, { viewId: 'contractView' }));
     window.addEventListener('lso:cloud-state-changed', (event) => {
       if (!event.detail?.key || event.detail.key === 'lso_member_database_v1') setTimeout(refreshMembers, 30);
     });
@@ -579,6 +613,13 @@
     refresh: refreshMembers,
     generatePdfBytes,
     getSelectedMember: selectedMember,
+    selectMember: (memberId) => {
+      const member = allMembers().find((item) => String(item.id) === String(memberId));
+      if (!member) return false;
+      populateMember(member);
+      renderMemberList();
+      return true;
+    },
     getDiagnostics: () => ({ templateSource, hasEmbeddedTemplate: Boolean(window.LSO_CONTRACT_TEMPLATE_BASE64), hasPdfLib: Boolean(window.PDFLib), previewReady: Boolean(previewUrl) })
   };
 

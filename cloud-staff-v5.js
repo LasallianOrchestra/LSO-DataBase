@@ -2,7 +2,11 @@
   'use strict';
 
   const TABLE_ROW_ID = 1;
-  const POLL_INTERVAL_MS = 5000;
+  const POLL_INTERVAL_MS = (() => {
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+    const lowConcurrency = Number(navigator.hardwareConcurrency || 8) <= 4;
+    return coarse || lowConcurrency ? 10000 : 7000;
+  })();
   const PENDING_KEY = 'lso_cloud_pending_v1';
   const MONTHLY_COMPAT_COLUMN = 'monthly_reports_compat';
   const MONTHLY_SETTINGS_KEY = '__lso_monthly_reports_v1';
@@ -152,12 +156,22 @@
     }
   }
 
-  function dispatchDomainChange(key, source = 'cloud') {
+  function dispatchDomainChange(key, source = 'cloud', includeCloudState = true) {
     if (key === 'lso_member_database_v1') emit('lso:members-changed', { source });
     if (['lso_events_v2', 'lso_attendance_v2', 'lso_instruments_v2', 'lso_activity_log_v2', 'lso_system_settings_v2', 'lso_duty_hours_v1', 'lso_monthly_reports_v1'].includes(key)) {
       emit('lso:operations-changed', { key, source });
     }
-    emit('lso:cloud-state-changed', { key, source });
+    if (includeCloudState) emit('lso:cloud-state-changed', { key, keys: [key], source });
+  }
+
+  function compactSettingsValue(value) {
+    const normalized = normalizeColumn('settings', value);
+    try {
+      const compacted = window.LSORuntimeStability?.compactAttendanceSettings?.(normalized);
+      return compacted?.value && typeof compacted.value === 'object' ? compacted.value : normalized;
+    } catch {
+      return normalized;
+    }
   }
 
   function stateColumn(stateObject, column) {
@@ -175,27 +189,153 @@
       const settingsValue = normalizeColumn(column, stateObject.settings);
       const cleanSettings = { ...settingsValue };
       delete cleanSettings[MONTHLY_SETTINGS_KEY];
-      return cleanSettings;
+      return compactSettingsValue(cleanSettings);
     }
     return normalizeColumn(column, stateObject[column]);
   }
 
-  function applyState(nextState, source = 'cloud') {
-    if (!nextState || typeof nextState !== 'object') return;
-    state = nextState;
-    lastServerUpdate = String(nextState.updated_at || nextState.updatedAt || '');
+  function governanceEntryTimestamp(entry) {
+    return Math.max(...[entry?.updatedAt, entry?.liveArchiveSyncedAt, entry?.compactedAt, entry?.reopenedAt, entry?.finalizedAt]
+      .filter(Boolean).map((value) => Date.parse(value) || 0), 0);
+  }
 
-    Object.entries(KEY_TO_COLUMN).forEach(([key, column]) => {
-      if (dirtyVersions.has(column)) return;
-      const serialized = JSON.stringify(stateColumn(nextState, column));
-      if (getLocal(key) !== serialized) {
-        setLocal(key, serialized);
-        dispatchDomainChange(key, source);
-      }
+  function chooseNewerGovernanceEntry(localEntry, remoteEntry) {
+    if (!localEntry) return { value: remoteEntry, localWon: false };
+    if (!remoteEntry) return { value: localEntry, localWon: true };
+    const localTime = governanceEntryTimestamp(localEntry);
+    const remoteTime = governanceEntryTimestamp(remoteEntry);
+    if (localTime !== remoteTime) return localTime > remoteTime
+      ? { value: localEntry, localWon: true }
+      : { value: remoteEntry, localWon: false };
+    const localVersion = Math.max(Number(localEntry.stateVersion) || 0, Number(localEntry.revision) || 0);
+    const remoteVersion = Math.max(Number(remoteEntry.stateVersion) || 0, Number(remoteEntry.revision) || 0);
+    if (localVersion !== remoteVersion) return localVersion > remoteVersion
+      ? { value: localEntry, localWon: true }
+      : { value: remoteEntry, localWon: false };
+    // A Finalized entry must not regress to a timestamp-less Draft due to a stale full-settings write.
+    if (localEntry.state === 'Finalized' && remoteEntry.state !== 'Finalized' && !remoteEntry.reopenedAt && !remoteEntry.updatedAt) {
+      return { value: localEntry, localWon: true };
+    }
+    return { value: remoteEntry, localWon: false };
+  }
+
+  function mergeGovernanceMap(localMap, remoteMap) {
+    const result = {};
+    let localWon = false;
+    const keys = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
+    keys.forEach((key) => {
+      const chosen = chooseNewerGovernanceEntry(localMap?.[key], remoteMap?.[key]);
+      result[key] = chosen.value;
+      localWon = localWon || chosen.localWon;
+    });
+    return { value: result, localWon };
+  }
+
+  function mergeAttendanceGovernance(localGovernance, remoteGovernance) {
+    if (!localGovernance || typeof localGovernance !== 'object') return { value: remoteGovernance, localWon: false };
+    if (!remoteGovernance || typeof remoteGovernance !== 'object') return { value: localGovernance, localWon: true };
+    const months = mergeGovernanceMap(localGovernance.monthFinalizations, remoteGovernance.monthFinalizations);
+    const semesters = mergeGovernanceMap(localGovernance.semesterFinalizations, remoteGovernance.semesterFinalizations);
+    const endDateUpdates = mergeGovernanceMap(localGovernance.semesterEndDateUpdates, remoteGovernance.semesterEndDateUpdates);
+    const semesterEndDates = { ...(remoteGovernance.semesterEndDates || {}) };
+    Object.entries(endDateUpdates.value).forEach(([semester, meta]) => {
+      if (meta?.value) semesterEndDates[semester] = meta.value;
     });
 
+    const archiveMap = new Map();
+    const archiveKey = (entry) => String(entry?.id || `${entry?.scopeKey || ''}::${entry?.revision || 0}::${entry?.finalizedAt || ''}`);
+    [...(remoteGovernance.archives || []), ...(localGovernance.archives || [])].forEach((entry) => {
+      if (!entry) return;
+      const key = archiveKey(entry);
+      const current = archiveMap.get(key);
+      if (!current || governanceEntryTimestamp(entry) >= governanceEntryTimestamp(current)) archiveMap.set(key, entry);
+    });
+    const archives = [...archiveMap.values()].sort((a, b) => String(b?.finalizedAt || '').localeCompare(String(a?.finalizedAt || ''))).slice(0, 240);
+    const localArchiveIds = new Set((localGovernance.archives || []).map(archiveKey));
+    const remoteArchiveIds = new Set((remoteGovernance.archives || []).map(archiveKey));
+    const remoteArchiveMap = new Map((remoteGovernance.archives || []).map((entry) => [archiveKey(entry), entry]));
+    const localArchiveWon = [...localArchiveIds].some((id) => !remoteArchiveIds.has(id)) ||
+      (localGovernance.archives || []).some((entry) => {
+        const remoteEntry = remoteArchiveMap.get(archiveKey(entry));
+        return remoteEntry && governanceEntryTimestamp(entry) >= governanceEntryTimestamp(remoteEntry) && JSON.stringify(entry) !== JSON.stringify(remoteEntry);
+      });
+
+    const localUpdated = Date.parse(localGovernance.updatedAt || '') || 0;
+    const remoteUpdated = Date.parse(remoteGovernance.updatedAt || '') || 0;
+    const localWon = months.localWon || semesters.localWon || endDateUpdates.localWon || localArchiveWon;
+    const base = localUpdated > remoteUpdated ? localGovernance : remoteGovernance;
+    return {
+      value: {
+        ...base,
+        version: Math.max(Number(localGovernance.version) || 1, Number(remoteGovernance.version) || 1),
+        semesterEndDates,
+        semesterEndDateUpdates: endDateUpdates.value,
+        monthFinalizations: months.value,
+        semesterFinalizations: semesters.value,
+        archives,
+        loaPolicyVersion: Math.max(Number(localGovernance.loaPolicyVersion) || 0, Number(remoteGovernance.loaPolicyVersion) || 0),
+        updatedAt: localUpdated > remoteUpdated ? localGovernance.updatedAt : remoteGovernance.updatedAt,
+        updatedBy: localUpdated > remoteUpdated ? localGovernance.updatedBy : remoteGovernance.updatedBy,
+        mutationId: localUpdated > remoteUpdated ? localGovernance.mutationId : remoteGovernance.mutationId
+      },
+      localWon
+    };
+  }
+
+  function mergeRemoteSettingsWithLocal(remoteSettings) {
+    const remote = normalizeColumn('settings', remoteSettings);
+    const local = normalizeColumn('settings', safeParse(getLocal('lso_system_settings_v2'), {}));
+    const mergedGovernance = mergeAttendanceGovernance(local.attendancePeriodGovernance, remote.attendancePeriodGovernance);
+    if (!mergedGovernance.value) return { value: remote, needsPush: false };
+    return {
+      value: { ...remote, attendancePeriodGovernance: mergedGovernance.value },
+      needsPush: mergedGovernance.localWon
+    };
+  }
+
+  function applyState(nextState, source = 'cloud') {
+    if (!nextState || typeof nextState !== 'object') return;
+    // Keep the in-memory cloud snapshot compact as well. Legacy archive payloads can be
+    // several megabytes and cloning them after each update can freeze lower-power devices.
+    state = {
+      ...nextState,
+      settings: compactSettingsValue(nextState.settings)
+    };
+    nextState = state;
+    lastServerUpdate = String(nextState.updated_at || nextState.updatedAt || '');
+
+    const changedKeys = [];
+    let attendanceGovernanceNeedsPush = false;
+    Object.entries(KEY_TO_COLUMN).forEach(([key, column]) => {
+      if (dirtyVersions.has(column)) return;
+      let columnValue = stateColumn(nextState, column);
+      if (column === 'settings') {
+        const merged = mergeRemoteSettingsWithLocal(columnValue);
+        columnValue = merged.value;
+        attendanceGovernanceNeedsPush = attendanceGovernanceNeedsPush || merged.needsPush;
+      }
+      const serialized = JSON.stringify(columnValue);
+      if (storageGetItem(key) !== serialized) {
+        if (setLocal(key, serialized)) {
+          changedKeys.push(key);
+          dispatchDomainChange(key, source, false);
+        } else {
+          status('error', 'Browser storage is full or unavailable. Archived attendance was compacted, but this update could not be cached. Free browser site storage, then reload.');
+          emit('lso:storage-error', { key, source, reason: 'write-failed' });
+        }
+      }
+    });
+    if (changedKeys.length) emit('lso:cloud-state-changed', { key: changedKeys.length === 1 ? changedKeys[0] : '', keys: changedKeys, source });
+    if (attendanceGovernanceNeedsPush && sessionToken && canWriteColumn('settings')) {
+      dirtyVersions.set('settings', (dirtyVersions.get('settings') || 0) + 1);
+      persistDirtyMarkers();
+      scheduleFlush(320);
+    }
+
     loaded = true;
-    emit('lso:cloud-loaded', { state: cloneState(), source });
+    // No module consumes a full state copy from this event. Emitting metadata prevents an
+    // unnecessary deep clone of every member, attendance row, and archive after each sync.
+    emit('lso:cloud-loaded', { source, keys: changedKeys, updatedAt: lastServerUpdate });
   }
 
   function cloneState() {
@@ -294,10 +434,10 @@
 
   function currentValueForColumn(column) {
     if (column === MONTHLY_COMPAT_COLUMN) {
-      return normalizeColumn(column, safeParse(getLocal('lso_monthly_reports_v1'), {}));
+      return normalizeColumn(column, safeParse(storageGetItem('lso_monthly_reports_v1'), {}));
     }
     const key = Object.keys(KEY_TO_COLUMN).find((item) => KEY_TO_COLUMN[item] === column);
-    return normalizeColumn(column, safeParse(getLocal(key), defaultForColumn(column)));
+    return normalizeColumn(column, safeParse(storageGetItem(key), defaultForColumn(column)));
   }
 
   function settingsPayloadWithMonthlyCompatibility() {
@@ -374,7 +514,18 @@
   }
 
   function storageGetItem(key) {
-    return getLocal(key);
+    const raw = getLocal(key);
+    if (key !== 'lso_system_settings_v2' || !raw) return raw;
+    try {
+      const compacted = window.LSORuntimeStability?.compactSettingsRaw?.(raw);
+      if (!compacted?.changed || !compacted.raw) return raw;
+      // Return the compact value even when persistence is temporarily blocked so callers
+      // do not repeatedly parse the legacy oversized archive payload in this session.
+      setLocal(key, compacted.raw);
+      return compacted.raw;
+    } catch {
+      return raw;
+    }
   }
 
   function storageSetItem(key, value) {
@@ -383,9 +534,22 @@
       emitReadOnlyDenied(column);
       return false;
     }
-    const saved = setLocal(key, value);
-    if (saved && column && sessionToken && loaded) markDirty(column);
-    return saved;
+    let nextValue = value;
+    if (key === 'lso_system_settings_v2' && typeof value === 'string') {
+      try {
+        nextValue = window.LSORuntimeStability?.compactSettingsRaw?.(value)?.raw || value;
+      } catch {
+        nextValue = value;
+      }
+    }
+    const saved = setLocal(key, nextValue);
+    if (!saved) {
+      status('error', 'This browser could not save the latest change because its site storage is full or blocked.');
+      emit('lso:storage-error', { key, source: 'local-write', reason: 'write-failed' });
+      return false;
+    }
+    if (column && sessionToken && loaded) markDirty(column);
+    return true;
   }
 
   function storageRemoveItem(key) {

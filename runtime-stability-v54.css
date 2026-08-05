@@ -1,0 +1,87 @@
+/* V54 runtime stability: rendering containment and low-power compatibility only. */
+.attendance-archive-card,
+.attendance-archive-revision,
+.overall-record-card,
+.dashboard-card,
+.system-workflow-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 260px;
+}
+
+.attendance-archive-lazy-body {
+  min-height: 3rem;
+  margin-top: 0.75rem;
+}
+
+.attendance-archive-loading-note {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px dashed var(--border, #d9e0e6);
+  border-radius: 0.75rem;
+  color: var(--text-secondary, #667085);
+  background: var(--surface-soft, #f7f9fa);
+}
+
+.attendance-archive-record-table {
+  max-height: min(58vh, 34rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.attendance-archive-page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0;
+}
+
+.attendance-archive-page-controls span {
+  flex: 1 1 14rem;
+  text-align: center;
+  color: var(--text-secondary, #667085);
+  font-size: 0.88rem;
+}
+
+html[data-lso-performance="constrained"] {
+  scroll-behavior: auto;
+}
+
+html[data-lso-performance="constrained"] *,
+html[data-lso-performance="constrained"] *::before,
+html[data-lso-performance="constrained"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-lso-performance="constrained"] .view,
+html[data-lso-performance="constrained"] .panel,
+html[data-lso-performance="constrained"] .card,
+html[data-lso-performance="constrained"] .attendance-archive-card {
+  box-shadow: none !important;
+}
+
+html[data-lso-performance="constrained"] .table-wrap,
+html[data-lso-performance="constrained"] .attendance-roster-scroll,
+html[data-lso-performance="constrained"] .attendance-archive-record-table {
+  scroll-behavior: auto !important;
+}
+
+@media (max-width: 720px) {
+  .attendance-archive-page-controls {
+    align-items: stretch;
+  }
+
+  .attendance-archive-page-controls .button {
+    flex: 1 1 8rem;
+  }
+
+  .attendance-archive-record-table {
+    max-height: 52vh;
+  }
+}

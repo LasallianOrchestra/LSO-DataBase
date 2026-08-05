@@ -1,0 +1,53 @@
+/* V51 targeted repair presentation. No application workflow behavior. */
+.monthly-archive-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(145px, 1fr));
+  align-items: stretch;
+  gap: .6rem;
+  width: 100%;
+  padding-top: .15rem;
+}
+.monthly-archive-actions .button {
+  width: 100%;
+  min-height: 42px;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+}
+.monthly-archive-card { align-items: start; }
+.monthly-archive-card-header .badge { flex: 0 0 auto; }
+@media (max-width: 1040px) {
+  .monthly-archive-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .monthly-archive-actions { grid-template-columns: 1fr; }
+  .monthly-archive-actions .button { min-height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .monthly-archive-actions .button { transition: none !important; }
+}
+
+.duty-print-signatory-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) repeat(2, minmax(210px, .72fr));
+  gap: .85rem;
+  align-items: end;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color, #d9e0e6);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f4f8f6, #fff);
+}
+.duty-print-signatory-copy { display: grid; gap: .18rem; align-self: center; }
+.duty-print-signatory-copy h4 { margin: 0; color: #123f33; }
+.duty-print-signatory-copy small { color: #667085; line-height: 1.4; }
+.duty-print-signatory-panel .field { margin: 0; }
+@media (max-width: 980px) {
+  .duty-print-signatory-panel { grid-template-columns: 1fr 1fr; }
+  .duty-print-signatory-copy { grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+  .duty-print-signatory-panel { grid-template-columns: 1fr; padding: .85rem; }
+  .duty-print-signatory-copy { grid-column: auto; }
+}

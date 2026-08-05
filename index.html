@@ -45,7 +45,7 @@
 <link rel="icon" href="favicon.ico?v=20260717-logos" sizes="any"/>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20260717-logos"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20260721-pwa-v1"/>
-<link rel="manifest" href="manifest.webmanifest?v=20260804-role-control-v45"/>
+<link rel="manifest" href="manifest.webmanifest?v=20260805-attendance-stability-v53"/>
 <link href="styles.css?v=20260720-member-table-v2" rel="stylesheet"/>
 <link href="duty-roster-layout.css?v=20260717-1605" rel="stylesheet"/>
 <link href="access-control.css?v=20260721-role-approval-v2" rel="stylesheet"/>
@@ -117,6 +117,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <link href="professional-interface-v43.css?v=20260804-professional-v43" rel="stylesheet"/>
 <link href="cross-device-accessibility-v44.css?v=20260804-role-control-v45" rel="stylesheet"/>
 <link href="smooth-motion-v1.css?v=20260804-smooth-motion-v1" rel="stylesheet"/>
+<link href="member-overall-record-v49.css?v=20260805-overall-record-v49" rel="stylesheet"/>
+<link href="governance-archives-v50.css?v=20260805-archives-governance-v50" rel="stylesheet"/>
+<link href="targeted-repairs-v51.css?v=20260805-targeted-repairs-v51" rel="stylesheet"/>
+<link href="device-performance-v52.css?v=20260805-attendance-duty-performance-v52" rel="stylesheet"/>
+<link href="attendance-stability-v53.css?v=20260805-attendance-stability-v53" rel="stylesheet"/>
+<link href="runtime-stability-v54.css?v=20260805-runtime-stability-v54" rel="stylesheet"/>
+<link href="attendance-semester-stability-v55.css?v=20260805-semester-state-v55" rel="stylesheet"/>
+<link href="attendance-archive-workflow-v56.css?v=20260805-attendance-archive-v56" rel="stylesheet"/>
 </head>
 <body>
 <div aria-live="polite" class="connection-banner hidden" id="connectionBanner" role="status"></div>
@@ -226,7 +234,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <nav aria-label="Main navigation" class="nav-list">
 <button class="nav-item active" data-view="dashboardView">Dashboard</button>
 <button class="nav-item" data-view="membersView">Members</button>
-<button class="nav-item" data-view="lookupView">Member Lookup</button>
+<button class="nav-item" data-view="lookupView">Members Overall Record</button>
 <button class="nav-item" data-view="contractView">Contract</button>
 <button class="nav-item" data-view="monthlyReportView">Monthly Report</button>
 <button class="nav-item" data-view="attendanceView">Attendance</button>
@@ -309,7 +317,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="quick-action-card" data-dashboard-action="new-event" type="button"><span class="quick-action-icon">▣</span><strong>New Event</strong><small>Schedule a rehearsal or activity</small></button>
 <button class="quick-action-card" data-dashboard-action="attendance" type="button"><span class="quick-action-icon">✓</span><strong>Take Attendance</strong><small>Open the semester event roster</small></button>
 <button class="quick-action-card" data-dashboard-action="duty-hours" type="button"><span class="quick-action-icon">◷</span><strong>Duty Hours</strong><small>Track exact hours, minutes, and incentives</small></button>
-<button class="quick-action-card" data-dashboard-action="member-lookup" type="button"><span class="quick-action-icon">ID</span><strong>Member Record</strong><small>Search and print an official profile</small></button>
+<button class="quick-action-card" data-dashboard-action="member-lookup" type="button"><span class="quick-action-icon">ID</span><strong>Overall Record</strong><small>Search every live member record</small></button>
 <button class="quick-action-card" data-dashboard-action="alerts" type="button"><span class="quick-action-icon">!</span><strong>Review Alerts</strong><small>Resolve urgent action items</small></button>
 <button class="quick-action-card" data-dashboard-action="data" type="button"><span class="quick-action-icon">↓</span><strong>Data &amp; Backup</strong><small>Export or protect system records</small></button>
 </div>
@@ -440,48 +448,85 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </article>
 </section>
 <section class="view" id="lookupView">
-<div class="lookup-layout">
-<article class="panel lookup-search-panel">
-<div class="panel-header">
+<div class="overall-record-shell">
+<article class="panel overall-record-search-panel">
+<div class="panel-header stack-mobile">
 <div>
-<p class="eyebrow">Fast Search</p>
-<h3>Member Lookup</h3>
+<p class="eyebrow">Unified Live Record</p>
+<h3>Members Overall Record</h3>
+<p class="panel-subtitle">Search Official Members, Trainees, and Probationary Members in one place. Every section reads from the same live records used by the rest of the system.</p>
 </div>
+<span class="overall-live-badge" aria-label="Live synchronized record"><span></span>Live</span>
 </div>
-<label class="field">
-<span>Search by full name, Membership ID, or Student Number</span>
-<input autocomplete="off" id="lookupSearch" placeholder="Start typing..." type="search"/>
+<label class="field overall-record-search-field">
+<span>Search by name, Membership ID, Student Number, stage, course, or section</span>
+<input autocomplete="off" id="lookupSearch" placeholder="Search all member records..." type="search"/>
 </label>
-<div class="lookup-results" id="lookupResults"></div>
+<div class="overall-search-meta"><span id="overallSearchCount">0 records</span><small>Select one person to open the complete record.</small></div>
+<div class="lookup-results overall-lookup-results" id="lookupResults"></div>
 </article>
-<article class="panel member-record-panel" id="memberRecordPanel">
-<div class="record-placeholder" id="recordPlaceholder">
-<div class="empty-icon">♪</div>
-<h3>Select a member</h3>
-<p>The selected member’s complete record will appear here.</p>
+
+<article class="panel member-record-panel overall-record-panel" id="memberRecordPanel">
+<div class="record-placeholder overall-record-placeholder" id="recordPlaceholder">
+<div class="empty-icon">◎</div>
+<h3>Select a person</h3>
+<p>Their profile, contract history, monthly reports, attendance, and duty hours will appear here.</p>
 </div>
-<div class="member-record hidden" id="memberRecord">
-<div class="record-header">
+<div class="member-record overall-member-record hidden" id="memberRecord">
+<div class="record-header overall-record-header">
 <div>
-<p class="eyebrow">Official Member Record</p>
+<p class="eyebrow">Members Overall Record</p>
 <h3 id="recordName"></h3>
 <p id="recordIdentity"></p>
 </div>
 <div class="record-actions no-print">
-<button class="button button-secondary" id="editRecordButton">Edit</button>
-<button class="button button-primary" id="printRecordButton">Print Record</button>
+<button class="button button-secondary" id="editRecordButton" type="button">Edit Profile</button>
+<button class="button button-primary" id="printRecordButton" type="button">Download PDF Overview</button>
 </div>
 </div>
 <div class="record-badges" id="recordBadges"></div>
+<div class="overall-record-metrics" id="overallRecordMetrics" aria-label="Record summary"></div>
+<nav class="overall-record-tabs" id="overallRecordTabs" aria-label="Member record sections">
+<button class="overall-record-tab active" data-overall-tab="overview" type="button">Overview</button>
+<button class="overall-record-tab" data-overall-tab="contracts" type="button">Contracts <span id="overallContractCount">0</span></button>
+<button class="overall-record-tab" data-overall-tab="monthly" type="button">Monthly Reports <span id="overallMonthlyCount">0</span></button>
+<button class="overall-record-tab" data-overall-tab="attendance" type="button">Attendance <span id="overallAttendanceCount">0</span></button>
+<button class="overall-record-tab" data-overall-tab="duty" type="button">Duty Hours <span id="overallDutyCount">0</span></button>
+</nav>
+
+<section class="overall-record-tab-panel active" data-overall-panel="overview">
+<div class="overall-record-section-heading"><div><p class="eyebrow">Identity &amp; Lifecycle</p><h4>Profile information</h4></div><small>Use Edit Profile to revise the shared member record.</small></div>
 <div class="record-grid" id="recordGrid"></div>
+<div class="overall-lifecycle" id="overallLifecycle"></div>
 <div class="record-notes">
 <h4>Remarks / Notes</h4>
 <p id="recordRemarks"></p>
 </div>
-<div class="signature-grid">
-<div><span></span><p>Member Signature</p></div>
-<div><span></span><p>Authorized Officer</p></div>
-</div>
+</section>
+
+<section class="overall-record-tab-panel" data-overall-panel="contracts">
+<div class="overall-record-section-heading stack-mobile"><div><p class="eyebrow">Official Membership Documents</p><h4>Generated contract history</h4><small>Newly downloaded contracts are tracked automatically. Older files generated before this upgrade were not historically logged.</small></div><button class="button button-secondary" id="overallOpenContractCenter" type="button">Open Contract Center</button></div>
+<div id="overallContractsList" class="overall-record-list"></div>
+</section>
+
+<section class="overall-record-tab-panel" data-overall-panel="monthly">
+<div class="overall-record-section-heading"><div><p class="eyebrow">Three Membership Phases</p><h4>Monthly report participation</h4><small>Shows the person’s phase for each filing month and any Leave, OJT, Trainee/Probationary, Quitted, or Remaining entries.</small></div></div>
+<div class="overall-inline-editor" id="overallMonthlyAdd"></div>
+<div id="overallMonthlyList" class="overall-record-list"></div>
+</section>
+
+<section class="overall-record-tab-panel" data-overall-panel="attendance">
+<div class="overall-record-section-heading"><div><p class="eyebrow">Complete Attendance History</p><h4>All recorded attendance</h4><small>Corrections update the same Attendance database used by the calendar and analytics modules.</small></div></div>
+<div class="overall-inline-editor" id="overallAttendanceAdd"></div>
+<div id="overallAttendanceList" class="overall-record-list"></div>
+</section>
+
+<section class="overall-record-tab-panel" data-overall-panel="duty">
+<div class="overall-record-section-heading"><div><p class="eyebrow">Trainee, Probationary &amp; Applicable Member Duty</p><h4>Duty-hour ledger</h4><small>Includes rendered duty, incentives, approval status, and current requirements.</small></div></div>
+<div class="overall-inline-editor" id="overallDutyAdd"></div>
+<div id="overallDutySummary"></div>
+<div id="overallDutyList" class="overall-record-list"></div>
+</section>
 </div>
 </article>
 </div>
@@ -586,14 +631,15 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
       <button class="monthly-report-tab" data-monthly-tab="status" type="button">Leave &amp; OJT</button>
       <button class="monthly-report-tab" data-monthly-tab="trainees" type="button">Trainee Filing</button>
       <button class="monthly-report-tab" data-monthly-tab="preview" type="button">PDF Preview</button>
+      <button class="monthly-report-tab" data-monthly-tab="archive" type="button">Report Archive</button>
     </div>
     <div class="monthly-report-toolbar-actions">
       <div class="monthly-report-status" id="monthlyReportStatus" aria-live="polite">Loading report…</div>
       <div class="monthly-report-action-buttons">
         <span class="badge badge-gold" id="monthlyReportWorkflowBadge">Draft</span>
         <button class="button button-secondary" id="monthlyReportSaveButton" data-monthly-write type="button">Save Draft</button>
-        <button class="button button-primary admin-only" id="monthlyReportFinalizeButton" type="button">Finalize Report</button>
-        <button class="button button-secondary admin-only hidden" id="monthlyReportReopenButton" type="button">Reopen for Correction</button>
+        <button class="button button-primary admin-only" id="monthlyReportFinalizeButton" data-state-visibility-owner="monthly-report" type="button">Finalize Report</button>
+        <button class="button button-secondary admin-only hidden" id="monthlyReportReopenButton" data-state-visibility-owner="monthly-report" type="button">Reopen for Correction</button>
         <button class="button button-secondary" id="monthlyReportAuditButton" type="button">Audit History</button>
         <button class="button button-secondary" id="monthlyReportPreviewButton" type="button">Preview PDF</button>
         <button class="button button-primary" id="monthlyReportDownloadButton" type="button">Download Monthly Report PDF</button>
@@ -712,6 +758,15 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
       </div>
     </article>
   </div>
+
+
+  <div class="monthly-report-tab-panel" data-monthly-panel="archive">
+    <article class="panel monthly-report-panel monthly-report-archive-panel">
+      <div class="panel-header stack-mobile"><div><p class="eyebrow">Generated Report History</p><h3>Monthly Report Archive</h3><p class="panel-subtitle">Every downloaded or finalized report is recorded as a frozen cross-checking snapshot. Lock the verified final output to keep it view-only, or unlock it for controlled archive management.</p></div><span class="badge badge-gray" id="monthlyReportArchiveCount">0 archived outputs</span></div>
+      <div class="monthly-archive-toolbar"><label class="field"><span>Search archive</span><input id="monthlyArchiveSearch" type="search" placeholder="Month, semester, academic year, generator…"/></label><label class="field"><span>Archive status</span><select id="monthlyArchiveStatusFilter"><option value="">All archived outputs</option><option value="locked">Locked final outputs</option><option value="open">Open for cross-checking</option></select></label><div class="monthly-archive-policy"><span>LOCK</span><div><strong>Locked archives are view-only.</strong><small>Authorized administrators may delete either open or locked archive copies after confirming the action and recording a reason. The live source report remains unchanged.</small></div></div></div>
+      <div class="monthly-report-archive-list" id="monthlyReportArchiveList"></div>
+    </article>
+  </div>
 </section>
 
 
@@ -738,13 +793,17 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div class="attendance-group-actions">
 <div class="segmented-control attendance-roster-mode-toggle" id="attendanceRosterModeToggle" aria-label="Attendance roster mode">
 <button class="segment-button active" data-attendance-roster-mode="Current" type="button"><span>Current Roster</span><small>Active members only</small></button>
-<button class="segment-button" data-attendance-roster-mode="Archive" type="button"><span>Attendance Archive</span><small>Completed stage records</small></button>
+<button class="segment-button" data-attendance-roster-mode="Archive" type="button"><span>Attendance Archive</span><small>Validated finalized months</small></button>
 </div>
 <div class="semester-live-label attendance-group-live-label"><span id="attendanceRosterModeLabel">Current roster</span><strong id="attendanceGroupLabel">Official Members</strong></div>
 <button class="button button-primary attendance-group-print-button" id="attendanceGroupPrintButton" type="button">Print Current Roster</button>
 </div>
 </div>
-<div class="attendance-archive-notice hidden" id="attendanceArchiveNotice"><span>Archive</span><div><strong>Historical stage attendance is kept separate.</strong><small>Completed Trainee and Probationary stage records—and inactive Official Member records—appear here without affecting current roster totals.</small></div></div>
+<div class="attendance-archive-notice hidden" id="attendanceArchiveNotice"><span>Validated Archive</span><div><strong>Finalized monthly attendance is preserved here.</strong><small>Finalizing a Current Roster month creates a locked, computed archive copy for the selected Official, Trainee, or Probationary calendar. Archive records are view-only until an authorized Administrator deletes the validated output and returns the live month to Draft.</small></div></div>
+<section class="attendance-finalized-archive-block panel hidden" id="attendanceFinalizedArchiveBlock" aria-labelledby="attendanceFinalizedArchiveTitle">
+<div class="attendance-finalized-archive-heading"><div><span>Validated Finalized Outputs</span><strong id="attendanceFinalizedArchiveTitle">Attendance Monthly Archive</strong><small>Each finalized Current Roster month is copied here automatically. Select a validated copy to review its computed rating and frozen member records.</small></div><button class="button button-secondary" id="refreshAttendanceArchiveButton" type="button">Refresh Archive</button></div>
+<div class="attendance-finalized-archive-list" id="attendanceFinalizedArchiveList"></div>
+</section>
 <section class="attendance-period-center panel" id="attendancePeriodFinalizationCenter" aria-labelledby="attendancePeriodCenterTitle">
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Final Attendance Ratings</p><h3 id="attendancePeriodCenterTitle">Monthly Finalization &amp; Semester Computation</h3><p class="panel-subtitle">The selected calendar month is finalized independently. The semestral rate is the average of its finalized monthly ratings up to the semester end date.</p></div></div>
 <div class="attendance-period-grid">
@@ -756,10 +815,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <article class="attendance-period-card semester-period-card">
 <div class="attendance-period-card-header"><div><span>Selected Semester</span><strong>Semestral Attendance Rating</strong></div><span class="badge badge-gold" id="attendanceSemesterFinalizationBadge">Draft</span></div>
 <div class="attendance-semester-rating-row"><div><span>Computed Rating</span><strong id="attendanceSemesterRatingValue">—</strong><small id="attendanceSemesterRatingMeta">Set the semester end date and finalize each month.</small></div><label class="field"><span>Semester End Date *</span><input id="attendanceSemesterEndDate" type="date"/></label></div>
-<div class="attendance-period-actions"><button class="button button-secondary admin-only" id="saveAttendanceSemesterEndDate" type="button">Save End Date</button><button class="button button-primary admin-only" id="finalizeAttendanceSemesterButton" type="button">Finalize Semester Rating</button><button class="button button-secondary hidden admin-only" id="reopenAttendanceSemesterButton" type="button">Reopen Semester</button></div>
+<div class="attendance-period-actions"><button class="button button-secondary admin-only" id="saveAttendanceSemesterEndDate" data-state-visibility-owner="attendance-semester" type="button">Save End Date</button><button class="button button-primary admin-only" id="finalizeAttendanceSemesterButton" data-state-visibility-owner="attendance-semester" type="button">Finalize Semester Rating</button><button class="button button-secondary hidden admin-only" id="reopenAttendanceSemesterButton" data-state-visibility-owner="attendance-semester" type="button">Reopen Semester</button></div>
 </article>
 </div>
 <div class="table-wrap attendance-semester-rates-table"><table><thead><tr><th>Finalized Month</th><th>Activities</th><th>Monthly Rating</th><th>Status</th></tr></thead><tbody id="attendanceSemesterMonthlyRatesBody"></tbody></table></div>
+
 </section>
 <div class="attendance-overview-grid">
 <article class="panel attendance-overall-panel">
@@ -893,6 +953,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </div>
 </div>
 <div class="duty-archive-notice hidden" id="dutyArchiveNotice"><span>Archive</span><div><strong>Completed and skipped periods remain available.</strong><small>Members in the Membership Period automatically keep both Trainee and Probationary duty ledgers here. A skipped Probationary Period is marked as archived but can still receive committed hours, render time, and incentive records.</small></div></div>
+<div class="duty-print-signatory-panel" aria-labelledby="dutyPrintSignatoryTitle">
+  <div class="duty-print-signatory-copy"><p class="eyebrow">Document Signatories</p><h4 id="dutyPrintSignatoryTitle">Duty Hours print information</h4><small>These names will appear on individual, Trainee, Probationary, and monthly Duty Hours documents.</small></div>
+  <label class="field"><span>Prepared By *</span><input id="dutyPrintPreparedBy" type="text" autocomplete="name" placeholder="Enter the preparer's full name"/></label>
+  <label class="field"><span>Authorized By *</span><input id="dutyPrintAuthorizedBy" type="text" autocomplete="name" placeholder="Enter the authorized person's full name"/></label>
+</div>
 <div class="duty-roster-grid">
 <article class="duty-roster-card trainee-roster-card">
 <header class="duty-roster-card-header">
@@ -990,7 +1055,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </div>
 
 <article class="panel duty-hours-overall-panel duty-management-only">
-<div class="panel-header stack-mobile"><div><p class="eyebrow">Semester Roster Totals</p><h3>Overall Duty Hours</h3><p class="panel-subtitle" id="dutyOverallCaption">First Semester • Trainee Period</p></div>
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Semester Roster Totals</p><h3>Live Trainee &amp; Probationary Duty Hours</h3><p class="panel-subtitle" id="dutyOverallCaption">Current Trainee or Probationary roster only • Official Members excluded</p></div>
 <div class="segmented-control compact-segmented" id="dutyOverallPeriodToggle"><button class="segment-button active" data-duty-period="Trainee Period" type="button">Trainees</button><button class="segment-button" data-duty-period="Probationary Period" type="button">Probationary</button></div></div>
 <div class="attendance-kpi-grid duty-overall-metrics" id="dutyOverallMetrics"></div>
 <div class="table-wrap compact-report-table duty-overall-table"><table><thead><tr><th>Member</th><th>Record Status</th><th>Committed</th><th>Rendered</th><th>Incentives</th><th>Credited</th><th>Remaining / Excess</th><th>Progress</th></tr></thead><tbody id="dutyOverallTableBody"></tbody></table></div>
@@ -1062,6 +1127,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <label class="field"><span>Account Role</span><select id="permissionRoleSelect"></select></label>
 <label class="field"><span>Landing Page After Login</span><select id="permissionLandingViewSelect"></select></label>
 <div class="inline-actions"><button class="button button-secondary" id="resetRolePermissionsButton" type="button">Reset Role Default</button><button class="button button-primary" id="saveRolePermissionsButton" type="button">Save Role Permissions</button></div>
+</div>
+<div class="permission-distribution-toolbar" id="permissionDistributionToolbar">
+  <div><span>Permission Distribution</span><strong>Assign access faster and review changes before saving.</strong><small>Use a role as a starting template, then select or clear operational permissions by section. Protected Administrator controls remain unchanged.</small></div>
+  <label class="field"><span>Copy permissions from</span><select id="permissionCopySourceRole"></select></label>
+  <button class="button button-secondary" id="copyRolePermissionsButton" type="button">Apply as Working Copy</button>
+</div>
+<div class="permission-bulk-actions" id="permissionBulkActions">
+  <button class="button button-secondary" data-permission-bulk="modules-all" type="button">Select All Modules</button>
+  <button class="button button-secondary" data-permission-bulk="modules-none" type="button">Clear Modules</button>
+  <button class="button button-secondary" data-permission-bulk="actions-all" type="button">Select All Actions</button>
+  <button class="button button-secondary" data-permission-bulk="actions-none" type="button">Clear Actions</button>
+  <button class="button button-secondary" data-permission-bulk="attendance-all" type="button">All Attendance Groups</button>
+  <button class="button button-secondary" data-permission-bulk="attendance-none" type="button">Clear Attendance Groups</button>
 </div>
 <p class="permission-editor-status" id="permissionEditorStatus" role="status">Select a role to review its access.</p>
 <div class="permission-editor-note" id="permissionEditorProtectionNote"></div>
@@ -1326,30 +1404,33 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
 <script src="lso-system-core-v4.js?v=20260804-workflow-v41"></script>
+<script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
 <script src="role-access-v4.js?v=20260729-role-permission-v38"></script>
-<script src="cloud-staff-v5.js?v=20260803-security-hardening-1"></script>
-<script src="app-member-information-v5.js?v=20260726-portrait-print-v30"></script>
+<script src="cloud-staff-v5.js?v=20260805-semester-state-v55"></script>
+<script src="app-member-information-v5.js?v=20260805-runtime-stability-v54"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
 <script src="auth.js?v=20260804-workflow-v41"></script>
-<script src="management-attendance-member-info-v4.js?v=20260804-smart-notifications-v48"></script>
+<script src="management-attendance-member-info-v4.js?v=20260805-runtime-stability-v54"></script>
 <script src="ui-enhancements.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="dashboard-enhancements.js?v=20260804-smart-notifications-v48"></script>
+<script src="dashboard-enhancements.js?v=20260805-runtime-stability-v54"></script>
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
-<script src="workflow-attendance-month-v6.js?v=20260728-attendance-duty-v35"></script>
-<script src="attendance-governance-v2.js?v=20260728-attendance-duty-v35"></script>
-<script src="duty-hours-member-info-v14.js?v=20260728-attendance-duty-v35"></script>
+<script src="workflow-attendance-month-v6.js?v=20260805-attendance-archive-v56"></script>
+<script src="attendance-governance-v2.js?v=20260805-attendance-archive-v56"></script>
+<script src="duty-hours-member-info-v14.js?v=20260805-attendance-duty-performance-v52"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="monthly-report-template-data.js?v=20260726-portrait-print-v30"></script>
-<script src="monthly-report-print-v31.js?v=20260804-workflow-v41"></script>
+<script src="monthly-report-print-v31.js?v=20260805-runtime-stability-v54"></script>
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
-<script src="contract-maker-membership-v4.js?v=20260723-membership-contract-v4"></script>
-<script src="dashboard-intelligence-member-info-v3.js?v=20260724-member-information-v3"></script>
-<script src="permissions-dynamic-v38.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="dashboard-command-center-v5.js?v=20260804-workflow-v41"></script>
+<script src="contract-maker-membership-v4.js?v=20260805-runtime-stability-v54"></script>
+<script src="official-pdf-assets-v51.js?v=20260805-pdf-fetch-repair-v51"></script>
+<script src="member-overall-record-v49.js?v=20260805-runtime-stability-v54"></script>
+<script src="dashboard-intelligence-member-info-v3.js?v=20260805-runtime-stability-v54"></script>
+<script src="permissions-dynamic-v38.js?v=20260805-semester-state-v55"></script>
+<script src="dashboard-command-center-v5.js?v=20260805-runtime-stability-v54"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v2.js?v=20260804-smart-notifications-v48"></script>
+<script src="system-enterprise-v2.js?v=20260805-runtime-stability-v54"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
-<script src="role-permission-center-v38.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="pwa-enterprise-v38.js?v=20260804-professional-v43"></script>
+<script src="role-permission-center-v38.js?v=20260805-governance-v50"></script>
+<script src="pwa-enterprise-v38.js?v=20260805-attendance-archive-v56"></script>
 </body>
 </html>

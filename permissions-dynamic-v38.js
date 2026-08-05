@@ -180,8 +180,27 @@
   }
 
   function applyAdministratorControls(root) {
-    qsa('.admin-only', root).forEach((node) => show(node, isAdmin()));
-    qsa('.account-role-select, .account-member-select, [data-account-action]', root).forEach((node) => enable(node, isAdmin(), 'Administrator access is required.'));
+    const administrator = isAdmin();
+    qsa('.admin-only', root).forEach((node) => {
+      const stateOwned = Boolean(node.dataset.stateVisibilityOwner);
+      if (!administrator) {
+        if (!node.classList.contains('hidden')) node.dataset.roleForcedHidden = 'true';
+        node.classList.add('hidden', 'role-hidden');
+        node.setAttribute('aria-hidden', 'true');
+        node.tabIndex = -1;
+        return;
+      }
+
+      // Role access and workflow state are separate concerns. Stateful controls such as
+      // Finalize/Reopen must remain under their module renderer; otherwise permission
+      // refreshes temporarily reveal both buttons and cause visible state flicker.
+      node.classList.remove('role-hidden');
+      node.setAttribute('aria-hidden', node.classList.contains('hidden') ? 'true' : 'false');
+      node.removeAttribute('tabindex');
+      if (!stateOwned) node.classList.remove('hidden');
+      delete node.dataset.roleForcedHidden;
+    });
+    qsa('.account-role-select, .account-member-select, [data-account-action]', root).forEach((node) => enable(node, administrator, 'Administrator access is required.'));
     ['addInstrumentButton', 'saveSystemSettings', 'clearActivityLog', 'clearDatabase', 'applyTimelineDefaults'].forEach((id) => show(el(id), isAdmin()));
     ['restoreCompleteSystem', 'csvImport', 'jsonRestore'].forEach((id) => {
       const input = el(id);
@@ -263,8 +282,8 @@
   document.addEventListener('submit', blockIfDenied, true);
   document.addEventListener('change', blockIfDenied, true);
 
-  ['lso:auth-changed', 'lso:cloud-state-changed', 'lso:members-changed', 'lso:operations-changed', 'lso:attendance-group-changed', 'lso:attendance-governance-changed']
-    .forEach((name) => window.addEventListener(name, scheduleApply));
+  ['lso:auth-changed', 'lso:permissions-changed', 'lso:attendance-group-changed', 'lso:attendance-governance-changed']
+    .forEach((name) => window.addEventListener(name, () => window.LSORuntimeStability?.schedule?.('permissions-apply', scheduleApply, 70)));
   window.addEventListener('lso:permission-denied', (event) => notify('', event.detail?.message));
 
   function initialize() {

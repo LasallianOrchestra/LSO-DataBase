@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_OPERATIONS_VERSION__ = 'v4-separated-calendars';
+  window.__LSO_ATTENDANCE_OPERATIONS_VERSION__ = 'v5-source-aware-attendance-save';
 
   const EVENTS_KEY = 'lso_events_v2';
   const ATTENDANCE_KEY = 'lso_attendance_v2';
@@ -50,9 +50,9 @@
     }
   }
 
-  function saveArray(key, value) {
+  function saveArray(key, value, source = 'user-action') {
     window.LSOStorage.setItem(key, JSON.stringify(value));
-    window.dispatchEvent(new CustomEvent('lso:operations-changed', { detail: { key } }));
+    window.dispatchEvent(new CustomEvent('lso:operations-changed', { detail: { key, source } }));
   }
 
   function loadSettings() {
@@ -647,6 +647,7 @@
     }
     const rows = qsa('[data-attendance-member]', el('attendanceRosterBody'));
     const now = new Date().toISOString();
+    let changed = false;
     rows.forEach((row) => {
       const memberId = row.dataset.attendanceMember;
       const status = row.querySelector('.attendance-status').value;
@@ -654,15 +655,24 @@
       const selectedEvent = events.find((item) => item.id === selectedEventId);
       const member = getMembers().find((item) => item.id === memberId);
       const index = attendance.findIndex((entry) =>
-        entry.eventId === selectedEventId &&
-        entry.memberId === memberId &&
+        String(entry.eventId) === String(selectedEventId) &&
+        String(entry.memberId) === String(memberId) &&
         attendanceRecordGroup(entry, selectedEvent, member) === activeAttendanceGroup()
       );
       if (!status && !remarks) {
-        if (index >= 0) attendance.splice(index, 1);
+        if (index >= 0) {
+          attendance.splice(index, 1);
+          changed = true;
+        }
         return;
       }
       const existingRecord = index >= 0 ? attendance[index] : {};
+      const same = index >= 0 &&
+        String(existingRecord.status || '') === String(status || '') &&
+        String(existingRecord.remarks || '') === String(remarks || '') &&
+        String(existingRecord.attendanceGroup || activeAttendanceGroup()) === String(activeAttendanceGroup()) &&
+        String(existingRecord.rosterModeAtEdit || 'Current') === String(activeAttendanceRosterMode());
+      if (same) return;
       const record = {
         ...existingRecord,
         eventId: selectedEventId,
@@ -677,8 +687,13 @@
       };
       if (index >= 0) attendance[index] = record;
       else attendance.push(record);
+      changed = true;
     });
-    saveArray(ATTENDANCE_KEY, attendance);
+    if (!changed) {
+      toast('No attendance changes to save.');
+      return;
+    }
+    saveArray(ATTENDANCE_KEY, attendance, 'attendance-user-save');
     const event = events.find((item) => item.id === selectedEventId);
     logActivity('Saved attendance', 'Attendance', `${event?.title || 'Event'} • ${attendanceRosterModeLabel()} • ${attendanceGroupShortLabel()} • ${rows.length} roster rows`);
     renderAttendance();
@@ -1651,18 +1666,42 @@
     }
   }
 
-  function refreshAll() {
+  function activeViewId() {
+    return document.querySelector('.view.active:not(.hidden)')?.id || '';
+  }
+
+  function refreshAll(options = {}) {
     events = loadArray(EVENTS_KEY);
     attendance = loadArray(ATTENDANCE_KEY);
     instruments = loadArray(INSTRUMENTS_KEY);
-    renderAttendance();
-    renderInstruments();
-    renderAlerts();
-    // Account rows are refreshed only by account/auth events or an explicit
-    // Administrator refresh. Unrelated shared-state saves must not rebuild the table.
-    renderSettings();
-    renderActivityLog();
-    renderInstrumentMemberOptions();
+    const active = activeViewId();
+    const force = Boolean(options.force);
+    if (force || active === 'attendanceView') renderAttendance();
+    if (force || active === 'instrumentsView') { renderInstruments(); renderInstrumentMemberOptions(); }
+    if (force || active === 'alertsView') renderAlerts();
+    if (force || active === 'dataView') { renderSettings(); renderActivityLog(); }
+    if (!active) {
+      // Keep startup light. Hidden data-heavy modules render when opened.
+      renderSettings();
+    }
+  }
+
+  let cloudRefreshTimer = 0;
+  const cloudRefreshKeys = new Set();
+
+  function scheduleCloudRefresh(detail = {}) {
+    const keys = Array.isArray(detail.keys) ? detail.keys : [detail.key].filter(Boolean);
+    keys.forEach((key) => cloudRefreshKeys.add(key));
+    clearTimeout(cloudRefreshTimer);
+    cloudRefreshTimer = window.setTimeout(() => {
+      const changed = new Set(cloudRefreshKeys);
+      cloudRefreshKeys.clear();
+      if (!changed.size || changed.has(EVENTS_KEY)) events = loadArray(EVENTS_KEY);
+      if (!changed.size || changed.has(ATTENDANCE_KEY)) attendance = loadArray(ATTENDANCE_KEY);
+      if (!changed.size || changed.has(INSTRUMENTS_KEY)) instruments = loadArray(INSTRUMENTS_KEY);
+      const active = activeViewId();
+      if (active) refreshView(active);
+    }, 140);
   }
 
   function wireEvents() {
@@ -1794,20 +1833,17 @@
     });
 
     window.addEventListener('lso:members-changed', () => {
-      renderAttendanceRoster();
-      renderInstrumentMemberOptions();
-      renderInstruments();
-      renderAlerts();
+      const active = activeViewId();
+      if (active === 'attendanceView') renderAttendanceRoster();
+      if (active === 'instrumentsView') { renderInstrumentMemberOptions(); renderInstruments(); }
+      if (active === 'alertsView') renderAlerts();
     });
     window.addEventListener('lso:accounts-changed', () => { renderAccounts(); renderAlerts(); });
     ['lso:duty-hours-changed', 'lso:monthly-report-changed', 'lso:system-health-changed', 'lso:system-errors-changed'].forEach((eventName) => {
       window.addEventListener(eventName, () => renderAlerts());
     });
-    window.addEventListener('lso:cloud-state-changed', () => {
-      events = loadArray(EVENTS_KEY);
-      attendance = loadArray(ATTENDANCE_KEY);
-      instruments = loadArray(INSTRUMENTS_KEY);
-      refreshAll();
+    window.addEventListener('lso:cloud-state-changed', (event) => {
+      scheduleCloudRefresh(event.detail || {});
     });
     window.addEventListener('lso:attendance-semester-changed', () => {
       selectedEventId = null;
@@ -1863,10 +1899,13 @@
       const event = events.find((item) => item.id === eventId);
       return membersForEventAttendanceGroup(event).map((member) => ({ ...member }));
     },
-    replaceAttendance: (nextAttendance) => {
+    replaceAttendance: (nextAttendance, options = {}) => {
       if (!canSaveDraftAttendance() || !Array.isArray(nextAttendance)) return false;
+      const serializedCurrent = JSON.stringify(attendance);
+      const serializedNext = JSON.stringify(nextAttendance);
+      if (serializedCurrent === serializedNext) return true;
       attendance = nextAttendance.map((entry) => ({ ...entry }));
-      saveArray(ATTENDANCE_KEY, attendance);
+      saveArray(ATTENDANCE_KEY, attendance, options.source || 'attendance-user-save');
       renderAttendance();
       renderAlerts();
       return true;
@@ -1913,5 +1952,5 @@
   };
 
   wireEvents();
-  refreshAll();
+  refreshAll({ force: false });
 })();
