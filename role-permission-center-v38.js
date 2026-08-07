@@ -289,6 +289,7 @@
 
   async function save() {
     if (!isAdmin() || activeRole === ADMIN || busy) return;
+    const previousRow = clone(roleRow(activeRole));
     const views = checked('#permissionModuleOptions input:not(:disabled)');
     const actions = checked('#permissionActionOptions input:not(:disabled)');
     const attendanceGroups = checked('#permissionAttendanceOptions input:not(:disabled)');
@@ -301,6 +302,7 @@
       applyPayload(nextPayload);
       renderMatrix();
       window.LSOPermissions?.apply?.();
+      window.LSOOperations?.logActivity?.('Updated role permissions', 'Access Control', `${activeRole} • Landing ${previousRow?.landingView || '—'} → ${landingView} • Modules ${(previousRow?.views || []).length} → ${views.length} • Actions ${(previousRow?.actions || []).length} → ${actions.length} • Attendance groups ${(previousRow?.attendanceGroups || []).length} → ${attendanceGroups.length}`);
       status(`${activeRole} permissions were saved. Active users receive the update automatically.`, 'success');
       window.LSOApp?.showToast?.(`${activeRole} permissions updated.`);
     } catch (error) {
@@ -317,6 +319,7 @@
       const nextPayload = await window.LSOCloud.resetRolePermissionCenter(activeRole);
       applyPayload(nextPayload);
       renderMatrix();
+      window.LSOOperations?.logActivity?.('Reset role permissions', 'Access Control', `${activeRole} was restored to the official default permission profile.`);
       status(`${activeRole} was restored to its default access.`, 'success');
       window.LSOApp?.showToast?.(`${activeRole} permissions reset.`);
     } catch (error) {

@@ -135,19 +135,24 @@
   }
 
   function readNotificationState() {
+    const enhanced = window.LSONotificationInbox?.readState?.();
+    if (enhanced) return enhanced;
     try {
       const parsed = JSON.parse(window.LSOStorage.getItem(READ_KEY) || '[]');
-      if (Array.isArray(parsed)) return { ids: new Set(parsed), fingerprints: new Set() };
+      if (Array.isArray(parsed)) return { ids: new Set(parsed), fingerprints: new Set(), resolved: new Set(), archived: new Set() };
       return {
         ids: new Set(Array.isArray(parsed?.ids) ? parsed.ids : []),
-        fingerprints: new Set(Array.isArray(parsed?.fingerprints) ? parsed.fingerprints : [])
+        fingerprints: new Set(Array.isArray(parsed?.fingerprints) ? parsed.fingerprints : []),
+        resolved: new Set(Array.isArray(parsed?.resolved) ? parsed.resolved : []),
+        archived: new Set(Array.isArray(parsed?.archived) ? parsed.archived : [])
       };
     } catch {
-      return { ids: new Set(), fingerprints: new Set() };
+      return { ids: new Set(), fingerprints: new Set(), resolved: new Set(), archived: new Set() };
     }
   }
 
   function saveNotificationState(state) {
+    if (window.LSONotificationInbox?.saveReadState) return window.LSONotificationInbox.saveReadState(state);
     try {
       window.LSOStorage.setItem(READ_KEY, JSON.stringify({
         ids: [...state.ids].slice(-1000),
@@ -246,13 +251,15 @@
 
     const enterpriseNotifications = window.LSOEnterprise?.getNotifications?.();
     if (Array.isArray(enterpriseNotifications)) notifications.push(...enterpriseNotifications);
+    const governanceNotifications = window.LSONotificationInbox?.externalNotifications?.();
+    if (Array.isArray(governanceNotifications)) notifications.push(...governanceNotifications);
 
     const severityOrder = { high: 0, medium: 1, low: 2 };
     const readState = readNotificationState();
     return notifications
       .map((notification) => ({ ...notification, fingerprint: notificationFingerprint(notification) }))
       .filter((notification, index, all) => all.findIndex((item) => item.id === notification.id || item.fingerprint === notification.fingerprint) === index)
-      .map((notification) => ({ ...notification, read: readState.ids.has(notification.id) || readState.fingerprints.has(notification.fingerprint) }))
+      .map((notification) => ({ ...notification, read: readState.ids.has(notification.id) || readState.fingerprints.has(notification.fingerprint), resolved: readState.resolved?.has(notification.fingerprint) || false, archived: readState.archived?.has(notification.fingerprint) || false }))
       .sort((a, b) => Number(a.read) - Number(b.read)
         || (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)
         || String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
@@ -299,7 +306,8 @@
     if (!list || !badge || !summary || !button) return;
 
     const notifications = buildNotifications();
-    const unread = notifications.filter((notification) => !notification.read).length;
+    const activeNotifications = notifications.filter((notification) => !notification.resolved && !notification.archived);
+    const unread = activeNotifications.filter((notification) => !notification.read).length;
     badge.textContent = unread > 99 ? '99+' : String(unread);
     badge.classList.toggle('hidden', unread === 0);
     button.classList.toggle('has-unread', unread > 0);
@@ -307,7 +315,7 @@
     summary.textContent = unread ? `${unread} unread notification${unread === 1 ? '' : 's'}` : 'No unread notifications';
     el('markAllNotificationsRead')?.toggleAttribute('disabled', unread === 0);
 
-    list.innerHTML = notifications.length ? notifications.slice(0, 18).map((notification) => `
+    list.innerHTML = activeNotifications.length ? activeNotifications.slice(0, 18).map((notification) => `
       <button class="notification-item severity-${safeText(notification.severity)} ${notification.read ? '' : 'unread'}" data-notification-id="${safeText(notification.id)}" data-notification-action="${safeText(notification.actionType)}" data-notification-target="${safeText(notification.targetId)}" type="button">
         <span class="notification-item-icon">${safeText(notification.icon)}</span>
         <span class="notification-item-copy"><strong>${safeText(notification.title)}</strong><small>${safeText(notification.detail)}</small><em>${safeText(notificationMeta(notification))}</em></span>
@@ -315,7 +323,7 @@
       </button>`).join('') : `
       <div class="notification-empty"><span>✓</span><strong>You are all caught up</strong><small>No current alerts, approvals, or events within the next seven days.</small></div>`;
 
-    renderHeroStatus(notifications);
+    renderHeroStatus(activeNotifications);
   }
 
   function markNotificationRead(id) {
@@ -448,6 +456,19 @@
         target?.classList.add('notification-target-highlight');
         target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
         setTimeout(() => target?.classList.remove('notification-target-highlight'), 4200);
+      }, 70);
+      return;
+    }
+    if (action === 'data-quality') {
+      showView('dataView');
+      setTimeout(() => document.getElementById('dataQualityCenter')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 70);
+      return;
+    }
+    if (action === 'maintenance') {
+      showView('systemHealthView');
+      setTimeout(() => {
+        document.querySelector('[data-health-panel="access"]')?.click();
+        document.getElementById('maintenanceModePanel')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }, 70);
       return;
     }
@@ -696,6 +717,7 @@
     renderDashboardModules();
   }
 
+  window.LSODashboardNotifications = { buildNotifications, performNotificationAction, renderNotifications, markNotificationRead, markAllNotificationsRead, notificationFingerprint };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });
   else initialize();
 })();

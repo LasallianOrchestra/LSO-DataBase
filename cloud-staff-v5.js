@@ -1,12 +1,17 @@
 (() => {
   'use strict';
-  window.__LSO_CLOUD_SAVE_VERSION__ = 'v57-semantic-deduplication';
+  window.__LSO_CLOUD_SAVE_VERSION__ = 'v61-adaptive-sync-and-semantic-deduplication';
 
   const TABLE_ROW_ID = 1;
-  const POLL_INTERVAL_MS = (() => {
+  const POLL_BASE_INTERVAL_MS = (() => {
     const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
     const lowConcurrency = Number(navigator.hardwareConcurrency || 8) <= 4;
-    return coarse || lowConcurrency ? 10000 : 7000;
+    return coarse || lowConcurrency ? 12000 : 9000;
+  })();
+  const POLL_QUIET_INTERVAL_MS = (() => {
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches;
+    const lowConcurrency = Number(navigator.hardwareConcurrency || 8) <= 4;
+    return coarse || lowConcurrency ? 30000 : 22000;
   })();
   const PENDING_KEY = 'lso_cloud_pending_v1';
   const MONTHLY_COMPAT_COLUMN = 'monthly_reports_compat';
@@ -40,6 +45,8 @@
   let online = false;
   let lastServerUpdate = '';
   let pollTimer = null;
+  let pollPromise = null;
+  let unchangedPolls = 0;
   let flushTimer = null;
   let flushing = false;
   const dirtyVersions = new Map();
@@ -686,6 +693,7 @@
       emit('lso:storage-error', { key, source: 'local-write', reason: 'write-failed' });
       return false;
     }
+    emit('lso:storage-change', { key, before: currentValue, after: nextValue, source: 'local-write' });
     if (column && sessionToken && loaded) markDirty(column);
     return true;
   }
@@ -696,7 +704,9 @@
       emitReadOnlyDenied(column);
       return false;
     }
+    const before = getLocal(key);
     const removed = removeLocal(key);
+    if (removed) emit('lso:storage-change', { key, before, after: column ? JSON.stringify(defaultForColumn(column)) : null, source: 'local-remove' });
     if (removed && column && sessionToken && loaded) {
       setLocal(key, JSON.stringify(defaultForColumn(column)));
       markDirty(column);
@@ -767,28 +777,60 @@
     return true;
   }
 
+  function nextPollDelay() {
+    if (dirtyVersions.size) return POLL_BASE_INTERVAL_MS;
+    return unchangedPolls >= 3 ? POLL_QUIET_INTERVAL_MS : POLL_BASE_INTERVAL_MS;
+  }
+
   async function pollState() {
-    if (!sessionToken || document.hidden) return;
-    try {
-      const nextState = await rpc('lso_get_state', { p_token: sessionToken });
-      online = true;
-      const nextUpdated = String(nextState?.updated_at || '');
-      if (!lastServerUpdate || nextUpdated !== lastServerUpdate) applyState(nextState, 'cloud-poll');
-      if (!dirtyVersions.size) status('online', 'Shared database connected');
-    } catch (error) {
-      online = false;
-      status('offline', `${error.message} Reconnecting automatically…`);
-    }
+    if (!sessionToken || document.hidden) return false;
+    // Focus, visibility restoration, and the scheduled timer can fire close together.
+    // Reuse the active request instead of issuing overlapping lso_get_state RPC calls.
+    if (pollPromise) return pollPromise;
+    pollPromise = (async () => {
+      try {
+        const nextState = await rpc('lso_get_state', { p_token: sessionToken });
+        online = true;
+        const nextUpdated = String(nextState?.updated_at || '');
+        const changed = !lastServerUpdate || nextUpdated !== lastServerUpdate;
+        if (changed) {
+          unchangedPolls = 0;
+          applyState(nextState, 'cloud-poll');
+        } else unchangedPolls += 1;
+        if (!dirtyVersions.size) status('online', 'Shared database connected');
+        return changed;
+      } catch (error) {
+        online = false;
+        unchangedPolls = 0;
+        status('offline', `${error.message} Reconnecting automatically…`);
+        return false;
+      } finally {
+        pollPromise = null;
+      }
+    })();
+    return pollPromise;
+  }
+
+  function scheduleNextPoll(delay = nextPollDelay()) {
+    if (!sessionToken) return;
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(async () => {
+      pollTimer = null;
+      await pollState().catch(() => undefined);
+      scheduleNextPoll();
+    }, Math.max(1000, Number(delay) || POLL_BASE_INTERVAL_MS));
   }
 
   function startPolling() {
     stopPolling();
-    pollTimer = setInterval(() => pollState().catch(() => undefined), POLL_INTERVAL_MS);
+    unchangedPolls = 0;
+    scheduleNextPoll(900);
   }
 
   function stopPolling() {
-    if (pollTimer) clearInterval(pollTimer);
+    if (pollTimer) clearTimeout(pollTimer);
     pollTimer = null;
+    unchangedPolls = 0;
   }
 
   function setSession(token, account = null) {
@@ -810,6 +852,20 @@
                 : 'Shared database connected • Read-only access');
     } else stopPolling();
   }
+
+  window.addEventListener('focus', () => {
+    if (!sessionToken || document.hidden) return;
+    pollState().catch(() => undefined).finally(() => scheduleNextPoll());
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!sessionToken) return;
+    if (document.hidden) {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      return;
+    }
+    pollState().catch(() => undefined).finally(() => scheduleNextPoll());
+  });
 
   async function disconnect({ remoteLogout = false } = {}) {
     stopPolling();
@@ -1004,6 +1060,8 @@
   async function resolveSystemError(errorId, note = '') {
     return rpc('lso_resolve_system_error', { p_token: sessionToken, p_error_id: errorId, p_note: note });
   }
+
+  window.__LSO_STORAGE_CHANGE_EVENTS__ = 'v61';
 
   window.LSOStorage = {
     getItem: storageGetItem,

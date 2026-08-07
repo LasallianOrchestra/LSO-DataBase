@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v60-end-to-end-debug1';
+const CACHE_VERSION = 'lso-website-enterprise-v61-operations-governance1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -49,6 +49,7 @@ const CORE_PATHS = [
   './attendance-semester-stability-v55.css',
   './attendance-archive-workflow-v56.css',
   './attendance-workflow-v58.css',
+  './operations-governance-v61.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',
@@ -80,6 +81,7 @@ const CORE_PATHS = [
   './system-enterprise-v2.js',
   './mobile-shell-controller-v37.js',
   './role-permission-center-v38.js',
+  './operations-governance-v61.js',
   './pwa-enterprise-v38.js',
   './favicon.ico',
   './favicon-32x32.png',

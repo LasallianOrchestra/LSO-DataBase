@@ -1,3 +1,16 @@
+# LSO V61 — Operations Governance & Data Integrity
+
+This release adds a system-wide Full Audit Trail, Data Quality Center, account-specific Notification Inbox, adaptive database polling for lower browser load, Role Permission Templates, and Administrator Maintenance Mode. It builds on the V60 end-to-end debugged base and does not require a new Supabase schema migration.
+
+## V61 highlights
+
+- Structured audit entries capture module, actor, role, timestamp, and before/after values for new shared-data changes.
+- Data Quality Center detects duplicate, orphaned, incomplete, and invalid records without automatically deleting or rewriting data.
+- Notification Inbox supports per-account read, unread, resolved, and archived states while preserving exact-record routing.
+- Database polling adapts from active polling to a quieter interval when the server state is unchanged and pauses while the page is hidden.
+- Role Permission Templates provide tested working copies that remain editable before the Administrator saves them.
+- Administrator Maintenance Mode safely blocks non-Administrator use during controlled upgrades or recovery work.
+
 # LSO V60 — End-to-End Debugged Release
 
 This release completes a full simulated browser regression pass across authentication, account administration, dynamic permissions, members, contracts, Monthly Reports and archives, Attendance, Duty Hours and punch review, notifications, Action Center, System Health, error resolution, recovery, saving/synchronization behavior, PWA delivery, accessibility, and responsive layouts. It also aligns the visible application, System Health, recovery metadata, and PWA cache identifiers with V60. No database schema migration is required.

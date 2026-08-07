@@ -348,6 +348,7 @@
       renderHealthCounts(lastHealth);
       renderHealthWorkflowSummary(lastHealth);
       window.dispatchEvent(new CustomEvent('lso:system-health-changed', { detail: clone(lastHealth || { counts: { unresolvedErrors: unresolved } }) }));
+      window.LSOOperations?.logActivity?.('Resolved system error', 'System Health', `${id} • ${source} • ${trimmedNote}`);
       toast('System error marked resolved.');
     } catch (error) {
       console.error('Unable to resolve system error:', error);
@@ -370,6 +371,7 @@
     if (!window.LSOCloud?.createRecoveryPoint) throw new Error('The Recovery Center database migration is not installed.');
     const result = await window.LSOCloud.createRecoveryPoint({ label, reason, metadata });
     await refreshRecoveryPoints({ quiet: true });
+    window.LSOOperations?.logActivity?.('Created recovery point', 'Backup & Recovery', `${label}${reason ? ` • ${reason}` : ''}`);
     return result;
   }
   function recoverySummary(points = recoveryPoints) {
@@ -390,12 +392,12 @@
   async function restoreRecovery(id) {
     const point = recoveryPoints.find((item) => String(item.id) === String(id)); if (!point) return;
     if (!window.confirm(`Restore “${point.label}”?\n\nThe system will create another recovery point before replacing current shared records.`)) return;
-    try { await window.LSOCloud.restoreRecoveryPoint(id); await window.LSOCloud.loadSharedState({ quiet: true }); window.LSOApp?.refresh?.(); await refreshRecoveryPoints({ quiet: true }); toast('Recovery point restored.'); }
+    try { await window.LSOCloud.restoreRecoveryPoint(id); await window.LSOCloud.loadSharedState({ quiet: true }); window.LSOApp?.refresh?.(); await refreshRecoveryPoints({ quiet: true }); window.LSOOperations?.logActivity?.('Restored recovery point', 'Backup & Recovery', `${point.label} • ${id}`); toast('Recovery point restored.'); }
     catch (error) { reportError({ module: 'Backup & Recovery', publicMessage: 'The selected recovery point could not be restored.', technicalMessage: error.message, errorCode: CORE.ERROR_CODES?.RESTORE || 'DATA-RESTORE-007' }); }
   }
   async function deleteRecovery(id) {
     if (!window.confirm('Delete this recovery point? This cannot be undone.')) return;
-    try { await window.LSOCloud.deleteRecoveryPoint(id); await refreshRecoveryPoints({ quiet: true }); toast('Recovery point deleted.'); }
+    try { await window.LSOCloud.deleteRecoveryPoint(id); await refreshRecoveryPoints({ quiet: true }); window.LSOOperations?.logActivity?.('Deleted recovery point', 'Backup & Recovery', id); toast('Recovery point deleted.'); }
     catch (error) { reportError({ module: 'Backup & Recovery', publicMessage: 'The recovery point could not be deleted.', technicalMessage: error.message }); }
   }
   async function ensureDailyRecovery() {
@@ -529,12 +531,12 @@
     if(!can('finalizeMonthlyReport')) return toast('Only an Administrator can finalize a Monthly Report.',true);
     const state=monthlyState();const key=activeReportKey();const report=state.reports?.[key];const missing=monthlyMissing(report);if(missing.length)return toast(`Complete these fields before finalizing: ${missing.join(', ')}.`,true);
     if(!window.confirm('Finalize and lock this Monthly Report? It can be reopened only by an Administrator with a correction reason.'))return;
-    report.workflowStatus='Finalized';report.revision=Math.max(0,Number(report.revision)||0)+1;report.finalizedAt=new Date().toISOString();report.finalizedBy=monthlyActor();report.reopenedAt='';report.reopenedBy='';report.workflowHistory=Array.isArray(report.workflowHistory)?report.workflowHistory:[];report.workflowHistory.unshift(monthlyAudit('Monthly Report finalized',`Revision ${report.revision}`));report.workflowHistory=report.workflowHistory.slice(0,100);report.updatedAt=new Date().toISOString();saveMonthlyState(state);renderMonthlyWorkflow();setTimeout(()=>window.LSOMonthlyReport?.archiveCurrent?.('Finalized report'),40);toast('Monthly Report finalized, locked, and added to the archive.');
+    report.workflowStatus='Finalized';report.revision=Math.max(0,Number(report.revision)||0)+1;report.finalizedAt=new Date().toISOString();report.finalizedBy=monthlyActor();report.reopenedAt='';report.reopenedBy='';report.workflowHistory=Array.isArray(report.workflowHistory)?report.workflowHistory:[];report.workflowHistory.unshift(monthlyAudit('Monthly Report finalized',`Revision ${report.revision}`));report.workflowHistory=report.workflowHistory.slice(0,100);report.updatedAt=new Date().toISOString();saveMonthlyState(state);window.LSOOperations?.logActivity?.('Finalized Monthly Report','Monthly Reports',`${key} • Revision ${report.revision}`);renderMonthlyWorkflow();setTimeout(()=>window.LSOMonthlyReport?.archiveCurrent?.('Finalized report'),40);toast('Monthly Report finalized, locked, and added to the archive.');
   }
   function reopenMonthlyReport() {
     if(!can('reopenMonthlyReport')) return toast('Only an Administrator can reopen a Monthly Report.',true);
     const reason=window.prompt('Enter the reason for reopening this finalized report:');if(reason===null)return;if(reason.trim().length<3)return toast('A correction reason with at least 3 characters is required.',true);
-    const state=monthlyState();const report=state.reports?.[activeReportKey()];if(!report)return;report.workflowStatus='Draft';report.reopenedAt=new Date().toISOString();report.reopenedBy=monthlyActor();report.workflowHistory=Array.isArray(report.workflowHistory)?report.workflowHistory:[];report.workflowHistory.unshift(monthlyAudit('Monthly Report reopened','Finalized report reopened for correction.',reason.trim()));report.workflowHistory=report.workflowHistory.slice(0,100);saveMonthlyState(state);renderMonthlyWorkflow();toast('Monthly Report reopened for correction.');
+    const state=monthlyState();const reportKey=activeReportKey();const report=state.reports?.[reportKey];if(!report)return;report.workflowStatus='Draft';report.reopenedAt=new Date().toISOString();report.reopenedBy=monthlyActor();report.workflowHistory=Array.isArray(report.workflowHistory)?report.workflowHistory:[];report.workflowHistory.unshift(monthlyAudit('Monthly Report reopened','Finalized report reopened for correction.',reason.trim()));report.workflowHistory=report.workflowHistory.slice(0,100);saveMonthlyState(state);window.LSOOperations?.logActivity?.('Reopened Monthly Report','Monthly Reports',`${reportKey} • ${reason.trim()}`);renderMonthlyWorkflow();toast('Monthly Report reopened for correction.');
   }
   function showMonthlyAudit() {
     const report=monthlyReport();const history=Array.isArray(report?.workflowHistory)?report.workflowHistory:[];let overlay=el('monthlyReportAuditPanel');if(!overlay){overlay=document.createElement('div');overlay.id='monthlyReportAuditPanel';overlay.className='monthly-report-audit-panel';document.body.appendChild(overlay);}overlay.innerHTML=`<section class="monthly-report-audit-card"><div class="panel-header"><div><p class="eyebrow">Revision History</p><h3>${safeText(activeReportKey())} Monthly Report</h3><p class="panel-subtitle">Finalization and correction events are preserved.</p></div><button class="icon-button" data-close-monthly-audit type="button">×</button></div><div class="monthly-report-audit-list">${history.length?history.map((item)=>`<div class="monthly-report-audit-item"><strong>${safeText(item.action)}</strong><small>${safeText(dateTimeLabel(item.timestamp))} • ${safeText(item.account||'Administrator')}</small>${item.reason?`<p>${safeText(item.reason)}</p>`:''}</div>`).join(''):'<div class="system-error-empty"><strong>No workflow history yet</strong><p>Save, finalize, or reopen the report to begin its revision history.</p></div>'}</div></section>`;overlay.classList.remove('hidden');

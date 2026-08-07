@@ -186,9 +186,10 @@
       category: String(category || 'System'),
       details: String(details || ''),
       account: account?.displayName || account?.username || 'Local user',
-      username: account?.username || ''
+      username: account?.username || '',
+      role: account?.role || ''
     });
-    saveArray(ACTIVITY_KEY, log.slice(0, 500));
+    saveArray(ACTIVITY_KEY, log.slice(0, 800));
     renderActivityLog();
   }
 

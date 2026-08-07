@@ -215,9 +215,10 @@
         category: 'Monthly Report',
         details,
         account: account.displayName || account.username || 'Administrator',
-        username: account.username || ''
+        username: account.username || '',
+        role: account.role || ''
       });
-      window.LSOStorage.setItem(ACTIVITY_KEY, JSON.stringify(list.slice(0, 500)));
+      window.LSOStorage.setItem(ACTIVITY_KEY, JSON.stringify(list.slice(0, 800)));
     } catch {
       // Report generation remains available if the audit log cannot be updated.
     }

@@ -45,7 +45,7 @@
 <link rel="icon" href="favicon.ico?v=20260717-logos" sizes="any"/>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20260717-logos"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20260721-pwa-v1"/>
-<link rel="manifest" href="manifest.webmanifest?v=20260805-attendance-stability-v53"/>
+<link rel="manifest" href="manifest.webmanifest?v=20260807-operations-governance-v61"/>
 <link href="styles.css?v=20260720-member-table-v2" rel="stylesheet"/>
 <link href="duty-roster-layout.css?v=20260717-1605" rel="stylesheet"/>
 <link href="access-control.css?v=20260721-role-approval-v2" rel="stylesheet"/>
@@ -126,9 +126,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <link href="attendance-semester-stability-v55.css?v=20260805-semester-state-v55" rel="stylesheet"/>
 <link href="attendance-archive-workflow-v56.css?v=20260805-attendance-archive-v56" rel="stylesheet"/>
 <link rel="stylesheet" href="attendance-workflow-v58.css?v=20260806-end-to-end-debug-v60"/>
+<link rel="stylesheet" href="operations-governance-v61.css?v=20260807-operations-governance-v61"/>
 </head>
 <body>
 <div aria-live="polite" class="connection-banner hidden" id="connectionBanner" role="status"></div>
+<div class="maintenance-admin-badge hidden" id="maintenanceAdminBadge" aria-live="polite"></div>
 <button class="pwa-install-button hidden" id="installAppButton" type="button">Install LSO App</button>
 <section aria-hidden="false" aria-labelledby="authTitle" class="auth-screen" id="authScreen">
 <div aria-hidden="true" class="auth-decoration auth-decoration-one"></div>
@@ -258,7 +260,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="logout-button" id="logoutButton" type="button">Log Out</button>
 <p>One Symphony, One Spirit,<br/>One Lasallian Legacy.</p>
 <small>Shared online database</small>
-<small class="system-version-footer" id="systemVersionFooter">LSO System v6.0.0 • Database target 009</small>
+<small class="system-version-footer" id="systemVersionFooter">LSO System v6.1.0 • Database target 009</small>
 </div>
 </aside>
 <button aria-label="Close navigation" class="sidebar-overlay" id="sidebarOverlay" type="button"></button>
@@ -1110,6 +1112,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <div><p class="eyebrow">Operational Workflow</p><h3>Action Center</h3><p>Review, open, complete, and verify pending work from across the system in one organized workspace.</p></div>
 <div class="inline-actions"><span class="action-center-updated" id="actionCenterUpdated" aria-live="polite">Ready</span><button class="button button-secondary" id="refreshAlertsButton" type="button">Refresh Action Center</button></div>
 </div>
+<article class="panel v61-section" id="notificationInboxPanel">
+<div class="v61-panel-header"><div><p class="eyebrow">Personal Workflow Inbox</p><h3>Notification Inbox</h3><p>Review active notifications, mark them read, resolve completed work, or archive old notices. Each account keeps its own inbox state.</p></div><div class="inline-actions"><span id="notificationInboxSummary" class="action-center-updated" aria-live="polite">Loading inbox…</span><button class="button button-secondary" id="markAllInboxRead" type="button">Mark All Read</button><button class="button button-secondary" id="refreshNotificationInbox" type="button">Refresh Inbox</button></div></div>
+<div class="v61-toolbar">
+<label class="field search-field"><span>Search notifications</span><input id="notificationInboxSearch" type="search" placeholder="Notification, record, or module…"/></label>
+<label class="field"><span>Status</span><select id="notificationInboxStatus"><option value="active">Active</option><option value="unread">Unread</option><option value="read">Read</option><option value="resolved">Resolved</option><option value="archived">Archived</option><option value="all">All</option></select></label>
+<label class="field"><span>Priority</span><select id="notificationInboxSeverity"><option value="">All priorities</option><option value="high">Urgent</option><option value="medium">Review soon</option><option value="low">Information</option></select></label>
+<label class="field"><span>Module</span><select id="notificationInboxModule"><option value="">All modules</option></select></label>
+</div>
+<div class="v61-inbox-list" id="notificationInboxList"></div>
+</article>
 <div class="action-workflow-map" id="actionWorkflowMap" aria-label="Action Center workflow"></div>
 <div class="panel action-center-toolbar">
 <label class="field search-field"><span>Search work items</span><input id="actionCenterSearch" type="search" placeholder="Member, activity, module, or task..."/></label>
@@ -1158,6 +1170,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
   <label class="field"><span>Copy permissions from</span><select id="permissionCopySourceRole"></select></label>
   <button class="button button-secondary" id="copyRolePermissionsButton" type="button">Apply as Working Copy</button>
 </div>
+<div class="permission-template-toolbar" id="permissionTemplateToolbar">
+  <div><span>Role Permission Templates</span><strong>Start with a tested operational profile.</strong><small>Templates change only the unsaved working copy. The Administrator can still adjust every unlocked permission before saving.</small></div>
+  <label class="field"><span>Template</span><select id="permissionTemplateSelect"></select></label>
+  <button class="button button-secondary" id="applyPermissionTemplateButton" type="button">Apply Template</button>
+</div>
 <div class="permission-bulk-actions" id="permissionBulkActions">
   <button class="button button-secondary" data-permission-bulk="modules-all" type="button">Select All Modules</button>
   <button class="button button-secondary" data-permission-bulk="modules-none" type="button">Clear Modules</button>
@@ -1174,6 +1191,15 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <details class="permission-editor-section" data-permission-section="attendance"><summary><span><strong>Attendance Calendar Access</strong><small>Choose which Official, Trainee, and Probationary calendars the role can open.</small></span></summary><div class="permission-toggle-grid" id="permissionAttendanceOptions"></div></details>
 </div>
 <details class="permission-matrix-disclosure"><summary>View complete permission matrix</summary><div class="table-wrap permission-matrix-wrap"><table class="permission-matrix-table"><thead id="permissionMatrixHead"></thead><tbody id="permissionMatrixBody"></tbody></table></div></details>
+</article>
+<article class="panel maintenance-panel" id="maintenanceModePanel">
+<div class="v61-panel-header"><div><p class="eyebrow">Administrator Control</p><h3>Maintenance Mode</h3><p>Temporarily block non-Administrator access during upgrades, restores, or controlled database maintenance. Administrators remain able to work and disable the mode.</p></div><span id="maintenanceModeStatus" class="action-center-updated" aria-live="polite">Checking status…</span></div>
+<div class="maintenance-grid">
+<label class="maintenance-toggle"><input id="maintenanceModeEnabled" type="checkbox"/><span><strong>Enable Maintenance Mode</strong><small>Approved non-Administrator accounts will see a maintenance notice instead of the management workspace.</small></span></label>
+<label class="field"><span>Expected Availability (optional)</span><input id="maintenanceExpectedResume" placeholder="e.g., Today at 10:30 PM"/></label>
+<label class="field span-2"><span>Maintenance Message</span><textarea id="maintenanceModeMessage" rows="3" placeholder="Explain why the system is temporarily unavailable."></textarea></label>
+</div>
+<div class="inline-actions"><button class="button button-primary" id="saveMaintenanceModeButton" type="button">Save Maintenance Status</button></div>
 </article>
 </section>
 <section class="health-workflow-panel" id="systemHealthDiagnosticsPanel" data-health-workflow-panel="diagnostics" role="tabpanel" aria-labelledby="systemHealthDiagnosticsTab" hidden>
@@ -1192,6 +1218,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <article class="panel backup-validator-panel"><div class="panel-header"><div><p class="eyebrow">Backup Integrity</p><h3>Validate Before Restore</h3><p class="panel-subtitle">Inspect a JSON backup before it is allowed to replace shared records.</p></div></div><label class="button button-secondary file-button">Select Backup to Validate<input id="validateBackupFile" type="file" accept=".json,application/json"/></label><div id="backupValidationResult" class="backup-validation-result"></div></article>
 </div>
 <article class="panel recovery-list-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Restore Points</p><h3>Server Recovery History</h3><p class="panel-subtitle">Restoring automatically creates another point first, so the action can be reversed.</p></div><button class="button button-secondary" id="refreshRecoveryPointsButton" type="button">Refresh</button></div><div id="recoveryPointList" class="recovery-point-list"></div></article>
+<article class="panel v61-section" id="dataQualityCenter">
+<div class="v61-panel-header"><div><p class="eyebrow">Data Integrity</p><h3>Data Quality Center</h3><p>Cross-check live Members, Attendance, Duty Hours, Accounts, and Monthly Reports for duplicate, orphaned, incomplete, or structurally invalid records.</p></div><div class="inline-actions"><button class="button button-secondary" id="exportDataQualityButton" type="button">Export Findings</button><button class="button button-primary" id="runDataQualityScan" type="button">Run Quality Scan</button></div></div>
+<div class="v61-metrics" id="dataQualityMetrics"></div>
+<div class="v61-toolbar compact"><label class="field search-field"><span>Search findings</span><input id="dataQualitySearch" type="search" placeholder="Member, issue, module…"/></label><label class="field"><span>Severity</span><select id="dataQualitySeverity"><option value="">All severities</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="info">Information</option></select></label><label class="field"><span>Module</span><select id="dataQualityModule"><option value="">All modules</option></select></label></div>
+<div class="v61-status-line"><span id="dataQualityStatus" aria-live="polite">Quality scan has not run yet.</span><div class="v61-database-performance"><span>Lazy scan</span><span>Cached while unchanged</span><span>No automatic record deletion</span></div></div>
+<div class="v61-quality-list" id="dataQualityIssues"></div>
+</article>
+<article class="panel v61-section" id="auditTrailCenter">
+<div class="v61-panel-header"><div><p class="eyebrow">Accountability</p><h3>Full Audit Trail</h3><p>Review system activity with account, role, timestamp, module, and captured before/after values for shared-data changes.</p></div><button class="button button-secondary" id="exportAuditTrailButton" type="button">Export Audit CSV</button></div>
+<div class="v61-toolbar"><label class="field search-field"><span>Search audit records</span><input id="auditTrailSearch" type="search" placeholder="Action, field, value, account…"/></label><label class="field"><span>Module</span><select id="auditTrailModuleFilter"><option value="">All modules</option></select></label><label class="field"><span>Account</span><input id="auditTrailActorFilter" placeholder="Username or role"/></label><label class="field"><span>From</span><input id="auditTrailFrom" type="date"/></label><label class="field"><span>To</span><input id="auditTrailTo" type="date"/></label></div>
+<div class="v61-status-line"><span id="auditTrailSummary">Loading audit trail…</span><small>Structured before/after values are recorded for new V61 shared-data changes; legacy activity remains visible.</small></div>
+<div class="v61-audit-list" id="fullAuditTrail"></div><div class="v61-pagination"><button class="button button-secondary" id="auditTrailPrev" type="button">Previous</button><button class="button button-secondary" id="auditTrailNext" type="button">Next</button></div>
+</article>
 <div class="data-grid">
 <article class="panel action-card featured-action-card">
 <div class="action-icon">ALL</div>
@@ -1421,6 +1460,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </aside>
 <div class="accessibility-overlay hidden" id="accessibilityOverlay"></div>
 
+<section class="maintenance-mode-overlay hidden" id="maintenanceModeOverlay" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="maintenanceOverlayTitle">
+<div class="maintenance-mode-card"><div class="mark" aria-hidden="true">M</div><p class="eyebrow">LSO System Maintenance</p><h1 id="maintenanceOverlayTitle">The management system is temporarily unavailable</h1><p id="maintenanceOverlayMessage">An Administrator is currently performing maintenance.</p><div class="resume" id="maintenanceOverlayResume">Please try again after maintenance is completed.</div><button class="button button-primary" id="maintenanceModeLogoutButton" type="button">Log Out</button></div>
+</section>
 <div class="system-error-dialog hidden" id="systemErrorDialog" role="dialog" aria-modal="true" aria-labelledby="systemErrorTitle">
 <div class="system-error-card"><div class="system-error-icon">!</div><div><p class="eyebrow">System Notice</p><h2 id="systemErrorTitle">The requested action could not be completed</h2><p id="systemErrorMessage">A safe error message will appear here.</p><div class="system-error-code"><span>Error Code</span><strong id="systemErrorCode">SYS-UNEXPECTED-999</strong></div><details id="systemErrorTechnicalDetails"><summary>Technical details</summary><pre id="systemErrorTechnicalText"></pre></details><div class="modal-footer"><button class="button button-secondary" id="copySystemErrorButton" type="button">Copy Details</button><button class="button button-secondary admin-only" id="openHealthFromErrorButton" type="button">Open System Health</button><button class="button button-primary" id="dismissSystemErrorButton" type="button">Dismiss</button></div></div></div>
 </div>
@@ -1428,16 +1470,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260806-end-to-end-debug-v60"></script>
+<script src="lso-system-core-v4.js?v=20260807-operations-governance-v61"></script>
 <script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
 <script src="role-access-v4.js?v=20260729-role-permission-v38"></script>
-<script src="cloud-staff-v5.js?v=20260805-save-queue-stability-v57"></script>
+<script src="cloud-staff-v5.js?v=20260807-adaptive-sync-v61"></script>
 <script src="app-member-information-v5.js?v=20260805-runtime-stability-v54"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
 <script src="auth.js?v=20260804-workflow-v41"></script>
-<script src="management-attendance-member-info-v4.js?v=20260806-end-to-end-debug-v60"></script>
+<script src="management-attendance-member-info-v4.js?v=20260807-audit-v61"></script>
 <script src="ui-enhancements.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="dashboard-enhancements.js?v=20260805-attendance-workflow-v58"></script>
+<script src="dashboard-enhancements.js?v=20260807-notification-inbox-v61"></script>
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
 <script src="workflow-attendance-month-v6.js?v=20260805-attendance-workflow-v58"></script>
 <script src="attendance-governance-v2.js?v=20260806-end-to-end-debug-v60"></script>
@@ -1454,9 +1496,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="permissions-dynamic-v38.js?v=20260805-semester-state-v55"></script>
 <script src="dashboard-command-center-v5.js?v=20260805-runtime-stability-v54"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v2.js?v=20260805-runtime-stability-v54"></script>
+<script src="system-enterprise-v2.js?v=20260807-audit-v61"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
-<script src="role-permission-center-v38.js?v=20260805-governance-v50"></script>
-<script src="pwa-enterprise-v38.js?v=20260806-end-to-end-debug-v60"></script>
+<script src="role-permission-center-v38.js?v=20260807-role-templates-v61"></script>
+<script src="operations-governance-v61.js?v=20260807-operations-governance-v61"></script>
+<script src="pwa-enterprise-v38.js?v=20260807-operations-governance-v61"></script>
 </body>
 </html>
