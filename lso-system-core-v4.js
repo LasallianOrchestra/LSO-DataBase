@@ -22,9 +22,9 @@ window.renderAll = renderAll;
   const PERMISSIONS = Object.freeze({
     views: Object.freeze({
       [ROLES.ADMIN]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'accountsView', 'systemHealthView', 'dataView'],
-      [ROLES.STAFF]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
-      [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView'],
-      [ROLES.SECRETARY]: ['dashboardView', 'attendanceView', 'dutyHoursView'],
+      [ROLES.STAFF]: ['dashboardView', 'membersView', 'lookupView', 'attendanceView', 'dutyHoursView', 'alertsView'],
+      [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView'],
+      [ROLES.SECRETARY]: ['dashboardView', 'membersView', 'lookupView', 'attendanceView', 'dutyHoursView', 'alertsView'],
       [ROLES.TRAINEE]: ['dutyHoursView']
     }),
     actions: Object.freeze({
@@ -63,18 +63,18 @@ window.renderAll = renderAll;
     attendanceGroups: Object.freeze({
       [ROLES.ADMIN]: ['Official Members', 'Trainee Members', 'Probationary Members'],
       [ROLES.STAFF]: ['Official Members', 'Trainee Members', 'Probationary Members'],
-      [ROLES.MEMBERSHIP]: ['Trainee Members', 'Probationary Members'],
+      [ROLES.MEMBERSHIP]: ['Official Members', 'Trainee Members', 'Probationary Members'],
       [ROLES.SECRETARY]: ['Official Members', 'Trainee Members', 'Probationary Members'],
       [ROLES.TRAINEE]: []
     })
   });
 
   const VERSION = Object.freeze({
-    app: '6.1.0',
-    build: '2026.08.07-operations-governance.1',
-    schemaTarget: '009_dynamic_role_permissions',
-    cache: 'lso-enterprise-v61',
-    permissions: 'permissions-manifest-v4-dynamic',
+    app: '6.7.0',
+    build: '2026.08.11-attendance-permission-center.1',
+    schemaTarget: '011_open_operational_permissions',
+    cache: 'lso-enterprise-v67',
+    permissions: 'permissions-manifest-v5-operational-open',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });
 

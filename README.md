@@ -1,3 +1,7 @@
+# LSO Orchestra Management System — V67 Attendance & Permission Center Repair
+
+This release repairs Administrator Maintenance Mode with shared-database verification, a hard application gate for non-Administrator accounts, cross-tab synchronization, and a status refresh/preview workflow. All V61 governance features remain included.
+
 # LSO V61 — Operations Governance & Data Integrity
 
 This release adds a system-wide Full Audit Trail, Data Quality Center, account-specific Notification Inbox, adaptive database polling for lower browser load, Role Permission Templates, and Administrator Maintenance Mode. It builds on the V60 end-to-end debugged base and does not require a new Supabase schema migration.
@@ -224,3 +228,45 @@ This package adds `smooth-motion-v1.css`, a presentation-only animation layer fo
 - Removes the per-event save burst during archive deletion; the monthly lifecycle remains the authoritative state.
 - Aligns the PWA cache marker with the active service-worker version to prevent the current cache from being removed as stale.
 - No Supabase schema migration is required.
+
+
+## V63 Member Photo & PDF Preview
+- Members Overall Record now previews the official PDF before download.
+- Member profiles support optimized square face photos stored with the shared member record.
+- Photos appear in member directory avatars and the Members Overall Record header.
+- Uploaded photos are center-cropped and compressed client-side to a small profile thumbnail (target under about 12 KB) to protect browser/database performance.
+- No new Supabase schema or SQL migration is required.
+
+
+## V64 Member Photo Canvas Compatibility Fix
+- Replaced createImageBitmap-based member photo decoding with HTMLImageElement decoding for wider browser compatibility.
+- Replaced the nine-argument Canvas drawImage crop with the simpler five-argument scaled draw, preventing overload-resolution failures.
+- Added explicit image-dimension validation and a user-friendly fallback error.
+- PDF Preview, member photo storage, database flow, permissions, and all unrelated workflows remain unchanged.
+
+
+## V66 Compact High-Quality Member Profile PDF
+
+- Members Overall Record PDF preview and download now render the member profile picture at a true 2×2 inches (144×144 PDF points).
+- The portrait frame and surrounding profile text spacing were adjusted to prevent overlap.
+- No database, workflow, permission, or member-data logic was changed.
+
+
+## V66 profile layout and portrait quality
+
+- Keeps the Overall Record portrait at a true 2×2 inches in PDF output.
+- Uses member details beside the portrait to remove excessive blank space.
+- Shortens decorative divider rules for a cleaner official-document layout.
+- Stores newly uploaded portraits at up to 512×512 JPEG with adaptive high-quality compression (roughly up to 90 KB) instead of the previous 128×128 thumbnail.
+- Existing low-resolution photos must be re-uploaded from the original image to gain the higher-quality source; upscaling cannot restore detail already discarded in older thumbnails.
+
+## V67 Attendance & Permission Center Repair
+
+- Repairs Attendance activity creation so **+ New Activity** and **Create on Selected Date** are governed by the currently selected month, not by a previously selected finalized activity.
+- Adds a submit-time workflow check so an activity cannot be accidentally created inside an In Review or Finalized month.
+- Removes hard-coded Administrator-only presentation from Attendance and Monthly Report workflow controls; these controls now follow the saved dynamic action permissions while their workflow state still controls when they are visible.
+- Refreshes Role Management descriptions to match Members Overall Record, profile photos/PDF preview, three-phase Monthly Reports and archive, Attendance Review/Finalize/Archive/Reopen, Duty Hours punches/archives, Action Center, and current governance features.
+- Adds **Grant Full Operational Access** and **Clear Operational Access** working-copy actions. Security-owner controls remain protected from delegation.
+- Adds module/action dependency validation before a role profile can be saved.
+- Requires the separate V67 Supabase permission patch so the live permission center accepts the current operational permission model without legacy role-name restrictions.
+- Updates application/PWA/cache metadata to V67.

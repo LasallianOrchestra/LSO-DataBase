@@ -1609,12 +1609,31 @@
             ? 'Finalized attendance is locked. Reopen the month for corrections.'
             : '';
     });
-    ['addEventButton', 'createEventOnSelectedDate', 'editEventButton', 'deleteEventButton'].forEach((id) => {
+    // Activity creation belongs to the currently selected calendar month, not to
+    // whichever activity happened to be selected previously. Keeping these scopes
+    // separate prevents a finalized old activity from disabling + New Activity in
+    // a different Draft/Reopened month.
+    const activeMonthWorkflow = monthState(activeMonth(), activeSemester(), activeGroup(), activeMode());
+    const createLocked = activeMode() !== 'Current' || monthStateLocksEditing(activeMonthWorkflow.state);
+    ['addEventButton', 'createEventOnSelectedDate'].forEach((id) => {
+      const control = el(id);
+      if (!control) return;
+      control.disabled = createLocked;
+      control.setAttribute('aria-disabled', createLocked ? 'true' : 'false');
+      control.title = activeMode() !== 'Current'
+        ? 'Return to Current Attendance to create an activity.'
+        : activeMonthWorkflow.state === 'In Review'
+          ? 'Return the selected month for corrections before creating an activity.'
+          : activeMonthWorkflow.state === 'Finalized'
+            ? 'Reopen the selected month before creating an activity.'
+            : '';
+    });
+    ['editEventButton', 'deleteEventButton'].forEach((id) => {
       const control = el(id);
       if (!control) return;
       control.disabled = monthlyLocked;
       control.setAttribute('aria-disabled', monthlyLocked ? 'true' : 'false');
-      control.title = monthlyState.state === 'In Review' ? 'Return the month for corrections before changing activities.' : monthlyState.state === 'Finalized' ? 'Reopen the month before changing activities.' : '';
+      control.title = monthlyState.state === 'In Review' ? 'Return the activity month for corrections before changing it.' : monthlyState.state === 'Finalized' ? 'Reopen the activity month before changing it.' : '';
     });
     const recordingState = el('attendanceRecordingState');
     if (recordingState) {
@@ -1913,13 +1932,34 @@
 
   function interceptLockedEdits(event) {
     const target = event.target;
+
+    // Creating a new activity is governed by the active month even when there is
+    // no selected activity yet (or the previously selected activity is finalized).
+    const createControl = target.closest?.('#addEventButton, #createEventOnSelectedDate');
+    if (createControl) {
+      const current = monthState(activeMonth(), activeSemester(), activeGroup(), activeMode());
+      const createLocked = activeMode() !== 'Current' || monthStateLocksEditing(current.state);
+      if (!createLocked) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.LSOApp?.showToast?.(
+        activeMode() !== 'Current'
+          ? 'Return to Current Attendance to create an activity.'
+          : current.state === 'In Review'
+            ? 'This month is in Review. Return it for corrections before creating an activity.'
+            : 'This month is finalized. Reopen it before creating a corrected revision.',
+        true
+      );
+      return;
+    }
+
     const eventRecord = selectedEvent();
     if (!eventRecord) return;
     const eventMonth = String(eventRecord.date || '').slice(0, 7);
     const monthly = monthState(eventMonth, eventRecord.semester || activeSemester(), activeGroup(), activeMode());
     const locked = monthStateLocksEditing(monthly.state) || workflowState(eventRecord) === 'Finalized';
     if (!locked) return;
-    const blocked = target.closest?.('#saveAttendanceButton, #markAllPresent, .attendance-status, .attendance-remarks, #addEventButton, #createEventOnSelectedDate, #editEventButton, #deleteEventButton');
+    const blocked = target.closest?.('#saveAttendanceButton, #markAllPresent, .attendance-status, .attendance-remarks, #editEventButton, #deleteEventButton');
     if (!blocked) return;
     event.preventDefault();
     event.stopImmediatePropagation();

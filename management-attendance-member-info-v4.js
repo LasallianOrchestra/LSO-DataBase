@@ -540,6 +540,15 @@
       formMessage('eventFormMessage', 'Your account is not permitted to create activities in this attendance calendar.');
       return;
     }
+    const targetMonthState = window.LSOAttendanceGovernance?.getMonthState?.(
+      String(record.date || '').slice(0, 7), record.semester, record.attendanceGroup, 'Current'
+    );
+    if (targetMonthState && ['In Review', 'Finalized'].includes(targetMonthState.state)) {
+      formMessage('eventFormMessage', targetMonthState.state === 'In Review'
+        ? 'This attendance month is in Review. Return it for corrections before creating or editing an activity.'
+        : 'This attendance month is finalized. Reopen it before creating or editing an activity.');
+      return;
+    }
     if (record.startTime && record.endTime && record.endTime <= record.startTime) {
       formMessage('eventFormMessage', 'End Time must be later than Start Time.');
       return;

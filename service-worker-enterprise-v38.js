@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v61-operations-governance1';
+const CACHE_VERSION = 'lso-website-enterprise-v67-permissions-attendance';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -50,6 +50,7 @@ const CORE_PATHS = [
   './attendance-archive-workflow-v56.css',
   './attendance-workflow-v58.css',
   './operations-governance-v61.css',
+  './member-photo-pdf-preview-v63.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',
@@ -59,6 +60,7 @@ const CORE_PATHS = [
   './app-member-information-v5.js',
   './auth-view-controller-v18.js',
   './auth.js',
+  './maintenance-mode-v62.js',
   './management-attendance-member-info-v4.js',
   './ui-enhancements.js',
   './dashboard-enhancements.js',
@@ -74,6 +76,7 @@ const CORE_PATHS = [
   './contract-maker-membership-v4.js',
   './official-pdf-assets-v51.js',
   './member-overall-record-v49.js',
+  './member-photo-pdf-preview-v63.js',
   './dashboard-intelligence-member-info-v3.js',
   './permissions-dynamic-v38.js',
   './dashboard-command-center-v5.js',

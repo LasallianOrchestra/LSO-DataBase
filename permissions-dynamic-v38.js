@@ -11,7 +11,7 @@
     '.nav-item', '.admin-only', '[data-account-action]', '.account-role-select', '.account-member-select',
     '#memberForm', '[data-action="edit"]', '[data-action="delete"]', '#addMemberTop', '#addMemberHero', '#addMemberMembers', '#editRecordButton',
     '#addEventButton', '#createEventOnSelectedDate', '#editEventButton', '#deleteEventButton', '#markAllPresent', '#saveAttendanceButton',
-    '#finalizeAttendanceButton', '#unlockAttendanceButton', '.attendance-status', '.attendance-remarks', '[data-attendance-group]',
+    '#reviewAttendanceMonthButton', '#returnAttendanceMonthToDraftButton', '#finalizeAttendanceMonthButton', '#reopenAttendanceMonthButton', '#saveAttendanceSemesterEndDate', '#finalizeAttendanceSemesterButton', '#reopenAttendanceSemesterButton', '#finalizeAttendanceButton', '#unlockAttendanceButton', '.attendance-status', '.attendance-remarks', '[data-attendance-group]',
     '#contractAdminWorkspace', '#contractReadOnlyNotice', '#contractMakerForm', '[data-monthly-edit]', '[data-monthly-write]',
     '#monthlyReportFinalizeButton', '#monthlyReportReopenButton', '.duty-management-only', '.duty-roster-monitor-panel',
     '.duty-roster-report-actions', '#dutyRecordModeToggle', '#dutyApprovalPanel', '#dutyHoursAdminControls', '[data-duty-delete]',
@@ -104,6 +104,7 @@
 
   function applyWorkflowPermission(node, permitted) {
     if (!node) return;
+    const stateOwned = Boolean(node.dataset.stateVisibilityOwner);
     if (!permitted) {
       if (!node.classList.contains('hidden')) node.dataset.roleForcedHidden = 'true';
       node.classList.add('hidden', 'role-hidden');
@@ -112,9 +113,11 @@
       return;
     }
     node.classList.remove('role-hidden');
-    node.setAttribute('aria-hidden', 'false');
+    // Stateful workflow controls remain owned by Attendance/Monthly Report renderers.
+    // Permission refreshes must never reveal Finalize/Reopen at the wrong stage.
+    node.setAttribute('aria-hidden', node.classList.contains('hidden') ? 'true' : 'false');
     if (node.dataset.roleForcedHidden === 'true') {
-      node.classList.remove('hidden');
+      if (!stateOwned) node.classList.remove('hidden');
       delete node.dataset.roleForcedHidden;
     }
     node.removeAttribute('tabindex');
@@ -129,6 +132,13 @@
     show(el('deleteEventButton'), can('deleteEvents'));
     show(el('markAllPresent'), saveDraft);
     show(el('saveAttendanceButton'), saveDraft);
+    applyWorkflowPermission(el('reviewAttendanceMonthButton'), can('finalizeAttendance'));
+    applyWorkflowPermission(el('finalizeAttendanceMonthButton'), can('finalizeAttendance'));
+    applyWorkflowPermission(el('saveAttendanceSemesterEndDate'), can('finalizeAttendance'));
+    applyWorkflowPermission(el('finalizeAttendanceSemesterButton'), can('finalizeAttendance'));
+    applyWorkflowPermission(el('returnAttendanceMonthToDraftButton'), can('unlockAttendance'));
+    applyWorkflowPermission(el('reopenAttendanceMonthButton'), can('unlockAttendance'));
+    applyWorkflowPermission(el('reopenAttendanceSemesterButton'), can('unlockAttendance'));
     applyWorkflowPermission(el('finalizeAttendanceButton'), can('finalizeAttendance'));
     applyWorkflowPermission(el('unlockAttendanceButton'), can('unlockAttendance'));
     qsa('.attendance-status, .attendance-remarks', root).forEach((node) => {
@@ -147,9 +157,7 @@
     show(el('contractReadOnlyNotice'), !allowed);
     if (el('contractReadOnlyNotice')) {
       el('contractReadOnlyNotice').querySelector('h3').textContent = allowed ? '' : 'Contract access not assigned';
-      el('contractReadOnlyNotice').querySelector('p').textContent = isStaff()
-        ? 'Staff Accounts may view system records, but contract generation is assigned to the Administrator and Membership role.'
-        : 'Your role does not include the Contract workspace.';
+      el('contractReadOnlyNotice').querySelector('p').textContent = 'Your current role profile does not include contract generation. An Administrator can assign this operational permission from Role & Permission Center.';
     }
     qsa('#contractMakerForm input, #contractMakerForm textarea, #contractMakerForm button', root).forEach((node) => enable(node, allowed, 'This role is not assigned to perform this action.'));
   }
@@ -233,7 +241,7 @@
     applying = true;
     try {
       document.body.dataset.accountRole = role();
-      document.body.classList.toggle('staff-readonly-mode', isStaff() && !['manageMembers','manageEvents','saveDraftAttendance','manageDutyHours','editMonthlyReport','generateContract'].some((action) => can(action)));
+      document.body.classList.toggle('staff-readonly-mode', isStaff() && !['manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport','manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog'].some((action) => can(action)));
       document.body.classList.toggle('membership-role-mode', isMembership());
       document.body.classList.toggle('secretary-role-mode', isSecretary());
       ensureBanner();
@@ -256,8 +264,8 @@
     if (target.closest('#addEventButton, #createEventOnSelectedDate, #editEventButton, #eventForm')) return 'manageEvents';
     if (target.closest('#deleteEventButton')) return 'deleteEvents';
     if (target.closest('#markAllPresent, #saveAttendanceButton, .attendance-status, .attendance-remarks')) return 'saveDraftAttendance';
-    if (target.closest('#finalizeAttendanceButton')) return 'finalizeAttendance';
-    if (target.closest('#unlockAttendanceButton')) return 'unlockAttendance';
+    if (target.closest('#reviewAttendanceMonthButton, #finalizeAttendanceMonthButton, #saveAttendanceSemesterEndDate, #finalizeAttendanceSemesterButton, #finalizeAttendanceButton')) return 'finalizeAttendance';
+    if (target.closest('#returnAttendanceMonthToDraftButton, #reopenAttendanceMonthButton, #reopenAttendanceSemesterButton, #unlockAttendanceButton, [data-attendance-archive-delete]')) return 'unlockAttendance';
     if (target.closest('#contractMakerForm, #previewContractButton, #downloadContractButton, #resetContractButton')) return 'generateContract';
     if (target.closest('#monthlyReportFinalizeButton')) return 'finalizeMonthlyReport';
     if (target.closest('#monthlyReportReopenButton')) return 'reopenMonthlyReport';

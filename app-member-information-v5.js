@@ -106,6 +106,15 @@
     return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'LSO';
   }
 
+  function memberAvatarMarkup(member, extraClass = '') {
+    const photo = String(member?.profilePhoto || '');
+    const classes = `member-avatar${extraClass ? ` ${extraClass}` : ''}`;
+    if (/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo)) {
+      return `<div class="${classes}" aria-hidden="true"><img src="${safeText(photo)}" alt="" loading="lazy" decoding="async"/></div>`;
+    }
+    return `<div class="${classes}" aria-hidden="true">${safeText(initials(member?.fullName))}</div>`;
+  }
+
   function toDateLabel(value) {
     if (!value) return '—';
     const date = new Date(`${value}T00:00:00`);
@@ -367,7 +376,7 @@
     const recentMembers = el('recentMembers');
     if (recentMembers) recentMembers.innerHTML = recent.length ? recent.map((member) => `
       <div class="recent-item">
-        <div class="member-avatar">${safeText(initials(member.fullName))}</div>
+        ${memberAvatarMarkup(member)}
         <div><h4>${safeText(member.fullName)}</h4><p>${safeText(member.membershipId)} • ${safeText(member.primaryInstrument || 'No instrument')}</p></div>
         <span class="badge ${getPeriodBadge(member.periodGroup)}">${safeText(member.periodGroup)}</span>
         <button class="text-button" data-open-record="${safeText(member.id)}">Open →</button>
@@ -436,7 +445,7 @@
         ${groupMembers.length ? `<div class="period-table-wrap"><table class="period-table">
           <thead><tr><th>Member</th><th>Membership ID</th><th>Student No.</th><th>Section / Instrument</th><th>Status</th><th>Timeline</th><th>Actions</th></tr></thead>
           <tbody>${groupMembers.map((member) => `<tr>
-            <td><div class="member-cell member-identity"><div class="member-avatar" aria-hidden="true">${safeText(initials(member.fullName))}</div><div class="member-copy"><strong class="member-name">${safeText(member.fullName)}</strong><small class="member-email" title="${safeText(member.outlook || 'No Outlook account')}">${safeText(member.outlook || 'No Outlook account')}</small></div></div></td>
+            <td><div class="member-cell member-identity">${memberAvatarMarkup(member)}<div class="member-copy"><strong class="member-name">${safeText(member.fullName)}</strong><small class="member-email" title="${safeText(member.outlook || 'No Outlook account')}">${safeText(member.outlook || 'No Outlook account')}</small></div></div></td>
             <td><strong>${safeText(member.membershipId)}</strong></td>
             <td>${safeText(member.studentNumber || '—')}</td>
             <td><strong>${safeText(member.orchestraSection || '—')}</strong><br><small>${safeText(member.primaryInstrument || '—')}</small></td>
@@ -466,7 +475,7 @@
     el('membersTableBody').innerHTML = filtered.map((member) => `
       <tr>
         <td><strong>${safeText(member.membershipId)}</strong></td>
-        <td><div class="member-cell member-identity"><div class="member-avatar" aria-hidden="true">${safeText(initials(member.fullName))}</div><div class="member-copy"><strong class="member-name">${safeText(member.fullName)}</strong><small class="member-email" title="${safeText(member.outlook || 'No Outlook account')}">${safeText(member.outlook || 'No Outlook account')}</small></div></div></td>
+        <td><div class="member-cell member-identity">${memberAvatarMarkup(member)}<div class="member-copy"><strong class="member-name">${safeText(member.fullName)}</strong><small class="member-email" title="${safeText(member.outlook || 'No Outlook account')}">${safeText(member.outlook || 'No Outlook account')}</small></div></div></td>
         <td>${safeText(member.studentNumber || '—')}</td>
         <td>${safeText(member.orchestraSection || '—')}</td>
         <td>${safeText(member.primaryInstrument || '—')}</td>
@@ -519,7 +528,7 @@
     const results = lookupMatches();
     el('lookupResults').innerHTML = results.length ? results.map((member) => `
       <button class="lookup-result ${selectedMemberId === member.id ? 'active' : ''}" data-lookup-id="${safeText(member.id)}">
-        <div class="member-avatar">${safeText(initials(member.fullName))}</div>
+        ${memberAvatarMarkup(member)}
         <div><strong>${safeText(member.fullName)}</strong><small>${safeText(member.membershipId)} • ${safeText(member.periodGroup)} • ${safeText(member.studentNumber || 'No student number')}</small></div>
       </button>
     `).join('') : `<div class="empty-state"><div class="empty-icon">?</div><h4>No matching member</h4><p>Try a different name or number.</p></div>`;
@@ -610,6 +619,8 @@
     el('memberForm').reset();
     el('formMessage').classList.add('hidden');
     el('editingId').value = member?.id || '';
+    if (el('memberProfilePhotoData')) el('memberProfilePhotoData').value = member?.profilePhoto || '';
+    window.dispatchEvent(new CustomEvent('lso:member-photo-form-opened', { detail: { memberId: member?.id || '', fullName: member?.fullName || '', profilePhoto: member?.profilePhoto || '' } }));
     el('modalTitle').textContent = member ? 'Edit Member Record' : 'Register New Member';
     el('dateRegistered').value = member?.dateRegistered || getToday();
     el('membershipStage').value = member?.membershipStage || 'Trainee';
@@ -648,6 +659,8 @@
       id: existing?.id || (crypto.randomUUID ? crypto.randomUUID() : `member-${Date.now()}-${Math.random().toString(16).slice(2)}`),
       membershipId: existing?.membershipId || generateMembershipId(dateRegistered),
       fullName: el('fullName').value.trim(),
+      profilePhoto: el('memberProfilePhotoData') ? String(el('memberProfilePhotoData').value || '').trim() : String(existing?.profilePhoto || '').trim(),
+      profilePhotoUpdatedAt: el('memberProfilePhotoData') && String(el('memberProfilePhotoData').value || '') !== String(existing?.profilePhoto || '') ? new Date().toISOString() : (existing?.profilePhotoUpdatedAt || ''),
       birthdate: el('birthdate').value,
       age: el('age').value.trim() || ageFromBirthdate(el('birthdate').value),
       sex: el('sex').value,

@@ -3,3 +3,12 @@
 @media(max-width:980px){.v61-toolbar,.v61-toolbar.compact{grid-template-columns:repeat(2,minmax(0,1fr))}.v61-toolbar .button{width:100%}.v61-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.permission-template-toolbar{grid-template-columns:1fr 1fr}.permission-template-toolbar>div{grid-column:1/-1}.v61-audit-main{grid-template-columns:1fr}.v61-audit-meta{justify-items:start;display:flex;gap:8px;flex-wrap:wrap}.v61-inbox-item{grid-template-columns:42px minmax(0,1fr)}.v61-inbox-actions{grid-column:2;justify-content:flex-start;max-width:none}}
 @media(max-width:680px){.v61-toolbar,.v61-toolbar.compact,.permission-template-toolbar,.maintenance-panel .maintenance-grid{grid-template-columns:1fr}.v61-metrics{grid-template-columns:1fr 1fr}.v61-quality-item{grid-template-columns:1fr}.v61-quality-severity{justify-self:start}.v61-quality-item .button{width:100%}.v61-change-list>div{grid-template-columns:1fr}.v61-change-list>div>span[aria-hidden="true"]{display:none}.v61-inbox-item{grid-template-columns:38px minmax(0,1fr);padding:12px}.v61-inbox-actions{grid-column:1/-1}.v61-inbox-actions .button{flex:1 1 100%}.v61-status-line{align-items:flex-start;flex-direction:column}.v61-quality-list,.v61-inbox-list,.v61-audit-list{max-height:62dvh}.maintenance-admin-badge{left:12px;right:auto}.v61-panel-header{flex-direction:column}.v61-panel-header .inline-actions{width:100%}.v61-panel-header .inline-actions .button{flex:1}}
 @media(prefers-reduced-motion:reduce){.maintenance-mode-overlay,.v61-quality-item,.v61-inbox-item,.v61-audit-item{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* V62 maintenance gate hardening */
+body[data-maintenance-blocked="true"] #appShell[data-maintenance-locked="true"]{pointer-events:none!important;user-select:none!important}
+.maintenance-mode-overlay{overscroll-behavior:contain}
+.maintenance-mode-card:focus{outline:none}
+.maintenance-overlay-actions{display:flex;gap:10px;flex-wrap:wrap}
+.maintenance-overlay-actions .button{min-height:44px}
+body.lso-maintenance-preview{overflow:hidden!important}
+@media(max-width:680px){.maintenance-overlay-actions{display:grid;grid-template-columns:1fr}.maintenance-overlay-actions .button{width:100%}.maintenance-mode-card{max-height:calc(100dvh - 32px);overflow:auto}}

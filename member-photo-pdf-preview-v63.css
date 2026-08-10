@@ -1,0 +1,57 @@
+/* V63 member profile photos + PDF preview. Visual/accessibility layer only. */
+.member-avatar,
+.overall-record-photo,
+.member-photo-preview{
+  overflow:hidden;
+  flex:0 0 auto;
+}
+.member-avatar img,
+.overall-record-photo img,
+.member-photo-preview img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+}
+.member-photo-editor{
+  display:grid;
+  grid-template-columns:112px minmax(0,1fr);
+  align-items:center;
+  gap:18px;
+  padding:16px;
+  margin-bottom:16px;
+  border:1px solid var(--border,#d9e0e6);
+  border-radius:16px;
+  background:#f8faf9;
+}
+.member-photo-preview{
+  width:104px;
+  height:104px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:#123f33;
+  color:#fff;
+  border:3px solid #fff;
+  box-shadow:0 0 0 1px #c9d6d0;
+  font-size:26px;
+  font-weight:800;
+  letter-spacing:.04em;
+}
+.member-photo-controls{display:grid;gap:9px;min-width:0}.member-photo-controls>div:first-child{display:grid;gap:3px}.member-photo-controls strong{color:#1f2933}.member-photo-controls small{color:#667085;line-height:1.45}.member-photo-upload{cursor:pointer}.member-photo-upload.is-busy{opacity:.65;pointer-events:none}.member-photo-status{display:block}.overall-record-person{display:flex;align-items:center;gap:14px;min-width:0}.overall-record-photo{width:68px;height:68px;border-radius:16px;display:grid;place-items:center;background:#123f33;color:#fff;border:1px solid #c9d6d0;font-weight:800;font-size:18px}.overall-record-photo.has-photo{background:#fff}.overall-record-person>div:last-child{min-width:0}.overall-record-person h3{overflow-wrap:anywhere}
+body.member-pdf-preview-open{overflow:hidden}
+.member-pdf-preview-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:10050;
+  display:grid;
+  place-items:center;
+  padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+  background:rgba(10,25,20,.68);
+}
+.member-pdf-preview-backdrop.hidden{display:none!important}.member-pdf-preview-card{width:min(1180px,100%);height:min(92dvh,920px);min-height:520px;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border-radius:20px;background:#fff;border:1px solid rgba(18,63,51,.18);box-shadow:0 24px 70px rgba(0,0,0,.28)}.member-pdf-preview-header,.member-pdf-preview-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 18px;background:#fff}.member-pdf-preview-header{border-bottom:1px solid #d9e0e6}.member-pdf-preview-header>div{min-width:0}.member-pdf-preview-header h2{margin:2px 0 4px;color:#123f33;font-size:clamp(18px,2.2vw,26px)}.member-pdf-preview-header p:last-child{margin:0;color:#667085;font-size:13px}.member-pdf-preview-body{position:relative;min-height:0;background:#eef2f0;padding:12px}.member-pdf-preview-body iframe{display:block;width:100%;height:100%;min-height:420px;border:1px solid #cbd5d0;border-radius:12px;background:#fff}.member-pdf-preview-fallback{position:absolute;right:24px;bottom:24px;display:flex;align-items:center;gap:8px;max-width:520px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.96);border:1px solid #d9e0e6;box-shadow:0 8px 24px rgba(15,34,28,.12);font-size:12px;color:#667085}.member-pdf-preview-fallback strong{color:#1f2933}.member-pdf-preview-footer{border-top:1px solid #d9e0e6}.member-pdf-preview-footer>small{color:#667085}
+@media(max-width:760px){.member-photo-editor{grid-template-columns:86px minmax(0,1fr);gap:14px;padding:13px}.member-photo-preview{width:82px;height:82px;font-size:21px}.overall-record-header{align-items:flex-start!important}.overall-record-person{width:100%}.overall-record-photo{width:58px;height:58px;border-radius:14px}.member-pdf-preview-backdrop{padding:0}.member-pdf-preview-card{width:100%;height:100dvh;min-height:100dvh;border-radius:0;border:0}.member-pdf-preview-header{padding:max(12px,env(safe-area-inset-top)) 12px 10px}.member-pdf-preview-body{padding:8px}.member-pdf-preview-body iframe{min-height:0;border-radius:8px}.member-pdf-preview-fallback{position:static;margin-top:8px;max-width:none;display:grid;grid-template-columns:1fr auto}.member-pdf-preview-footer{padding:10px max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));align-items:flex-end}.member-pdf-preview-footer>small{display:none}.member-pdf-preview-footer .inline-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.member-pdf-preview-footer .button{width:100%}}
+@media(max-width:430px){.member-photo-editor{grid-template-columns:1fr;text-align:center}.member-photo-preview{margin:auto}.member-photo-controls .inline-actions{display:grid;grid-template-columns:1fr 1fr}.overall-record-person{align-items:flex-start}.overall-record-photo{width:52px;height:52px}.member-pdf-preview-fallback{grid-template-columns:1fr}.member-pdf-preview-fallback .button{width:100%}}
+@media(prefers-reduced-motion:reduce){.member-pdf-preview-backdrop,.member-pdf-preview-card,.member-photo-preview,.overall-record-photo{animation:none!important;transition:none!important}}
+@media print{.member-pdf-preview-backdrop,.member-photo-editor{display:none!important}}

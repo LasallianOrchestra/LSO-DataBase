@@ -7,43 +7,43 @@
   const ADMIN = 'Administrator';
   const ROLES = ['Administrator','Membership','General Secretary','Staff Account','Trainee/Probationary'];
   const VIEW_DEFS = [
-    ['dashboardView','Dashboard','Summary, alerts, analytics, and operational overview.'],
-    ['membersView','Members','Member directory, records, and stage monitoring.'],
-    ['lookupView','Members Overall Record','Unified profile, contracts, monthly reports, attendance, duty hours, and downloadable PDF overview.'],
-    ['contractView','Contract','Membership contract preparation and printing.'],
-    ['monthlyReportView','Monthly Report','Monthly filing, report review, and PDF generation.'],
-    ['attendanceView','Attendance','Activities, calendars, rosters, ratings, and reports.'],
-    ['dutyHoursView','Duty Hours','Trainee/Probationary hours, approvals, and progress.'],
-    ['alertsView','Action Center','System-generated operational notices and follow-up items.'],
-    ['accountsView','Accounts','Administrator account management and approvals.'],
-    ['systemHealthView','System Health','Diagnostics, permissions, migrations, and errors.'],
-    ['dataView','Data & Recovery','Backups, imports, restores, and system settings.']
+    ['dashboardView','Dashboard','Operational overview, quick actions, workflow cards, alerts, and live summaries.'],
+    ['membersView','Members','Member directory, stage monitoring, profile information, and member photo management.'],
+    ['lookupView','Members Overall Record','Unified member profile with contracts, Monthly Reports, Attendance, Duty Hours, corrections, PDF preview, and PDF download.'],
+    ['contractView','Contract','Membership contract preparation, preview, generation, and tracked contract output.'],
+    ['monthlyReportView','Monthly Report','Three-phase monthly filing, validation, PDF preview/download, finalization, and report archive.'],
+    ['attendanceView','Attendance','Activity creation, Official/Trainee/Probationary rosters, LOA/Excused rules, Review, Finalize, Archive, revisions, and semester ratings.'],
+    ['dutyHoursView','Duty Hours','Trainee/Probationary live rosters, Time In/Out punches, approvals, manual ledgers, archives, totals, and certifications.'],
+    ['alertsView','Action Center','Notification Inbox, workflow alerts, exact-record routing, and follow-up actions.'],
+    ['accountsView','Accounts','Security owner area for account approval, role assignment, activation, and account maintenance.'],
+    ['systemHealthView','System Health','Security owner area for diagnostics, Role Management, Audit Trail, Data Quality, Maintenance Mode, and Error Resolution.'],
+    ['dataView','Data & Recovery','Security owner area for system settings, backup, restore, recovery points, imports, and controlled clearing.']
   ];
   const ACTION_DEFS = [
-    ['manageMembers','Manage member records','Add, edit, and update member profiles.'],
-    ['generateContract','Generate contracts','Prepare, preview, and print membership contracts.'],
-    ['editMonthlyReport','Edit Monthly Reports','Create and update monthly report content.'],
-    ['finalizeMonthlyReport','Finalize Monthly Reports','Lock a verified Monthly Report.'],
-    ['reopenMonthlyReport','Reopen Monthly Reports','Reopen a finalized report for correction.'],
-    ['manageEvents','Create/edit activities','Create or modify Attendance activities.'],
-    ['deleteEvents','Delete activities','Permanently remove activities.'],
-    ['saveDraftAttendance','Save draft attendance','Mark and save Attendance rosters.'],
-    ['finalizeAttendance','Finalize attendance','Finalize activity, month, and semester ratings.'],
-    ['unlockAttendance','Unlock attendance','Reopen finalized Attendance records.'],
-    ['reviewDutyPunches','Approve/reject Duty punches','Review separate Time In and Time Out requests.'],
-    ['manageDutyHours','Manually manage Duty Hours','Add, edit, delete, and adjust Duty Hours records.'],
-    ['manageDutyRequirements','Set Duty requirements','Configure required Trainee/Probationary hours.'],
-    ['certifyDutyHours','Generate Duty certification','Prepare official Duty Hours certification.'],
-    ['writeActivityLog','Write audit activity','Record changes in the system activity log.'],
-    ['manageAccessibility','Use accessibility controls','Use text, contrast, motion, density, and table settings.'],
-    ['selfDutyPunch','Submit personal Duty punches','Use Time In and Time Out for the linked member account.'],
-    ['manageAccounts','Manage accounts','Approve, assign, disable, and maintain accounts.'],
-    ['manageSettings','Manage system settings','Change organization-wide system settings.'],
-    ['manageInventory','Manage inventory','Maintain instrument and inventory records.'],
-    ['manageData','Import/export/clear data','Run data import, export, and controlled clearing tools.'],
-    ['manageRecovery','Manage recovery points','Create, review, and restore recovery points.'],
-    ['viewSystemHealth','View System Health','Open diagnostics and system status information.'],
-    ['manageSystemErrors','Resolve system errors','Review and resolve recorded system errors.']
+    ['manageMembers','Manage member & Overall Records','Add/edit member profiles and photos, and correct member-linked Overall Record data through its source workflow.'],
+    ['generateContract','Generate contracts','Prepare, preview, download, and regenerate official membership contracts.'],
+    ['editMonthlyReport','Edit Monthly Reports','Create, revise, and save three-phase Monthly Report filing information.'],
+    ['finalizeMonthlyReport','Finalize & manage Monthly Report outputs','Finalize/reopen reports and control the validated Monthly Report archive output.'],
+    ['reopenMonthlyReport','Reopen Monthly Reports','Return a finalized Monthly Report to correction mode.'],
+    ['manageEvents','Create/edit Attendance activities','Create and modify activities in assigned Attendance calendars and Draft/Reopened months.'],
+    ['deleteEvents','Delete Attendance activities','Delete activities and their connected attendance records where workflow state allows.'],
+    ['saveDraftAttendance','Record Attendance','Mark Present/Late/Absent/Excused, add remarks, and save Draft/Reopened rosters.'],
+    ['finalizeAttendance','Review/finalize Attendance lifecycle','Run monthly Review, finalize validated months/activities, create archive copies, and finalize semester ratings.'],
+    ['unlockAttendance','Reopen/manage Attendance archives','Return reviewed months for correction, reopen finalized periods, and manage validated Attendance archive revisions.'],
+    ['reviewDutyPunches','Approve/reject Duty Hours punches','Review Time In and Time Out requests for authorized accounts.'],
+    ['manageDutyHours','Manage Duty Hours records & archives','Add/edit/remove manual Duty Hours records, corrections, and completed-period archive records.'],
+    ['manageDutyRequirements','Set Duty requirements','Configure required Trainee and Probationary semester hours.'],
+    ['certifyDutyHours','Generate Duty certifications','Generate individual and roster Duty Hours documents and certifications.'],
+    ['writeActivityLog','Write operational audit activity','Record authorized changes in the system activity/audit history.'],
+    ['manageAccessibility','Use accessibility controls','Use text sizing, contrast, motion, density, and table accessibility settings.'],
+    ['selfDutyPunch','Submit personal Duty punches','Linked Trainee/Probationary self-service Time In and Time Out.'],
+    ['manageAccounts','Manage accounts','Protected security-owner permission for approvals, roles, activation, and account maintenance.'],
+    ['manageSettings','Manage system settings','Protected security-owner permission for organization-wide settings and Maintenance Mode backing data.'],
+    ['manageInventory','Manage inventory','Protected legacy inventory maintenance permission.'],
+    ['manageData','Import/export/clear data','Protected security-owner data administration permission.'],
+    ['manageRecovery','Manage recovery points','Protected security-owner backup and restore permission.'],
+    ['viewSystemHealth','View System Health','Protected security-owner diagnostics and compatibility information.'],
+    ['manageSystemErrors','Resolve system errors','Protected security-owner System Error Log resolution permission.']
   ];
   const GROUP_DEFS = [
     ['Official Members','Official Members Calendar'],
@@ -176,7 +176,7 @@
     if (el('permissionEditorProtectionNote')) {
       el('permissionEditorProtectionNote').innerHTML = roleName === ADMIN
         ? '<strong>Administrator is protected.</strong> Full access and Dashboard landing cannot be removed, preventing system lockout.'
-        : '<strong>Administrator-controlled access:</strong> Assign the modules, attendance calendars, and operational actions this role needs. Security-critical Administrator areas and linked-member self-service remain protected.';
+        : '<strong>Administrator-controlled operational access:</strong> Every supported operational permission is open for assignment. Accounts, System Health, Data & Recovery, and identity-bound self-service remain protected because their server functions are security-owner controls.';
     }
     updateSummary();
   }
@@ -279,7 +279,17 @@
 
   function applyBulkPermission(action) {
     if (!isAdmin() || activeRole === ADMIN) return;
-    const [section, mode] = String(action || '').split('-');
+    const value = String(action || '');
+    if (value === 'operational-all' || value === 'operational-none') {
+      const grant = value === 'operational-all';
+      document.querySelectorAll('#permissionModuleOptions input:not(:disabled), #permissionActionOptions input:not(:disabled), #permissionAttendanceOptions input:not(:disabled)')
+        .forEach((input) => { input.checked = grant; });
+      updateLandingOptions();
+      updateSummary();
+      status(`${grant ? 'Full operational access selected' : 'Operational access cleared'} for ${activeRole}. Protected security-owner controls were not changed. Review the working copy before saving.`, 'success');
+      return;
+    }
+    const [section, mode] = value.split('-');
     const selector = section === 'modules' ? '#permissionModuleOptions' : section === 'actions' ? '#permissionActionOptions' : '#permissionAttendanceOptions';
     const inputs = [...document.querySelectorAll(`${selector} input:not(:disabled)` )];
     inputs.forEach((input) => { input.checked = mode === 'all'; });
@@ -296,6 +306,14 @@
     const landingView = el('permissionLandingViewSelect')?.value || '';
     if (!views.length) return status('Assign at least one module before saving.', 'error');
     if (!views.includes(landingView)) return status('The landing page must be one of the assigned modules.', 'error');
+    if (views.includes('attendanceView') && !attendanceGroups.length) return status('Attendance is assigned, so select at least one Official, Trainee, or Probationary attendance calendar.', 'error');
+    const actionDependencies = {
+      manageMembers: 'membersView', generateContract: 'contractView', editMonthlyReport: 'monthlyReportView', finalizeMonthlyReport: 'monthlyReportView', reopenMonthlyReport: 'monthlyReportView',
+      manageEvents: 'attendanceView', deleteEvents: 'attendanceView', saveDraftAttendance: 'attendanceView', finalizeAttendance: 'attendanceView', unlockAttendance: 'attendanceView',
+      reviewDutyPunches: 'dutyHoursView', manageDutyHours: 'dutyHoursView', manageDutyRequirements: 'dutyHoursView', certifyDutyHours: 'dutyHoursView', selfDutyPunch: 'dutyHoursView'
+    };
+    const missingDependency = actions.find((action) => actionDependencies[action] && !views.includes(actionDependencies[action]));
+    if (missingDependency) return status(`${ACTION_DEFS.find(([key]) => key === missingDependency)?.[1] || missingDependency} requires the ${viewLabel(actionDependencies[missingDependency])} module.`, 'error');
     setBusy(true); status('Saving role permissions…');
     try {
       const nextPayload = await window.LSOCloud.saveRolePermissionCenter({ roleName: activeRole, landingView, views, actions, attendanceGroups });

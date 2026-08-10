@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '6.1.0';
+  const VERSION = '6.7.0';
   const KEYS = Object.freeze({
     members: 'lso_member_database_v1',
     events: 'lso_events_v2',
@@ -36,7 +36,7 @@
     membership: {
       label: 'Membership Operations', landing: 'dashboardView',
       views: ['dashboardView','membersView','lookupView','contractView','monthlyReportView','attendanceView','dutyHoursView','alertsView'],
-      actions: ['manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'],
+      actions: ['manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     secretary: {
@@ -103,6 +103,7 @@
   }
   function scalar(value) {
     if (value === null || value === undefined || value === '') return '—';
+    if (typeof value === 'string' && /^data:image\//i.test(value)) return `[Profile photo image • ${Math.max(1, Math.round(value.length * 0.75 / 1024))} KB]`;
     if (Array.isArray(value)) return `[${value.length} item${value.length === 1 ? '' : 's'}]`;
     if (typeof value === 'object') {
       const keys = Object.keys(value);
@@ -444,24 +445,30 @@
   }
 
   function maintenanceSettings() {
-    const settings = loadObject(KEYS.settings); const m = settings.maintenanceModeV61; return m && typeof m === 'object' ? { enabled:Boolean(m.enabled), message:String(m.message || ''), expectedResume:String(m.expectedResume || ''), updatedAt:m.updatedAt || '', updatedBy:m.updatedBy || '' } : { enabled:false, message:'The LSO system is temporarily unavailable while an Administrator performs maintenance.', expectedResume:'', updatedAt:'', updatedBy:'' };
+    if (window.LSOMaintenanceV62?.getSettings) return window.LSOMaintenanceV62.getSettings();
+    const settings = loadObject(KEYS.settings); const m = settings.maintenanceModeV61; return m && typeof m === 'object' ? { enabled:Boolean(m.enabled), message:String(m.message || ''), expectedResume:String(m.expectedResume || ''), updatedAt:m.updatedAt || '', updatedBy:m.updatedBy || '', mutationId:m.mutationId || '', version:Number(m.version)||1 } : { enabled:false, message:'The LSO system is temporarily unavailable while an Administrator performs maintenance.', expectedResume:'', updatedAt:'', updatedBy:'', mutationId:'', version:1 };
   }
   function renderMaintenanceSettings() {
-    const m = maintenanceSettings(); if (el('maintenanceModeEnabled')) el('maintenanceModeEnabled').checked = m.enabled; if (el('maintenanceModeMessage')) el('maintenanceModeMessage').value = m.message; if (el('maintenanceExpectedResume')) el('maintenanceExpectedResume').value = m.expectedResume; if (el('maintenanceModeStatus')) el('maintenanceModeStatus').textContent = m.enabled ? `Active • Updated ${dateTime(m.updatedAt)}${m.updatedBy ? ` by ${m.updatedBy}` : ''}` : 'Maintenance Mode is off. All approved accounts can use their assigned modules.';
+    const m = maintenanceSettings(); if (el('maintenanceModeEnabled')) el('maintenanceModeEnabled').checked = m.enabled; if (el('maintenanceModeMessage')) el('maintenanceModeMessage').value = m.message; if (el('maintenanceExpectedResume')) el('maintenanceExpectedResume').value = m.expectedResume;
+    const pending = window.LSOCloud?.getPendingChanges?.() || []; const waiting = Array.isArray(pending) && pending.includes('settings');
+    if (el('maintenanceModeStatus')) el('maintenanceModeStatus').textContent = waiting ? 'Saving maintenance status to the shared database…' : (m.enabled ? `Active and shared • Updated ${dateTime(m.updatedAt)}${m.updatedBy ? ` by ${m.updatedBy}` : ''}` : 'Maintenance Mode is off. All approved accounts can use their assigned modules.');
   }
-  function saveMaintenanceSettings() {
+  async function saveMaintenanceSettings() {
     if (!isAdmin() || !can('manageSettings')) return toast('Administrator settings access is required.', true);
-    const settings = loadObject(KEYS.settings); const enabled = Boolean(el('maintenanceModeEnabled')?.checked); const message = String(el('maintenanceModeMessage')?.value || '').trim() || 'The LSO system is temporarily unavailable while an Administrator performs maintenance.'; const expectedResume = String(el('maintenanceExpectedResume')?.value || '').trim();
-    const next = { ...settings, maintenanceModeV61:{ enabled, message, expectedResume, updatedAt:new Date().toISOString(), updatedBy:currentAccount()?.username || currentAccount()?.displayName || 'Administrator' } };
-    const saved = window.LSOStorage?.setItem(KEYS.settings, JSON.stringify(next)); if (saved === false) return toast('Maintenance settings could not be saved.', true);
-    applyMaintenanceMode(); renderMaintenanceSettings(); toast(enabled ? 'Maintenance Mode enabled.' : 'Maintenance Mode disabled.'); window.dispatchEvent(new CustomEvent('lso:maintenance-mode-changed', { detail: next.maintenanceModeV61 }));
+    const button = el('saveMaintenanceModeButton'); if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'Saving & Verifying…'; }
+    try {
+      const enabled = Boolean(el('maintenanceModeEnabled')?.checked); const message = String(el('maintenanceModeMessage')?.value || '').trim(); const expectedResume = String(el('maintenanceExpectedResume')?.value || '').trim();
+      if (!window.LSOMaintenanceV62?.save) throw new Error('The Maintenance Mode controller did not load. Reload the website and try again.');
+      const result = await window.LSOMaintenanceV62.save({ enabled, message, expectedResume });
+      renderMaintenanceSettings(); applyMaintenanceMode();
+      if (result.verified) toast(enabled ? 'Maintenance Mode is active across the shared system.' : 'Maintenance Mode is disabled across the shared system.');
+      else toast(`Maintenance status is saved locally but cloud verification is pending. ${result.reason || 'Check the database connection.'}`, true);
+    } catch (error) {
+      renderMaintenanceSettings(); toast(error?.message || 'Maintenance settings could not be saved.', true);
+    } finally { if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Save Maintenance Status'; delete button.dataset.originalText; } }
   }
   function applyMaintenanceMode() {
-    const m = maintenanceSettings(); const account = currentAccount(); const overlay = el('maintenanceModeOverlay'); const adminBadge = el('maintenanceAdminBadge');
-    const lock = Boolean(account && m.enabled && account.role !== 'Administrator');
-    document.body.classList.toggle('lso-maintenance-locked', lock); if (overlay) { overlay.hidden = !lock; overlay.classList.toggle('hidden', !lock); overlay.setAttribute('aria-hidden', String(!lock)); }
-    if (el('maintenanceOverlayMessage')) el('maintenanceOverlayMessage').textContent = m.message; if (el('maintenanceOverlayResume')) { el('maintenanceOverlayResume').textContent = m.expectedResume ? `Expected availability: ${m.expectedResume}` : 'Please try again after maintenance is completed.'; }
-    if (adminBadge) { adminBadge.classList.toggle('hidden', !(m.enabled && account?.role === 'Administrator')); adminBadge.textContent = m.enabled ? 'Maintenance Mode Active' : ''; }
+    return window.LSOMaintenanceV62?.apply?.() || { blocked:false, settings:maintenanceSettings() };
   }
 
   function openSource(action, targetId='') {

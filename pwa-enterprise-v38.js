@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v38.js';
-  const ACTIVE_CACHE_MARKER = 'enterprise-v61-operations-governance1';
+  const ACTIVE_CACHE_MARKER = 'enterprise-v67-permissions-attendance';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;

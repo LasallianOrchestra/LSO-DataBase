@@ -526,9 +526,11 @@
       else node.removeAttribute('tabindex');
     });
     const landingView = defaultLandingView(normalized);
-    window.LSOApp?.setView?.(landingView);
+    const maintenanceBlocked = window.LSOMaintenanceV62?.shouldBlockAccount?.(normalized) || false;
+    if (!maintenanceBlocked) window.LSOApp?.setView?.(landingView);
     if (!unlockApplicationShell()) return;
-    openAuthenticatedLanding(normalized);
+    const maintenanceState = window.LSOMaintenanceV62?.apply?.({ account: normalized });
+    if (!maintenanceState?.blocked) openAuthenticatedLanding(normalized);
     emit('lso:auth-changed', normalized);
     window.LSOPermissions?.apply?.();
     document.title = traineeAccess ? 'Duty Hours | LSO Orchestra Management System' : 'LSO Orchestra Management System';
@@ -637,10 +639,14 @@
       }
       showApplication(normalized);
       await refreshAccounts();
-      window.LSOApp?.refresh?.();
-      window.LSOOperations?.refreshAll?.();
-      openAuthenticatedLanding(normalized);
-      if (normalized.role === 'Trainee/Probationary') window.LSODutyHours?.refresh?.();
+      const maintenanceBlocked = window.LSOMaintenanceV62?.isBlocking?.(normalized) || false;
+      window.LSOMaintenanceV62?.apply?.({ account: normalized });
+      if (!maintenanceBlocked) {
+        window.LSOApp?.refresh?.();
+        window.LSOOperations?.refreshAll?.();
+        openAuthenticatedLanding(normalized);
+        if (normalized.role === 'Trainee/Probationary') window.LSODutyHours?.refresh?.();
+      }
       if (migrated) {
         setTimeout(() => window.LSOApp?.showToast?.('Existing records from this browser were moved to the shared online database.'), 60);
       } else if (!resumed) {

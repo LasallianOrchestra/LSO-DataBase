@@ -135,6 +135,23 @@
     return normalize(phase).includes('official') ? 'official' : normalize(phase).includes('probationary') ? 'probationary' : 'trainee';
   }
 
+  function initials(name) {
+    return String(name || 'LSO').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'LSO';
+  }
+
+  function renderRecordPhoto(member) {
+    const node = el('overallRecordPhoto');
+    if (!node) return;
+    const photo = String(member?.profilePhoto || '');
+    if (/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(photo)) {
+      node.innerHTML = `<img src="${safeText(photo)}" alt="" decoding="async"/>`;
+      node.classList.add('has-photo');
+    } else {
+      node.innerHTML = `<span>${safeText(initials(member?.fullName))}</span>`;
+      node.classList.remove('has-photo');
+    }
+  }
+
   function statusClass(status) {
     const value = normalize(status);
     if (value.includes('approved') || value.includes('finalized') || value === 'present') return value === 'present' ? 'present' : value.includes('final') ? 'finalized' : 'approved';
@@ -211,7 +228,7 @@
     }
     root.innerHTML = [...contracts].sort((a, b) => String(b.generatedAt || '').localeCompare(String(a.generatedAt || ''))).map((record) => `
       <article class="overall-record-card" data-contract-record="${safeText(record.id)}">
-        <div class="overall-record-card-header"><div class="overall-record-card-title"><strong>${safeText(record.filename || 'LSO Membership Contract.pdf')}</strong><small>Generated ${safeText(dateLabel(record.generatedAt, false))}</small></div><div class="overall-record-card-actions"><span class="overall-status-badge approved">Generated</span>${canGenerate ? '<button class="overall-small-button" data-overall-contract-open type="button">Regenerate</button>' : ''}${isAdmin() ? `<button class="overall-small-button danger" data-overall-contract-remove="${safeText(record.id)}" type="button">Remove Log</button>` : ''}</div></div>
+        <div class="overall-record-card-header"><div class="overall-record-card-title"><strong>${safeText(record.filename || 'LSO Membership Contract.pdf')}</strong><small>Generated ${safeText(dateLabel(record.generatedAt, false))}</small></div><div class="overall-record-card-actions"><span class="overall-status-badge approved">Generated</span>${canGenerate ? '<button class="overall-small-button" data-overall-contract-open type="button">Regenerate</button>' : ''}${can('generateContract') ? `<button class="overall-small-button danger" data-overall-contract-remove="${safeText(record.id)}" type="button">Remove Log</button>` : ''}</div></div>
         <div class="overall-record-card-body"><div class="overall-record-detail-grid">
           ${detail('Contract Date', dateLabel(record.contractDate))}${detail('Semester', record.semester || 'Not recorded')}${detail('Academic Year', record.academicYear || 'Not recorded')}${detail('Authorized Officer', record.officer || 'Not recorded')}
         </div><div class="overall-contract-note">The downloaded PDF itself is stored on the user’s device. This live history stores the generation details without placing large PDF files in the shared database.</div></div>
@@ -322,7 +339,7 @@
       const locked = eventFinalized(event, group, record.rosterModeAtEdit || 'Current');
       const editable = can('saveDraftAttendance') && (window.LSORoleAccess?.canUseAttendanceGroup?.(group, currentAccount()) ?? isAdmin()) && !locked;
       return `<article class="overall-record-card ${locked ? 'overall-row-locked' : ''}" data-attendance-record="${safeText(record.eventId)}">
-        <div class="overall-record-card-header"><div class="overall-record-card-title"><strong>${safeText(event.title || event.name || 'Attendance Activity')}</strong><small>${safeText(dateLabel(event.date))} • ${safeText(group)} • ${safeText(event.semester || 'Semester not recorded')}</small></div><div class="overall-record-card-actions"><span class="overall-status-badge ${statusClass(record.status)}">${safeText(record.status || 'No status')}</span>${locked ? '<span class="overall-status-badge finalized">Locked</span>' : ''}<button class="overall-small-button" data-overall-attendance-open="${safeText(record.eventId)}" type="button">Open Attendance</button>${isAdmin() && !locked ? `<button class="overall-small-button danger" data-overall-attendance-remove="${safeText(record.eventId)}" type="button">Remove</button>` : ''}</div></div>
+        <div class="overall-record-card-header"><div class="overall-record-card-title"><strong>${safeText(event.title || event.name || 'Attendance Activity')}</strong><small>${safeText(dateLabel(event.date))} • ${safeText(group)} • ${safeText(event.semester || 'Semester not recorded')}</small></div><div class="overall-record-card-actions"><span class="overall-status-badge ${statusClass(record.status)}">${safeText(record.status || 'No status')}</span>${locked ? '<span class="overall-status-badge finalized">Locked</span>' : ''}<button class="overall-small-button" data-overall-attendance-open="${safeText(record.eventId)}" type="button">Open Attendance</button>${can('saveDraftAttendance') && (window.LSORoleAccess?.canUseAttendanceGroup?.(group, currentAccount()) ?? isAdmin()) && !locked ? `<button class="overall-small-button danger" data-overall-attendance-remove="${safeText(record.eventId)}" type="button">Remove</button>` : ''}</div></div>
         <div class="overall-record-card-body">${editable ? `<div class="overall-record-edit-grid"><label><span class="sr-only">Attendance status</span><select data-overall-attendance-field="status"><option ${record.status === 'Present' ? 'selected' : ''}>Present</option><option ${record.status === 'Late' ? 'selected' : ''}>Late</option><option ${record.status === 'Absent' ? 'selected' : ''}>Absent</option><option ${record.status === 'Excused' ? 'selected' : ''}>Excused</option></select></label><label class="span-2"><span class="sr-only">Remarks</span><input data-overall-attendance-field="remarks" value="${safeText(record.remarks || '')}" placeholder="Remarks"/></label><div class="overall-record-card-actions"><button class="overall-small-button primary" data-overall-attendance-save="${safeText(record.eventId)}" type="button">Save Revision</button></div></div>` : `<div class="overall-record-detail-grid">${detail('Status', record.status || 'Not marked')}${detail('Remarks', record.remarks || 'None')}${detail('Updated By', record.updatedBy || 'Not recorded')}${detail('Last Updated', dateLabel(record.updatedAt || record.createdAt))}</div>${locked ? '<div class="overall-inline-message">This roster is finalized. Reopen the event or month in Attendance before revising it.</div>' : ''}`}</div>
       </article>`;
     }).join('');
@@ -361,7 +378,7 @@
       const editable = manageable && !workflowLocked;
       const clock = entry.entryType === 'Duty' ? `${timeLabel(entry.timeIn)} - ${timeLabel(entry.timeOut)}` : 'Incentive adjustment';
       return `<article class="overall-record-card ${workflowLocked ? 'overall-row-locked' : ''}" data-duty-record="${safeText(entry.id)}">
-        <div class="overall-record-card-header"><div class="overall-record-card-title"><strong>${safeText(entry.entryType === 'Duty' ? 'Rendered Duty' : 'Incentive Adjustment')} - ${safeText(dateLabel(entry.date))}</strong><small>${safeText(entry.semester || 'Semester')} • ${safeText(entry.period || 'Period')} • ${safeText(clock)}</small></div><div class="overall-record-card-actions"><span class="overall-status-badge ${statusClass(entry.approvalStatus)}">${safeText(entry.approvalStatus || 'Approved')}</span><button class="overall-small-button" data-overall-duty-open="${safeText(entry.id)}" type="button">Open Duty Hours</button>${isAdmin() ? `<button class="overall-small-button danger" data-overall-duty-remove="${safeText(entry.id)}" type="button">Remove</button>` : ''}</div></div>
+        <div class="overall-record-card-header"><div class="overall-record-card-title"><strong>${safeText(entry.entryType === 'Duty' ? 'Rendered Duty' : 'Incentive Adjustment')} - ${safeText(dateLabel(entry.date))}</strong><small>${safeText(entry.semester || 'Semester')} • ${safeText(entry.period || 'Period')} • ${safeText(clock)}</small></div><div class="overall-record-card-actions"><span class="overall-status-badge ${statusClass(entry.approvalStatus)}">${safeText(entry.approvalStatus || 'Approved')}</span><button class="overall-small-button" data-overall-duty-open="${safeText(entry.id)}" type="button">Open Duty Hours</button>${can('manageDutyHours') ? `<button class="overall-small-button danger" data-overall-duty-remove="${safeText(entry.id)}" type="button">Remove</button>` : ''}</div></div>
         <div class="overall-record-card-body">${editable ? `<div class="overall-record-edit-grid"><label><span class="sr-only">Date</span><input data-overall-duty-field="date" type="date" value="${safeText(entry.date || '')}"/></label>${entry.entryType === 'Duty' ? `<label><span class="sr-only">Time In</span><input data-overall-duty-field="timeIn" type="time" value="${safeText(entry.timeIn || '')}"/></label><label><span class="sr-only">Time Out</span><input data-overall-duty-field="timeOut" type="time" value="${safeText(entry.timeOut || '')}"/></label>` : `<label><span class="sr-only">Minutes</span><input data-overall-duty-field="minutes" type="number" value="${safeText(entry.minutes || 0)}"/></label>`}<label class="span-2"><span class="sr-only">Description</span><input data-overall-duty-field="description" value="${safeText(entry.description || '')}" placeholder="Description"/></label><div class="overall-record-card-actions"><button class="overall-small-button primary" data-overall-duty-save="${safeText(entry.id)}" type="button">Save Revision</button></div></div>` : `<div class="overall-record-detail-grid">${detail('Duration', entry.approvalStatus === 'Active' ? 'In progress' : minutesLabel(entry.minutes, entry.entryType === 'Incentive'))}${detail('Description', entry.description || 'None')}${detail('Submitted By', entry.submittedByUsername || entry.createdBy || 'System')}${detail('Approver', entry.memberApprovers || entry.approvedBy || 'Not recorded')}</div>${workflowLocked ? '<div class="overall-inline-message">This is an active, pending, or rejected punch workflow. Use Duty Hours to approve, reject, or correct it without bypassing its audit trail.</div>' : ''}`}</div>
       </article>`;
     }).join('');
@@ -374,6 +391,7 @@
     if (!member || !el('memberRecord') || el('memberRecord').classList.contains('hidden')) return;
     selectedId = String(member.id);
     const data = recordData(member);
+    renderRecordPhoto(member);
     renderMetrics(member, data);
     renderLifecycle(member);
     renderContracts(member, data.contracts);
@@ -409,7 +427,7 @@
   }
 
   function removeContract(member, recordId) {
-    if (!isAdmin()) return;
+    if (!can('generateContract')) return toast('Your role is not assigned to manage contract generation records.', true);
     const reason = window.prompt('Enter the reason for removing this contract history entry:');
     if (reason === null) return;
     if (reason.trim().length < 3) return toast('A clear removal reason is required.', true);
@@ -574,13 +592,14 @@
   }
 
   function removeAttendance(eventId, member) {
-    if (!isAdmin()) return;
+    if (!can('saveDraftAttendance')) return toast('Your role is not assigned to correct draft attendance.', true);
     const events = read(KEYS.events, []);
     const event = events.find((item) => String(item.id) === String(eventId));
     const attendance = read(KEYS.attendance, []);
     const record = attendance.find((item) => String(item.eventId) === String(eventId) && String(item.memberId) === String(member.id));
     if (!record) return;
     const group = record.attendanceGroup || attendanceGroupFor(member, event?.date);
+    if (!(window.LSORoleAccess?.canUseAttendanceGroup?.(group, currentAccount()) ?? isAdmin())) return toast('Your role cannot edit this attendance group.', true);
     if (event && eventFinalized(event, group, record.rosterModeAtEdit || 'Current')) return toast('This attendance roster is finalized.', true);
     const reason = window.prompt('Enter the reason for removing this attendance record:');
     if (reason === null) return;
@@ -682,7 +701,7 @@
   }
 
   function removeDuty(entryId, member) {
-    if (!isAdmin()) return;
+    if (!can('manageDutyHours')) return toast('Your role is not assigned to manage duty-hour records.', true);
     const reason = window.prompt('Enter the reason for deleting this duty-hour ledger entry:');
     if (reason === null) return;
     if (reason.trim().length < 3) return toast('A clear deletion reason is required.', true);
@@ -702,8 +721,8 @@
   async function downloadPdf(member) {
     if (!window.PDFLib?.PDFDocument) return toast('The PDF library is not available.', true);
     const button = el('printRecordButton');
-    const original = button?.textContent || 'Download PDF Overview';
-    if (button) { button.disabled = true; button.textContent = 'Preparing PDF...'; }
+    const original = button?.textContent || 'Preview PDF Overview';
+    if (button) { button.disabled = true; button.textContent = 'Preparing Preview...'; }
     try {
       const data = recordData(member);
       const PDF = window.PDFLib;
@@ -731,6 +750,15 @@
       ]);
       const officialHeader = await doc.embedPng(officialHeaderBytes);
       const officialFooter = await doc.embedPng(officialFooterBytes);
+      let profilePhoto = null;
+      if (/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(String(member.profilePhoto || ''))) {
+        try {
+          const photoBinary = window.atob(String(member.profilePhoto).split(',')[1]);
+          const photoBytes = new Uint8Array(photoBinary.length);
+          for (let index = 0; index < photoBinary.length; index += 1) photoBytes[index] = photoBinary.charCodeAt(index);
+          profilePhoto = await doc.embedJpg(photoBytes);
+        } catch (error) { console.warn('Member profile photo was omitted from the PDF:', error); }
+      }
       const pageSize = [595.28, 841.89];
       const margin = 42;
       const width = pageSize[0] - margin * 2;
@@ -751,11 +779,20 @@
         page.drawImage(officialFooter, { x: 0, y: 0, width: pageSize[0], height: officialFooterHeight });
         const titleTop = pageSize[1] - officialHeaderHeight - 24;
         page.drawText(pdfSafe(title), { x: margin, y: titleTop, size: 15, font: bold, color: green });
-        page.drawLine({ start: { x: margin, y: titleTop - 9 }, end: { x: margin + width, y: titleTop - 9 }, thickness: 1.2, color: emerald });
+        const titleRuleWidth = Math.min(width, 330);
+        page.drawLine({ start: { x: margin, y: titleTop - 9 }, end: { x: margin + titleRuleWidth, y: titleTop - 9 }, thickness: 1.05, color: emerald });
         y = titleTop - 31;
       }
       function ensure(height = 35, title) { if (y - height < contentBottom) newPage(title); }
-      function heading(text) { ensure(32); page.drawText(pdfSafe(text), { x: margin, y, size: 12, font: bold, color: green }); y -= 18; page.drawLine({ start: { x: margin, y: y + 4 }, end: { x: margin + width, y: y + 4 }, thickness: 1, color: emerald }); y -= 9; }
+      function heading(text) {
+        ensure(32);
+        const safeHeading = pdfSafe(text);
+        page.drawText(safeHeading, { x: margin, y, size: 12, font: bold, color: green });
+        y -= 18;
+        const ruleWidth = Math.min(width, Math.max(185, Math.min(300, bold.widthOfTextAtSize(safeHeading, 12) + 70)));
+        page.drawLine({ start: { x: margin, y: y + 4 }, end: { x: margin + ruleWidth, y: y + 4 }, thickness: .85, color: emerald });
+        y -= 9;
+      }
       function wrap(text, size, maxWidth, font = regular) {
         const words = pdfSafe(text).split(/\s+/); const lines = []; let line = '';
         words.forEach((word) => { const next = line ? `${line} ${word}` : word; if (font.widthOfTextAtSize(next, size) <= maxWidth) line = next; else { if (line) lines.push(line); line = word; } });
@@ -787,10 +824,53 @@
       }
 
       newPage();
-      page.drawText(pdfSafe(member.fullName), { x: margin, y, size: 20, font: bold, color: green }); y -= 23;
-      page.drawText(pdfSafe(`${member.membershipId || 'No Membership ID'} | Student No. ${member.studentNumber || 'Not recorded'} | ${phaseAt(member, today())}`), { x: margin, y, size: 9, font: regular, color: muted }); y -= 24;
-      heading('Profile and Membership Lifecycle');
-      [['Membership Status', member.memberStatus], ['Current Phase', phaseAt(member, today())], ['Orchestra Section', member.orchestraSection], ['Primary Instrument', member.primaryInstrument], ['College / Course', [member.college, member.course].filter(Boolean).join(' - ')], ['Year / Section', [member.yearLevel, member.section].filter(Boolean).join(' - ')], ['Home Address', member.homeAddress], ['DLSUD Outlook', member.outlook], ['Trainee Start', dateLabel(member.traineeStartDate)], ['Probationary Start', member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)], ['Membership Start', dateLabel(member.regularMemberDate)], ['Remarks', [member.stageNotes, member.remarks].filter(Boolean).join(' | ') || 'None']].forEach(([label, value]) => textBlock(label, value));
+      // PDF coordinates use 72 points per inch. Keep the member portrait at a true
+      // 2 x 2 inches (144 x 144 pt), but use the space beside it for profile details
+      // instead of reserving the entire portrait height as blank whitespace.
+      const portraitImageSize = profilePhoto ? 144 : 0;
+      const portraitFramePadding = profilePhoto ? 2 : 0;
+      const portraitFrameSize = portraitImageSize + portraitFramePadding * 2;
+      let portraitBottomY = null;
+      if (profilePhoto) {
+        const portraitX = margin + width - portraitFrameSize;
+        const portraitY = y - portraitFrameSize + 8;
+        portraitBottomY = portraitY;
+        page.drawRectangle({ x: portraitX, y: portraitY, width: portraitFrameSize, height: portraitFrameSize, borderColor: emerald, borderWidth: .9 });
+        page.drawImage(profilePhoto, {
+          x: portraitX + portraitFramePadding,
+          y: portraitY + portraitFramePadding,
+          width: portraitImageSize,
+          height: portraitImageSize
+        });
+      }
+      const identityWidth = width - (profilePhoto ? portraitFrameSize + 20 : 0);
+      const nameLines = wrap(member.fullName, 19, identityWidth, bold).slice(0, 2);
+      nameLines.forEach((line, index) => page.drawText(line, { x: margin, y: y - index * 21, size: 19, font: bold, color: green }));
+      y -= Math.max(22, nameLines.length * 21);
+      page.drawText(pdfSafe(`${member.membershipId || 'No Membership ID'} | Student No. ${member.studentNumber || 'Not recorded'} | ${phaseAt(member, today())}`), { x: margin, y, size: 8.6, font: regular, color: muted });
+      y -= 18;
+
+      const profileSummary = [
+        ['Membership Status', member.memberStatus || '—'],
+        ['Orchestra Section', member.orchestraSection || '—'],
+        ['Primary Instrument', member.primaryInstrument || '—'],
+        ['College / Course', [member.college, member.course].filter(Boolean).join(' - ') || '—'],
+        ['Year / Section', [member.yearLevel, member.section].filter(Boolean).join(' - ') || '—']
+      ];
+      const summaryWidth = identityWidth;
+      const summaryLabelWidth = 92;
+      profileSummary.forEach(([label, value]) => {
+        const valueLines = wrap(value, 8.1, Math.max(80, summaryWidth - summaryLabelWidth - 4)).slice(0, 2);
+        const rowHeight = Math.max(16, valueLines.length * 9 + 4);
+        page.drawText(pdfSafe(label), { x: margin, y, size: 7.4, font: bold, color: muted });
+        valueLines.forEach((line, index) => page.drawText(line, { x: margin + summaryLabelWidth, y: y - index * 9, size: 8.1, font: regular, color: ink }));
+        y -= rowHeight;
+      });
+
+      if (profilePhoto && portraitBottomY !== null) y = Math.min(y, portraitBottomY - 14);
+      else y -= 4;
+      heading('Membership Lifecycle & Additional Information');
+      [['Home Address', member.homeAddress], ['DLSUD Outlook', member.outlook], ['Trainee Start', dateLabel(member.traineeStartDate)], ['Probationary Start', member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)], ['Membership Start', dateLabel(member.regularMemberDate)], ['Remarks', [member.stageNotes, member.remarks].filter(Boolean).join(' | ') || 'None']].forEach(([label, value]) => textBlock(label, value));
 
       heading('Generated Contract History');
       const contracts = [...data.contracts].sort((a,b) => String(b.generatedAt || '').localeCompare(String(a.generatedAt || '')));
@@ -817,13 +897,18 @@
       });
       const bytes = await doc.save();
       const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `LSO_Members_Overall_Record_${String(member.fullName || 'Member').replace(/[^a-z0-9]+/gi, '_')}.pdf`;
-      document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
-      log('Downloaded members overall record PDF', 'Members', `${member.fullName} • ${data.attendanceRecords.length} attendance • ${data.dutyEntries.length} duty entries`);
-      toast('Members Overall Record PDF downloaded.');
+      const filename = `LSO_Members_Overall_Record_${String(member.fullName || 'Member').replace(/[^a-z0-9]+/gi, '_')}.pdf`;
+      if (window.LSOMemberPdfPreview?.open) {
+        window.LSOMemberPdfPreview.open({ blob, filename, memberName: member.fullName, onDownload: () => {
+          log('Downloaded members overall record PDF', 'Members', `${member.fullName} • ${data.attendanceRecords.length} attendance • ${data.dutyEntries.length} duty entries`);
+        } });
+        toast('PDF preview is ready. Review it before downloading.');
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+        log('Downloaded members overall record PDF', 'Members', `${member.fullName} • ${data.attendanceRecords.length} attendance • ${data.dutyEntries.length} duty entries`);
+        toast('Members Overall Record PDF downloaded.');
+      }
     } catch (error) {
       console.error('Overall record PDF failed:', error);
       toast(error.message || 'Unable to generate the PDF overview.', true);

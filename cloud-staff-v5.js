@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_CLOUD_SAVE_VERSION__ = 'v61-adaptive-sync-and-semantic-deduplication';
+  window.__LSO_CLOUD_SAVE_VERSION__ = 'v62-maintenance-protected-sync';
 
   const TABLE_ROW_ID = 1;
   const POLL_BASE_INTERVAL_MS = (() => {
@@ -16,6 +16,7 @@
   const PENDING_KEY = 'lso_cloud_pending_v1';
   const MONTHLY_COMPAT_COLUMN = 'monthly_reports_compat';
   const MONTHLY_SETTINGS_KEY = '__lso_monthly_reports_v1';
+  const MAINTENANCE_SETTINGS_KEY = 'maintenanceModeV61';
   const KEY_TO_COLUMN = {
     lso_member_database_v1: 'members',
     lso_events_v2: 'events',
@@ -377,7 +378,23 @@
 
       // A pending marker can survive a closed tab even after the prior request reached the
       // server. Clear it as soon as the local and remote payloads are semantically identical.
+      // For non-Administrator sessions, always accept the Administrator-owned maintenance
+      // transaction before deciding whether an unrelated local settings edit remains pending.
       if (dirtyVersions.has(column)) {
+        if (column === 'settings' && sessionAccount?.role !== 'Administrator') {
+          try {
+            const localSettings = normalizeColumn('settings', safeParse(getLocal('lso_system_settings_v2'), {}));
+            const remoteSettings = normalizeColumn('settings', stateColumn(nextState, 'settings'));
+            const remoteMaintenance = remoteSettings?.[MAINTENANCE_SETTINGS_KEY];
+            if (remoteMaintenance && stableSerialize(localSettings?.[MAINTENANCE_SETTINGS_KEY]) !== stableSerialize(remoteMaintenance)) {
+              const protectedLocal = { ...localSettings, [MAINTENANCE_SETTINGS_KEY]: remoteMaintenance };
+              if (setLocal('lso_system_settings_v2', JSON.stringify(protectedLocal))) {
+                changedKeys.push('lso_system_settings_v2');
+                dispatchDomainChange('lso_system_settings_v2', source, false);
+              }
+            }
+          } catch { /* the standard reconciliation below remains available */ }
+        }
         const localFingerprint = stableSerialize(payloadForColumn(column));
         const expectedFingerprint = dirtyFingerprints.get(column);
         if (localFingerprint === remoteFingerprint && (!expectedFingerprint || expectedFingerprint === localFingerprint)) {
@@ -684,6 +701,18 @@
       }
     }
     const currentValue = getLocal(key);
+    // Maintenance Mode is Administrator-owned even though some operational roles may write
+    // other settings. Preserve the currently synchronized maintenance transaction for every
+    // non-Administrator settings write so it cannot be removed or overwritten accidentally.
+    if (key === 'lso_system_settings_v2' && sessionAccount?.role !== 'Administrator' && typeof nextValue === 'string') {
+      try {
+        const currentSettings = safeParse(currentValue, {});
+        const requestedSettings = safeParse(nextValue, {});
+        if (currentSettings?.[MAINTENANCE_SETTINGS_KEY] && requestedSettings && typeof requestedSettings === 'object') {
+          nextValue = JSON.stringify({ ...requestedSettings, [MAINTENANCE_SETTINGS_KEY]: currentSettings[MAINTENANCE_SETTINGS_KEY] });
+        }
+      } catch { /* malformed operational settings will be handled by the normal save path */ }
+    }
     // Many modules defensively call save after rendering or reconciliation. Do not queue a
     // cloud write when the persisted JSON is already the same, including jsonb key reordering.
     if (semanticRawEqual(currentValue, nextValue)) return true;
