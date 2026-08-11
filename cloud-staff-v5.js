@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_CLOUD_SAVE_VERSION__ = 'v62-maintenance-protected-sync';
+  window.__LSO_CLOUD_SAVE_VERSION__ = 'v70-session-recovery-conflict-aware-sync';
 
   const TABLE_ROW_ID = 1;
   const POLL_BASE_INTERVAL_MS = (() => {
@@ -53,6 +53,11 @@
   const dirtyVersions = new Map();
   const dirtyFingerprints = new Map();
   const serverFingerprints = new Map();
+  const columnVersions = new Map();
+  const conflicts = new Map();
+  let lastSuccessfulSyncAt = '';
+  let v69Capabilities = null;
+  let v69MetaRetryAfter = 0;
   let lastStatusSignature = '';
   let lastStatusAt = 0;
   const legacySnapshot = {};
@@ -363,6 +368,7 @@
     };
     nextState = state;
     lastServerUpdate = String(nextState.updated_at || nextState.updatedAt || '');
+    refreshColumnVersions(nextState);
 
     const changedKeys = [];
     let attendanceGovernanceNeedsPush = false;
@@ -474,6 +480,30 @@
     if (error) {
       const message = rpcErrorMessage(error);
       const technicalMessage = String(error?.message || error?.details || error?.hint || message);
+      const sessionInvalid = /invalid or expired session|session expired|invalid session|expired token/i.test(`${message} ${technicalMessage}`);
+      if (sessionInvalid) {
+        // Session expiry is an authentication lifecycle event, not a database/system fault.
+        // Include the token that caused the failure so a delayed response from an OLD
+        // session cannot tear down a NEW login that has already succeeded.
+        const failedToken = String(params?.p_token || '');
+        // Only broadcast invalidation for the token that is CURRENTLY connected.
+        // Expired resume attempts and delayed RPCs from a disconnected/older session
+        // are handled by their caller and must not keep resetting the fresh Login form.
+        const activeSessionToken = String(sessionToken || '');
+        if (activeSessionToken && (!failedToken || failedToken === activeSessionToken)) {
+          emit('lso:session-invalid', {
+            message: 'Your session is no longer valid.',
+            technicalMessage,
+            token: failedToken || activeSessionToken,
+            rpc: name
+          });
+        }
+        const sessionError = new Error('Your previous session expired. Please log in again.');
+        sessionError.code = 'AUTH_SESSION_INVALID';
+        sessionError.rpc = name;
+        sessionError.token = failedToken;
+        throw sessionError;
+      }
       const code = /migration|schema|column|function .*does not exist|schema cache/i.test(technicalMessage)
         ? (window.LSOSystemCore?.ERROR_CODES?.MIGRATION || 'DB-MIGRATION-004')
         : /permission|42501|access is required/i.test(technicalMessage)
@@ -482,7 +512,6 @@
             ? (window.LSOSystemCore?.ERROR_CODES?.NETWORK || 'NET-CONNECTION-001')
             : (window.LSOSystemCore?.ERROR_CODES?.UNKNOWN || 'SYS-UNEXPECTED-999');
       emit('lso:system-error', { errorCode: code, module: 'Shared Database', publicMessage: message, technicalMessage, rpc: name, severity: 'error' });
-      if (/invalid or expired session/i.test(message)) emit('lso:session-invalid', { message });
       throw new Error(message);
     }
     return data;
@@ -548,8 +577,49 @@
     return stateColumn(stateObject, column);
   }
 
+  function refreshColumnVersions(stateObject) {
+    const versions = stateObject?.column_versions || stateObject?.columnVersions || {};
+    Object.entries(versions && typeof versions === 'object' ? versions : {}).forEach(([column, value]) => {
+      const n = Number(value); if (Number.isFinite(n)) columnVersions.set(column, n);
+    });
+  }
+
+  async function conflictAwareUpdate(column, value) {
+    const expectedVersion = Number(columnVersions.get(column) || 0);
+    if (!client) throw new Error('Supabase is not configured.');
+    const params = { p_token: sessionToken, p_column: column, p_value: value, p_expected_version: expectedVersion };
+    const response = await client.rpc('lso_update_state_v69', params);
+    if (!response.error) { v69Capabilities = { ...(v69Capabilities || {}), conflictProtection: true }; return response.data; }
+    const raw = String(response.error?.message || response.error?.details || response.error?.hint || '');
+    if (/LSO_CONFLICT:/i.test(raw)) {
+      const error = new Error(raw); error.code = 'LSO_CONFLICT'; error.column = column; throw error;
+    }
+    if (/lso_update_state_v69|could not find the function|function .* does not exist|schema cache/i.test(raw)) {
+      v69Capabilities = { ...(v69Capabilities || {}), conflictProtection: false };
+      return rpc('lso_update_state', { p_token: sessionToken, p_column: column, p_value: value });
+    }
+    throw new Error(rpcErrorMessage(response.error));
+  }
+
+  async function getStateMetaV69() {
+    if (Date.now() < v69MetaRetryAfter) return null;
+    try {
+      const meta = await rpc('lso_get_state_meta_v69', { p_token: sessionToken });
+      v69MetaRetryAfter = 0;
+      if (meta?.columnVersions) refreshColumnVersions({ column_versions: meta.columnVersions });
+      return meta;
+    } catch {
+      // Older databases do not have the V69 heartbeat. Avoid retrying the missing
+      // RPC on every poll; a reload or the next five-minute compatibility retry
+      // will detect a newly installed SQL patch.
+      v69MetaRetryAfter = Date.now() + 300000;
+      return null;
+    }
+  }
+
   function refreshServerFingerprints(stateObject) {
     if (!stateObject || typeof stateObject !== 'object') return;
+    refreshColumnVersions(stateObject);
     const sharedSettingsFingerprint = stableSerialize(serverPayloadForColumn(stateObject, 'settings'));
     serverFingerprints.set('settings', sharedSettingsFingerprint);
     serverFingerprints.set(MONTHLY_COMPAT_COLUMN, sharedSettingsFingerprint);
@@ -627,6 +697,7 @@
     try {
       for (const [column, version] of [...dirtyVersions.entries()]) {
         if (!dirtyVersions.has(column)) continue;
+        if (conflicts.has(column)) continue;
         const currentBeforeSend = stableSerialize(payloadForColumn(column));
         if (serverFingerprints.get(column) === currentBeforeSend) {
           dirtyVersions.delete(column);
@@ -637,12 +708,25 @@
         const serverColumn = column === MONTHLY_COMPAT_COLUMN ? 'settings' : column;
         const serverValue = payloadForColumn(column);
         const sentFingerprint = stableSerialize(serverValue);
-        const nextState = await rpc('lso_update_state', {
-          p_token: sessionToken,
-          p_column: serverColumn,
-          p_value: serverValue
-        });
+        let nextState;
+        try {
+          nextState = await conflictAwareUpdate(serverColumn, serverValue);
+        } catch (error) {
+          if (error?.code === 'LSO_CONFLICT' || /LSO_CONFLICT:/i.test(String(error?.message || ''))) {
+            const latest = await rpc('lso_get_state', { p_token: sessionToken });
+            online = true;
+            state = latest; lastServerUpdate = String(latest?.updated_at || '');
+            refreshServerFingerprints(latest);
+            conflicts.set(column, { column, serverColumn, localValue: serverValue, remoteValue: stateColumn(latest, serverColumn), detectedAt: new Date().toISOString(), remoteVersion: Number(columnVersions.get(serverColumn) || 0) });
+            emit('lso:sync-conflict', { column, conflict: conflicts.get(column) });
+            status('conflict', `A newer ${column.replace(/_/g,' ')} change exists in the shared database. Review the conflict before saving.`);
+            continue;
+          }
+          throw error;
+        }
         online = true;
+        lastSuccessfulSyncAt = new Date().toISOString();
+        conflicts.delete(column);
         state = nextState;
         lastServerUpdate = String(nextState?.updated_at || '');
         refreshServerFingerprints(nextState);
@@ -654,10 +738,13 @@
         }
       }
       applyState(state, 'cloud-save');
-      if (dirtyVersions.size) {
+      if (conflicts.size) {
+        status('conflict', `${conflicts.size} synchronization conflict${conflicts.size === 1 ? '' : 's'} require review.`);
+      } else if (dirtyVersions.size) {
         status('syncing', `Saving ${dirtyVersions.size} newer change${dirtyVersions.size === 1 ? '' : 's'}…`);
         scheduleFlush(220);
       } else {
+        lastSuccessfulSyncAt = new Date().toISOString();
         status('online', 'All changes saved to the shared database');
       }
       emit('lso:cloud-saved', { pending: dirtyVersions.size });
@@ -746,8 +833,13 @@
   async function loadSharedState({ quiet = false } = {}) {
     if (!sessionToken) throw new Error('No active shared-database session.');
     if (!quiet) status('syncing', 'Loading shared records…');
-    const nextState = await rpc('lso_get_state', { p_token: sessionToken });
+    const [nextState, meta] = await Promise.all([
+      rpc('lso_get_state', { p_token: sessionToken }),
+      getStateMetaV69()
+    ]);
+    if (meta?.columnVersions) nextState.column_versions = meta.columnVersions;
     online = true;
+    lastSuccessfulSyncAt = new Date().toISOString();
     applyState(nextState, 'cloud');
     if ([...dirtyVersions.keys()].some((column) => canWriteColumn(column))) scheduleFlush(300);
     if (!quiet && !dirtyVersions.size) status('online', 'Shared database connected');
@@ -818,15 +910,24 @@
     if (pollPromise) return pollPromise;
     pollPromise = (async () => {
       try {
+        const meta = await getStateMetaV69();
+        const metaUpdated = String(meta?.updatedAt || meta?.updated_at || '');
+        if (meta?.columnVersions) refreshColumnVersions({ column_versions: meta.columnVersions });
+        if (metaUpdated && lastServerUpdate && metaUpdated === lastServerUpdate) {
+          online = true; lastSuccessfulSyncAt = new Date().toISOString(); unchangedPolls += 1;
+          if (!dirtyVersions.size && !conflicts.size) status('online', 'Shared database connected');
+          emit('lso:sync-heartbeat', { updatedAt: metaUpdated, changed: false });
+          return false;
+        }
         const nextState = await rpc('lso_get_state', { p_token: sessionToken });
+        if (meta?.columnVersions) nextState.column_versions = meta.columnVersions;
         online = true;
+        lastSuccessfulSyncAt = new Date().toISOString();
         const nextUpdated = String(nextState?.updated_at || '');
         const changed = !lastServerUpdate || nextUpdated !== lastServerUpdate;
-        if (changed) {
-          unchangedPolls = 0;
-          applyState(nextState, 'cloud-poll');
-        } else unchangedPolls += 1;
-        if (!dirtyVersions.size) status('online', 'Shared database connected');
+        if (changed) { unchangedPolls = 0; applyState(nextState, 'cloud-poll'); } else unchangedPolls += 1;
+        if (!dirtyVersions.size && !conflicts.size) status('online', 'Shared database connected');
+        emit('lso:sync-heartbeat', { updatedAt: nextUpdated, changed });
         return changed;
       } catch (error) {
         online = false;
@@ -1090,6 +1191,43 @@
     return rpc('lso_resolve_system_error', { p_token: sessionToken, p_error_id: errorId, p_note: note });
   }
 
+  async function getCollectionPage(collection, offset = 0, limit = 25, search = '') {
+    const safeOffset = Math.max(0, Number(offset) || 0), safeLimit = Math.max(1, Math.min(100, Number(limit) || 25));
+    try {
+      return await rpc('lso_get_collection_page_v69', { p_token: sessionToken, p_collection: collection, p_offset: safeOffset, p_limit: safeLimit, p_search: String(search || '') });
+    } catch (error) {
+      const value = collection === 'duty_entries' ? (currentValueForColumn('duty_hours')?.entries || []) : currentValueForColumn(collection);
+      const list = Array.isArray(value) ? value : []; const q = String(search || '').trim().toLowerCase();
+      const filtered = q ? list.filter((item) => stableSerialize(item).toLowerCase().includes(q)) : list;
+      return { items: filtered.slice(safeOffset, safeOffset + safeLimit), total: filtered.length, offset: safeOffset, limit: safeLimit, fallback: true };
+    }
+  }
+  async function getV69Capabilities() {
+    try {
+      v69Capabilities = await rpc('lso_v69_capabilities', { p_token: sessionToken });
+      if (v69Capabilities?.installed) v69MetaRetryAfter = 0;
+    } catch { v69Capabilities = { installed: false, conflictProtection: false, serverPagination: false, notificationPreferences: false }; }
+    return { ...(v69Capabilities || {}) };
+  }
+  async function getNotificationPreferences() { try { return await rpc('lso_get_notification_preferences_v69', { p_token: sessionToken }); } catch { return null; } }
+  async function saveNotificationPreferences(prefs) { return rpc('lso_save_notification_preferences_v69', { p_token: sessionToken, p_preferences: prefs || {} }); }
+  async function saveRoleNotificationPreferences(roleName, prefs) { return rpc('lso_save_role_notification_preferences_v69', { p_token: sessionToken, p_role: roleName, p_preferences: prefs || {} }); }
+  async function resolveSyncConflict(column, resolution = 'remote') {
+    const conflict = conflicts.get(column); if (!conflict) return false;
+    if (resolution === 'remote') {
+      dirtyVersions.delete(column); dirtyFingerprints.delete(column); persistDirtyMarkers(); conflicts.delete(column);
+      const latest = await rpc('lso_get_state', { p_token: sessionToken }); applyState(latest, 'conflict-remote');
+      emit('lso:sync-conflict-resolved', { column, resolution: 'remote' }); return true;
+    }
+    if (resolution === 'local') {
+      columnVersions.set(conflict.serverColumn || column, Number(conflict.remoteVersion || columnVersions.get(conflict.serverColumn || column) || 0));
+      conflicts.delete(column); markDirty(column, { delay: 0 }); await flushDirty();
+      emit('lso:sync-conflict-resolved', { column, resolution: 'local' }); return !conflicts.has(column);
+    }
+    return false;
+  }
+  function syncSnapshot() { return { online, loaded, pending: [...dirtyVersions.keys()], conflicts: [...conflicts.values()].map((item) => ({ ...item })), lastServerUpdate, lastSuccessfulSyncAt, columnVersions: Object.fromEntries(columnVersions) }; }
+
   window.__LSO_STORAGE_CHANGE_EVENTS__ = 'v61';
 
   window.LSOStorage = {
@@ -1146,7 +1284,15 @@
     getPendingChanges: () => [...dirtyVersions.keys()],
     pollNow: pollState,
     canWrite: canWriteColumn,
-    canReviewDuty: canReviewDutyPunches
+    canReviewDuty: canReviewDutyPunches,
+    getCollectionPage,
+    getV69Capabilities,
+    getNotificationPreferences,
+    saveNotificationPreferences,
+    saveRoleNotificationPreferences,
+    getSyncSnapshot: syncSnapshot,
+    getConflicts: () => [...conflicts.values()].map((item) => ({ ...item })),
+    resolveSyncConflict
   };
 
   window.addEventListener('online', () => {

@@ -259,6 +259,7 @@
     return notifications
       .map((notification) => ({ ...notification, fingerprint: notificationFingerprint(notification) }))
       .filter((notification, index, all) => all.findIndex((item) => item.id === notification.id || item.fingerprint === notification.fingerprint) === index)
+      .filter((notification) => window.LSONotificationPreferencesV69?.allows?.(notification) !== false)
       .map((notification) => ({ ...notification, read: readState.ids.has(notification.id) || readState.fingerprints.has(notification.fingerprint), resolved: readState.resolved?.has(notification.fingerprint) || false, archived: readState.archived?.has(notification.fingerprint) || false }))
       .sort((a, b) => Number(a.read) - Number(b.read)
         || (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9)

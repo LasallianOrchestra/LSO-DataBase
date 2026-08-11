@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v67-permissions-attendance';
+const CACHE_VERSION = 'lso-website-enterprise-v72-auth-input-stability';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -51,6 +51,7 @@ const CORE_PATHS = [
   './attendance-workflow-v58.css',
   './operations-governance-v61.css',
   './member-photo-pdf-preview-v63.css',
+  './platform-upgrade-v69.css',
   './supabase-config.js',
   './branding-print-fullbleed-v31.js',
   './lso-system-core-v4.js',
@@ -77,6 +78,7 @@ const CORE_PATHS = [
   './official-pdf-assets-v51.js',
   './member-overall-record-v49.js',
   './member-photo-pdf-preview-v63.js',
+  './platform-upgrade-v69.js',
   './dashboard-intelligence-member-info-v3.js',
   './permissions-dynamic-v38.js',
   './dashboard-command-center-v5.js',

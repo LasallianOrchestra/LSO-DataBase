@@ -21,9 +21,9 @@ window.renderAll = renderAll;
 
   const PERMISSIONS = Object.freeze({
     views: Object.freeze({
-      [ROLES.ADMIN]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'accountsView', 'systemHealthView', 'dataView'],
+      [ROLES.ADMIN]: ['dashboardView', 'membersView', 'lookupView', 'documentsView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'accountsView', 'systemHealthView', 'dataView'],
       [ROLES.STAFF]: ['dashboardView', 'membersView', 'lookupView', 'attendanceView', 'dutyHoursView', 'alertsView'],
-      [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView'],
+      [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'documentsView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView'],
       [ROLES.SECRETARY]: ['dashboardView', 'membersView', 'lookupView', 'attendanceView', 'dutyHoursView', 'alertsView'],
       [ROLES.TRAINEE]: ['dutyHoursView']
     }),
@@ -70,10 +70,10 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '6.7.0',
-    build: '2026.08.11-attendance-permission-center.1',
-    schemaTarget: '011_open_operational_permissions',
-    cache: 'lso-enterprise-v67',
+    app: '7.2.0',
+    build: '2026.08.11-auth-input-stability.1',
+    schemaTarget: '012_platform_operations_v69',
+    cache: 'lso-enterprise-v72-auth-input-stability',
     permissions: 'permissions-manifest-v5-operational-open',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });

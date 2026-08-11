@@ -327,6 +327,7 @@
       dashboardView: 'Dashboard',
       membersView: 'Members',
       lookupView: 'Members Overall Record',
+      documentsView: 'Document Center',
       contractView: 'Contract Maker',
       monthlyReportView: 'Overall Monthly Report',
       attendanceView: 'Attendance',

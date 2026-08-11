@@ -822,18 +822,47 @@
         });
         y -= 10;
       }
+      function keyValueTable(title, rows, options = {}) {
+        const tableWidth = options.width || width;
+        const startX = options.x || margin;
+        const labelWidth = options.labelWidth || Math.min(130, Math.max(100, tableWidth * 0.32));
+        const titleHeight = options.compactTitle ? 20 : 22;
+        const rowGap = 0;
+        const preparedRows = rows.map(([label, value]) => {
+          const cellValue = value || '—';
+          const labelLines = wrap(label, 7.5, labelWidth - 12, bold).slice(0, 2);
+          const valueLines = wrap(cellValue, 8.1, tableWidth - labelWidth - 14).slice(0, options.maxLinesPerValue || 3);
+          const textLines = Math.max(labelLines.length, valueLines.length);
+          const rowHeight = Math.max(20, textLines * 9 + 10);
+          return { labelLines, valueLines, rowHeight };
+        });
+        const estimatedHeight = titleHeight + preparedRows.reduce((sum, row) => sum + row.rowHeight + rowGap, 0) + 8;
+        ensure(estimatedHeight + 8);
+        page.drawRectangle({ x: startX, y: y - titleHeight + 5, width: tableWidth, height: titleHeight, color: green });
+        page.drawText(pdfSafe(title), { x: startX + 8, y: y - 11, size: 8.5, font: bold, color: PDF.rgb(1,1,1) });
+        let localY = y - titleHeight;
+        preparedRows.forEach((row, rowIndex) => {
+          const rowY = localY - row.rowHeight + 5;
+          page.drawRectangle({ x: startX, y: rowY, width: tableWidth, height: row.rowHeight, color: rowIndex % 2 === 0 ? PDF.rgb(1,1,1) : light, borderColor: PDF.rgb(.82,.85,.84), borderWidth: .5 });
+          page.drawRectangle({ x: startX, y: rowY, width: labelWidth, height: row.rowHeight, color: rowIndex % 2 === 0 ? PDF.rgb(.98,.99,.985) : PDF.rgb(.95,.97,.96), borderColor: PDF.rgb(.82,.85,.84), borderWidth: .5 });
+          row.labelLines.forEach((line, index) => page.drawText(line, { x: startX + 6, y: localY - 9 - index * 9, size: 7.5, font: bold, color: muted }));
+          row.valueLines.forEach((line, index) => page.drawText(line, { x: startX + labelWidth + 8, y: localY - 9 - index * 9, size: 8.1, font: regular, color: ink }));
+          localY -= row.rowHeight + rowGap;
+        });
+        y = localY - 8;
+      }
 
       newPage();
-      // PDF coordinates use 72 points per inch. Keep the member portrait at a true
-      // 2 x 2 inches (144 x 144 pt), but use the space beside it for profile details
-      // instead of reserving the entire portrait height as blank whitespace.
       const portraitImageSize = profilePhoto ? 144 : 0;
       const portraitFramePadding = profilePhoto ? 2 : 0;
       const portraitFrameSize = portraitImageSize + portraitFramePadding * 2;
+      const portraitLift = profilePhoto ? 18 : 0;
+      const topSectionGap = profilePhoto ? 18 : 0;
+      const identityWidth = width - (profilePhoto ? portraitFrameSize + topSectionGap : 0);
       let portraitBottomY = null;
       if (profilePhoto) {
         const portraitX = margin + width - portraitFrameSize;
-        const portraitY = y - portraitFrameSize + 8;
+        const portraitY = y - portraitFrameSize + 26;
         portraitBottomY = portraitY;
         page.drawRectangle({ x: portraitX, y: portraitY, width: portraitFrameSize, height: portraitFrameSize, borderColor: emerald, borderWidth: .9 });
         page.drawImage(profilePhoto, {
@@ -843,13 +872,11 @@
           height: portraitImageSize
         });
       }
-      const identityWidth = width - (profilePhoto ? portraitFrameSize + 20 : 0);
       const nameLines = wrap(member.fullName, 19, identityWidth, bold).slice(0, 2);
       nameLines.forEach((line, index) => page.drawText(line, { x: margin, y: y - index * 21, size: 19, font: bold, color: green }));
       y -= Math.max(22, nameLines.length * 21);
       page.drawText(pdfSafe(`${member.membershipId || 'No Membership ID'} | Student No. ${member.studentNumber || 'Not recorded'} | ${phaseAt(member, today())}`), { x: margin, y, size: 8.6, font: regular, color: muted });
-      y -= 18;
-
+      y -= 16;
       const profileSummary = [
         ['Membership Status', member.memberStatus || '—'],
         ['Orchestra Section', member.orchestraSection || '—'],
@@ -857,20 +884,26 @@
         ['College / Course', [member.college, member.course].filter(Boolean).join(' - ') || '—'],
         ['Year / Section', [member.yearLevel, member.section].filter(Boolean).join(' - ') || '—']
       ];
-      const summaryWidth = identityWidth;
-      const summaryLabelWidth = 92;
-      profileSummary.forEach(([label, value]) => {
-        const valueLines = wrap(value, 8.1, Math.max(80, summaryWidth - summaryLabelWidth - 4)).slice(0, 2);
-        const rowHeight = Math.max(16, valueLines.length * 9 + 4);
-        page.drawText(pdfSafe(label), { x: margin, y, size: 7.4, font: bold, color: muted });
-        valueLines.forEach((line, index) => page.drawText(line, { x: margin + summaryLabelWidth, y: y - index * 9, size: 8.1, font: regular, color: ink }));
-        y -= rowHeight;
+      keyValueTable('Member Information', profileSummary, {
+        width: identityWidth,
+        labelWidth: Math.min(120, Math.max(104, identityWidth * 0.33)),
+        compactTitle: true,
+        maxLinesPerValue: 3
       });
-
-      if (profilePhoto && portraitBottomY !== null) y = Math.min(y, portraitBottomY - 14);
-      else y -= 4;
-      heading('Membership Lifecycle & Additional Information');
-      [['Home Address', member.homeAddress], ['DLSUD Outlook', member.outlook], ['Trainee Start', dateLabel(member.traineeStartDate)], ['Probationary Start', member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)], ['Membership Start', dateLabel(member.regularMemberDate)], ['Remarks', [member.stageNotes, member.remarks].filter(Boolean).join(' | ') || 'None']].forEach(([label, value]) => textBlock(label, value));
+      if (profilePhoto && portraitBottomY !== null) y = Math.min(y, portraitBottomY - 10);
+      else y -= 2;
+      keyValueTable('Membership Lifecycle & Additional Information', [
+        ['Home Address', member.homeAddress],
+        ['DLSUD Outlook', member.outlook],
+        ['Trainee Start', dateLabel(member.traineeStartDate)],
+        ['Probationary Start', member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)],
+        ['Membership Start', dateLabel(member.regularMemberDate)],
+        ['Remarks', [member.stageNotes, member.remarks].filter(Boolean).join(' | ') || 'None']
+      ], {
+        width,
+        labelWidth: 118,
+        maxLinesPerValue: 4
+      });
 
       heading('Generated Contract History');
       const contracts = [...data.contracts].sort((a,b) => String(b.generatedAt || '').localeCompare(String(a.generatedAt || '')));

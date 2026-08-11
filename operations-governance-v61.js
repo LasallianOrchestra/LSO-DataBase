@@ -35,31 +35,31 @@
   const TEMPLATE_DEFS = Object.freeze({
     membership: {
       label: 'Membership Operations', landing: 'dashboardView',
-      views: ['dashboardView','membersView','lookupView','contractView','monthlyReportView','attendanceView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','lookupView','documentsView','contractView','monthlyReportView','attendanceView','dutyHoursView','alertsView'],
       actions: ['manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     secretary: {
       label: 'General Secretary Operations', landing: 'dashboardView',
-      views: ['dashboardView','membersView','lookupView','attendanceView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','lookupView','documentsView','attendanceView','dutyHoursView','alertsView'],
       actions: ['manageEvents','saveDraftAttendance','reviewDutyPunches','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     attendance: {
       label: 'Attendance Officer', landing: 'attendanceView',
-      views: ['dashboardView','membersView','lookupView','attendanceView','alertsView'],
+      views: ['dashboardView','membersView','lookupView','documentsView','attendanceView','alertsView'],
       actions: ['manageEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     duty: {
       label: 'Duty Hours Reviewer', landing: 'dutyHoursView',
-      views: ['dashboardView','membersView','lookupView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','lookupView','documentsView','dutyHoursView','alertsView'],
       actions: ['reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'],
       groups: []
     },
     monitor: {
       label: 'Read-only Operations Monitor', landing: 'dashboardView',
-      views: ['dashboardView','membersView','lookupView','attendanceView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','lookupView','documentsView','attendanceView','dutyHoursView','alertsView'],
       actions: ['manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
@@ -247,16 +247,38 @@
       return true;
     });
   }
-  function renderAuditTrail(resetPage = false) {
+  let auditRenderRequest = 0;
+  async function renderAuditTrail(resetPage = false) {
     const host = el('fullAuditTrail'); if (!host || !isAdmin()) return;
     if (resetPage) auditPage = 1;
-    const entries = filteredAuditEntries(); const pageSize = 25; const pages = Math.max(1, Math.ceil(entries.length / pageSize)); auditPage = Math.min(auditPage, pages);
-    const slice = entries.slice((auditPage - 1) * pageSize, auditPage * pageSize);
+    const requestId = ++auditRenderRequest;
+    const f = auditFilters(); const pageSize = 25;
     const categories = [...new Set(auditEntries().map((e) => e.category).filter(Boolean))].sort();
     const moduleFilter = el('auditTrailModuleFilter');
     if (moduleFilter && moduleFilter.options.length !== categories.length + 1) moduleFilter.innerHTML = `<option value="">All modules</option>${categories.map((x) => `<option>${safe(x)}</option>`).join('')}`;
-    el('auditTrailSummary').textContent = `${entries.length} matching record${entries.length === 1 ? '' : 's'} • Page ${auditPage} of ${pages}`;
-    host.innerHTML = slice.length ? slice.map((entry) => {
+
+    // V69 server pagination is used when filters can be represented safely by the
+    // server text search. Module/account/date filters keep the proven local path
+    // so existing audit semantics are not changed.
+    const canServerPage = Boolean(window.LSOCloud?.getCollectionPage) && !f.category && !f.actor && !f.from && !f.to;
+    let entries = null, total = 0, pages = 1, serverPaged = false;
+    if (canServerPage) {
+      try {
+        const result = await window.LSOCloud.getCollectionPage('activity_log', (auditPage - 1) * pageSize, pageSize, f.q || '');
+        if (requestId !== auditRenderRequest) return;
+        if (result && Array.isArray(result.items)) {
+          entries = result.items; total = Number(result.total) || 0; pages = Math.max(1, Math.ceil(total / pageSize));
+          if (auditPage > pages) { auditPage = pages; return renderAuditTrail(false); }
+          serverPaged = !result.fallback;
+        }
+      } catch { entries = null; }
+    }
+    if (!entries) {
+      const filtered = filteredAuditEntries(); total = filtered.length; pages = Math.max(1, Math.ceil(total / pageSize)); auditPage = Math.min(auditPage, pages);
+      entries = filtered.slice((auditPage - 1) * pageSize, auditPage * pageSize);
+    }
+    el('auditTrailSummary').textContent = `${total} matching record${total === 1 ? '' : 's'} • Page ${auditPage} of ${pages}${serverPaged ? ' • server-paged' : ''}`;
+    host.innerHTML = entries.length ? entries.map((entry) => {
       const changes = Array.isArray(entry.changes) ? entry.changes : [];
       return `<article class="v61-audit-item"><div class="v61-audit-main"><div><span class="v61-audit-category">${safe(entry.category || 'System')}</span><strong>${safe(entry.action || 'Activity')}</strong><small>${safe(entry.details || '')}</small></div><div class="v61-audit-meta"><span>${safe(entry.account || entry.username || 'System')}</span><span>${safe(entry.role || '')}</span><time>${safe(dateTime(entry.timestamp))}</time></div></div>${changes.length ? `<details><summary>View ${changes.length} captured change${changes.length === 1 ? '' : 's'}</summary><div class="v61-change-list">${changes.map((c) => `<div><code>${safe(c.path)}</code><span class="before">${safe(c.before)}</span><span aria-hidden="true">→</span><span class="after">${safe(c.after)}</span></div>`).join('')}</div></details>` : ''}</article>`;
     }).join('') : '<div class="v61-empty"><strong>No audit records match the current filters.</strong><small>New shared-data changes will appear automatically.</small></div>';

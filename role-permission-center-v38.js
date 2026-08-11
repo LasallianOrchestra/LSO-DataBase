@@ -10,6 +10,7 @@
     ['dashboardView','Dashboard','Operational overview, quick actions, workflow cards, alerts, and live summaries.'],
     ['membersView','Members','Member directory, stage monitoring, profile information, and member photo management.'],
     ['lookupView','Members Overall Record','Unified member profile with contracts, Monthly Reports, Attendance, Duty Hours, corrections, PDF preview, and PDF download.'],
+    ['documentsView','Document Center','Centralized access to member overview PDFs, contracts, finalized Attendance archives, Monthly Reports, and Duty Hours documents.'],
     ['contractView','Contract','Membership contract preparation, preview, generation, and tracked contract output.'],
     ['monthlyReportView','Monthly Report','Three-phase monthly filing, validation, PDF preview/download, finalization, and report archive.'],
     ['attendanceView','Attendance','Activity creation, Official/Trainee/Probationary rosters, LOA/Excused rules, Review, Finalize, Archive, revisions, and semester ratings.'],

@@ -609,7 +609,20 @@
     document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>refreshRecoveryPoints({quiet:true}),50));
     ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-duty-enhancements',renderDutyEnhancements,120,{viewId:'dutyHoursView'})));
     ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-monthly-workflow',renderMonthlyWorkflow,120,{viewId:'monthlyReportView'})));
-    window.addEventListener('lso:system-error',(event)=>{if(loggingServerError&&event.detail?.rpc==='lso_log_system_error')return;reportError(event.detail||{});});
+    window.addEventListener('lso:system-error',(event)=>{
+      if(loggingServerError&&event.detail?.rpc==='lso_log_system_error')return;
+      const detail=event.detail||{};
+      const technical=String(detail.technicalMessage||detail.message||detail.publicMessage||'');
+      // An expired login session is expected authentication lifecycle behavior. It should
+      // return the user to Login, not be presented as a Shared Database malfunction.
+      if(detail.errorCode==='AUTH-SESSION-002'||/invalid or expired session|session expired|invalid session|expired token/i.test(technical)){
+        closeErrorDialog();
+        return;
+      }
+      reportError(detail);
+    });
+    window.addEventListener('lso:session-invalid',()=>closeErrorDialog());
+    window.addEventListener('lso:auth-session-recovered',()=>closeErrorDialog());
     window.addEventListener('error',(event)=>{if(!event.error&&!event.message)return;const technical=String(event.error?.stack||event.message||'Unknown JavaScript error');if(/renderAll is not defined/i.test(technical)&&/workflow-attendance-month-v2\.js/i.test(technical)){event.preventDefault?.();window.LSORenderCompatibility?.refreshAttendance?.();window.renderAll?.();closeErrorDialog();console.warn('Obsolete attendance cache recovered without blocking the website.');return;}reportError({module:'Website',publicMessage:'A website component stopped unexpectedly. Your shared records were not intentionally changed.',technicalMessage:technical}, {show:true});});
     window.addEventListener('unhandledrejection',(event)=>{const reason=event.reason;reportError({module:'Website',publicMessage:'A background operation could not be completed.',technicalMessage:reason?.stack||reason?.message||String(reason||'Unknown promise rejection')},{show:true});});
     window.addEventListener('lso:auth-changed',()=>setTimeout(()=>{if(isAdmin()){ensureDailyRecovery();refreshSystemHealth({quiet:true});refreshRecoveryPoints({quiet:true});}renderDutyEnhancements();renderMonthlyWorkflow();},300));

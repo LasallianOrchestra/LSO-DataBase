@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+'use strict';
+const fs=require('fs'),path=require('path'),cp=require('child_process');
+const root=__dirname, results=[];
+const add=(name,ok,detail='')=>results.push({name,ok:Boolean(ok),detail});
+const files=fs.readdirSync(root).filter(n=>fs.statSync(path.join(root,n)).isFile());
+add('GitHub file count',files.length<=100,`${files.length} files`);
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const ids=[...html.matchAll(/\bid=["']([^"']+)["']/g)].map(m=>m[1]);
+const dup=[...new Set(ids.filter((x,i)=>ids.indexOf(x)!==i))];add('Unique HTML IDs',dup.length===0,dup.length?dup.join(', '):`${ids.length} unique IDs`);
+const refs=[...html.matchAll(/(?:src|href)=["']([^"'#?]+)(?:\?[^"']*)?["']/g)].map(m=>m[1]).filter(r=>!/^https?:|^data:|^mailto:|^#/.test(r)&&!r.startsWith('/'));
+const missing=[...new Set(refs.filter(r=>!fs.existsSync(path.join(root,r))))];add('HTML local assets',missing.length===0,missing.length?missing.join(', '):`${new Set(refs).size} references found`);
+const js=files.filter(f=>f.endsWith('.js')&&f!=='predeploy-integrity-v69.js');const jsErrors=[];for(const f of js){const r=cp.spawnSync(process.execPath,['--check',path.join(root,f)],{encoding:'utf8'});if(r.status!==0)jsErrors.push(`${f}: ${(r.stderr||r.stdout).trim()}`);}add('JavaScript syntax',jsErrors.length===0,jsErrors.length?jsErrors.join('\n'):`${js.length} files passed`);
+const sw=fs.readFileSync(path.join(root,'service-worker-enterprise-v38.js'),'utf8');const swRefs=[...sw.matchAll(/'\.\/([^']+)'/g)].map(m=>m[1]).filter(x=>x&&!x.includes('${'));const swMissing=[...new Set(swRefs.filter(r=>!fs.existsSync(path.join(root,r))))];add('Service-worker assets',swMissing.length===0,swMissing.length?swMissing.join(', '):`${new Set(swRefs).size} assets found`);
+const core=fs.readFileSync(path.join(root,'lso-system-core-v4.js'),'utf8'),pwa=fs.readFileSync(path.join(root,'pwa-enterprise-v38.js'),'utf8'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest'),'utf8'));
+add('V72 core version',/app:\s*'7\.2\.0'/.test(core)&&/012_platform_operations_v69/.test(core),'Application V72 with V69 database schema target');
+add('V72 PWA cache',/v72-auth-input-stability/.test(sw)&&/v72-auth-input-stability/.test(pwa),'Service worker and active marker aligned to V72');
+add('V72 application manifest',String(manifest.id||'').includes('auth-input-v72')&&String(manifest.start_url||'').includes('auth-input-v72'),'Manifest identifier aligned to the current application build');
+const required=['platform-upgrade-v69.js','platform-upgrade-v69.css','operations-governance-v61.js','cloud-staff-v5.js','attendance-workflow-v58.js','member-overall-record-v49.js'];add('Required runtime modules',required.every(f=>files.includes(f)),required.filter(f=>!files.includes(f)).join(', ')||'All present');
+const secretPatterns=[/service_role\s*[:=]/i,/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,/password\s*[:=]\s*["']SNA1161["']/i];const source=files.filter(f=>/\.(?:js|html|md|json)$/.test(f)).map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n');const secretHits=secretPatterns.filter(r=>r.test(source));add('Public secret scan',secretHits.length===0,secretHits.length?'Potential sensitive pattern detected':'No service-role/private-key/default-password pattern');
+const auth=fs.readFileSync(path.join(root,'auth.js'),'utf8');add('V72 authentication input stability',/SESSION_BUILD = 'v72-auth-input-stability'/.test(auth)&&/already on a clean Login screen/.test(auth)&&/restoreLoginInteractivity/.test(auth),'Expired legacy sessions cannot repeatedly reset or disable the login form');const passed=results.filter(r=>r.ok).length;console.log(JSON.stringify({version:'V72',passed,total:results.length,results},null,2));process.exit(passed===results.length?0:1);

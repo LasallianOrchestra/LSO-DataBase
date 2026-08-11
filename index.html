@@ -40,12 +40,21 @@
   html.lso-auth-locked #authScreen,
   body:not([data-authenticated="true"]) #authScreen:not([hidden]) {
     display: grid !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    user-select: auto !important;
+    opacity: 1 !important;
+  }
+  html.lso-auth-locked #maintenanceModeOverlay,
+  body:not([data-authenticated="true"]) #maintenanceModeOverlay {
+    display: none !important;
+    pointer-events: none !important;
   }
 </style>
 <link rel="icon" href="favicon.ico?v=20260717-logos" sizes="any"/>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=20260717-logos"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=20260721-pwa-v1"/>
-<link rel="manifest" href="manifest.webmanifest?v=20260811-permission-attendance-v67"/>
+<link rel="manifest" href="manifest.webmanifest?v=20260811-auth-input-v72"/>
 <link href="styles.css?v=20260720-member-table-v2" rel="stylesheet"/>
 <link href="duty-roster-layout.css?v=20260717-1605" rel="stylesheet"/>
 <link href="access-control.css?v=20260721-role-approval-v2" rel="stylesheet"/>
@@ -128,6 +137,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <link rel="stylesheet" href="attendance-workflow-v58.css?v=20260806-end-to-end-debug-v60"/>
 <link rel="stylesheet" href="operations-governance-v61.css?v=20260807-maintenance-gate-v62"/>
 <link rel="stylesheet" href="member-photo-pdf-preview-v63.css?v=20260811-permission-attendance-v67"/>
+<link href="platform-upgrade-v69.css?v=20260811-platform-v69" rel="stylesheet"/>
 </head>
 <body>
 <div aria-live="polite" class="connection-banner hidden" id="connectionBanner" role="status"></div>
@@ -239,6 +249,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="nav-item active" data-view="dashboardView">Dashboard</button>
 <button class="nav-item" data-view="membersView">Members</button>
 <button class="nav-item" data-view="lookupView">Members Overall Record</button>
+<button class="nav-item" data-view="documentsView">Document Center</button>
 <button class="nav-item" data-view="contractView">Contract</button>
 <button class="nav-item" data-view="monthlyReportView">Monthly Report</button>
 <button class="nav-item" data-view="attendanceView">Attendance</button>
@@ -261,7 +272,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <button class="logout-button" id="logoutButton" type="button">Log Out</button>
 <p>One Symphony, One Spirit,<br/>One Lasallian Legacy.</p>
 <small>Shared online database</small>
-<small class="system-version-footer" id="systemVersionFooter">LSO System v6.2.0 • Database target 009</small>
+<small class="system-version-footer" id="systemVersionFooter">LSO System v6.9.0 • Database target 012</small>
 </div>
 </aside>
 <button aria-label="Close navigation" class="sidebar-overlay" id="sidebarOverlay" type="button"></button>
@@ -273,10 +284,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <h2 id="pageTitle">Dashboard</h2>
 </div>
 <div class="topbar-actions">
-<div aria-label="System status" class="topbar-status">
+<div aria-label="System synchronization status" class="topbar-status v69-sync-trigger" id="v69SyncTrigger" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false">
 <span class="status-indicator" aria-hidden="true"></span>
 <div><strong id="systemStatusText">Connecting to shared database…</strong><small id="currentDateLabel">Loading date…</small></div>
 </div>
+<span class="v69-environment-badge" id="v69EnvironmentBadge" title="Deployment environment">PRODUCTION</span>
+<button class="icon-button v69-help-launcher" id="v69HelpButton" type="button" aria-label="Open system help" title="Help Center">?</button>
 <button class="icon-button accessibility-launcher" id="accessibilityButton" type="button" aria-label="Open accessibility and display controls" title="Accessibility &amp; Display">Aa</button>
 <div class="notification-center" id="notificationCenter">
 <button aria-expanded="false" aria-label="Open notifications" class="notification-button" id="notificationButton" type="button">
@@ -299,6 +312,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </header>
 <section class="view active" id="dashboardView">
 <div id="dashboardCommandCenterV4" aria-live="polite"></div>
+<div id="v69DashboardAnalytics" aria-live="polite"></div>
 <div class="hero-card dashboard-hero dashboard-v4-legacy">
 <div class="dashboard-hero-copy">
 <p class="eyebrow">Orchestra Command Center</p>
@@ -537,6 +551,15 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </div>
 </article>
 </div>
+</section>
+
+<section class="view" id="documentsView">
+<article class="panel v69-document-center">
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Official Records</p><h3>Document Center</h3><p class="panel-subtitle">One organized place for member overviews, contracts, finalized Attendance copies, Monthly Reports, and Duty Hours documents. Documents are generated from the current validated source record.</p></div><div class="inline-actions"><span id="v69DocumentSummary" class="action-center-updated">Loading documents…</span><button class="button button-secondary" id="v69RefreshDocuments" type="button">Refresh</button></div></div>
+<div class="v69-document-toolbar"><label class="field search-field"><span>Search documents</span><input id="v69DocumentSearch" type="search" placeholder="Member, month, document type…"/></label><label class="field"><span>Type</span><select id="v69DocumentType"><option value="">All document types</option><option value="Member Overview">Member Overview</option><option value="Contract">Contract</option><option value="Attendance Archive">Attendance Archive</option><option value="Monthly Report">Monthly Report</option><option value="Duty Hours">Duty Hours</option></select></label><label class="field"><span>Page size</span><select id="v69DocumentPageSize"><option>10</option><option selected>25</option><option>50</option></select></label></div>
+<div id="v69DocumentList" class="v69-document-list"></div>
+<div class="v69-pagination"><button class="button button-secondary" id="v69DocumentPrev" type="button">Previous</button><span id="v69DocumentPage">Page 1</span><button class="button button-secondary" id="v69DocumentNext" type="button">Next</button></div>
+</article>
 </section>
 
 <section class="view" id="contractView">
@@ -1124,6 +1147,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <label class="field"><span>Priority</span><select id="notificationInboxSeverity"><option value="">All priorities</option><option value="high">Urgent</option><option value="medium">Review soon</option><option value="low">Information</option></select></label>
 <label class="field"><span>Module</span><select id="notificationInboxModule"><option value="">All modules</option></select></label>
 </div>
+<details class="v69-notification-preferences" id="v69NotificationPreferences"><summary>Notification Preferences</summary><div class="v69-pref-grid"><div><p class="eyebrow">My Account</p><div id="v69AccountNotificationPrefs" class="v69-pref-list"></div></div><div class="admin-only"><p class="eyebrow">Role Default</p><label class="field"><span>Role</span><select id="v69NotificationRole"><option>Membership</option><option>General Secretary</option><option>Staff Account</option><option>Trainee/Probationary</option></select></label><div id="v69RoleNotificationPrefs" class="v69-pref-list"></div></div></div><div class="inline-actions"><span id="v69NotificationPrefStatus" class="action-center-updated">Preferences load with your account.</span><button class="button button-secondary" id="v69ResetNotificationPrefs" type="button">Reset Mine</button><button class="button button-primary" id="v69SaveNotificationPrefs" type="button">Save Preferences</button><button class="button button-secondary admin-only" id="v69SaveRoleNotificationPrefs" type="button">Save Role Default</button></div></details>
 <div class="v61-inbox-list" id="notificationInboxList"></div>
 </article>
 <div class="action-workflow-map" id="actionWorkflowMap" aria-label="Action Center workflow"></div>
@@ -1219,6 +1243,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 </section>
 </section>
 <section class="view" id="dataView">
+<article class="panel v69-deployment-center" id="v69DeploymentCenter"><div class="panel-header stack-mobile"><div><p class="eyebrow">Deployment & Runtime</p><h3>System Operations Center</h3><p class="panel-subtitle">Verify deployment identity, synchronization health, database optimization support, and required application assets before production use.</p></div><button class="button button-primary" id="v69RunIntegrityCheck" type="button">Run Integrity Check</button></div><div class="v69-deployment-grid"><label class="field"><span>Deployment Environment</span><select id="v69EnvironmentSelect"><option value="Production">Production</option><option value="Staging">Staging</option></select></label><div class="v69-deployment-stat"><span>Application</span><strong id="v69DeploymentVersion">V72</strong></div><div class="v69-deployment-stat"><span>Database Upgrade</span><strong id="v69DatabaseOptimizationStatus">Checking…</strong></div><div class="v69-deployment-stat"><span>Last Sync</span><strong id="v69DeploymentLastSync">Not yet synchronized</strong></div></div><div id="v69IntegrityResults" class="v69-integrity-results"><small>Run the integrity check before deploying a new release.</small></div></article>
 <div class="recovery-center-grid">
 <article class="panel recovery-summary-panel"><div class="panel-header stack-mobile"><div><p class="eyebrow">Automated Protection</p><h3>Backup &amp; Recovery Center</h3><p class="panel-subtitle">The system creates server recovery points before risky operations and one daily point when an Administrator signs in.</p></div><button class="button button-primary" id="createRecoveryPointButton" type="button">Create Recovery Point</button></div><div class="recovery-kpis" id="recoveryKpis"></div><div class="recovery-status-line" id="automaticRecoveryStatus">Checking recovery protection…</div></article>
 <article class="panel backup-validator-panel"><div class="panel-header"><div><p class="eyebrow">Backup Integrity</p><h3>Validate Before Restore</h3><p class="panel-subtitle">Inspect a JSON backup before it is allowed to replace shared records.</p></div></div><label class="button button-secondary file-button">Select Backup to Validate<input id="validateBackupFile" type="file" accept=".json,application/json"/></label><div id="backupValidationResult" class="backup-validation-result"></div></article>
@@ -1227,7 +1252,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <article class="panel v61-section" id="dataQualityCenter">
 <div class="v61-panel-header"><div><p class="eyebrow">Data Integrity</p><h3>Data Quality Center</h3><p>Cross-check live Members, Attendance, Duty Hours, Accounts, and Monthly Reports for duplicate, orphaned, incomplete, or structurally invalid records.</p></div><div class="inline-actions"><button class="button button-secondary" id="exportDataQualityButton" type="button">Export Findings</button><button class="button button-primary" id="runDataQualityScan" type="button">Run Quality Scan</button></div></div>
 <div class="v61-metrics" id="dataQualityMetrics"></div>
-<div class="v61-toolbar compact"><label class="field search-field"><span>Search findings</span><input id="dataQualitySearch" type="search" placeholder="Member, issue, module…"/></label><label class="field"><span>Severity</span><select id="dataQualitySeverity"><option value="">All severities</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="info">Information</option></select></label><label class="field"><span>Module</span><select id="dataQualityModule"><option value="">All modules</option></select></label></div>
+<div class="v61-toolbar compact"><label class="field search-field"><span>Search findings</span><input id="dataQualitySearch" type="search" placeholder="Member, issue, module…"/></label><label class="field"><span>Severity</span><select id="dataQualitySeverity"><option value="">All severities</option><option value="critical">Critical</option><option value="warning">Warning</option><option value="info">Information</option></select></label><label class="field"><span>Module</span><select id="dataQualityModule"><option value="">All modules</option></select></label><label class="field"><span>Workflow</span><select id="dataQualityWorkflowStatus"><option value="active">Active</option><option value="resolved">Resolved History</option><option value="all">All</option></select></label></div>
 <div class="v61-status-line"><span id="dataQualityStatus" aria-live="polite">Quality scan has not run yet.</span><div class="v61-database-performance"><span>Lazy scan</span><span>Cached while unchanged</span><span>No automatic record deletion</span></div></div>
 <div class="v61-quality-list" id="dataQualityIssues"></div>
 </article>
@@ -1482,6 +1507,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <section class="maintenance-mode-overlay hidden" id="maintenanceModeOverlay" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="maintenanceOverlayTitle">
 <div class="maintenance-mode-card" tabindex="-1"><div class="mark" aria-hidden="true">M</div><p class="eyebrow">LSO System Maintenance</p><h1 id="maintenanceOverlayTitle">The management system is temporarily unavailable</h1><p id="maintenanceOverlayMessage">An Administrator is currently performing maintenance.</p><div class="resume" id="maintenanceOverlayResume">Please try again after maintenance is completed.</div><div class="inline-actions maintenance-overlay-actions"><button class="button button-secondary" id="maintenanceModeRefreshButton" type="button">Check Status</button><button class="button button-secondary hidden" id="maintenanceModeExitPreviewButton" type="button">Exit Preview</button><button class="button button-primary" id="maintenanceModeLogoutButton" type="button">Log Out</button></div></div>
 </section>
+<section class="v69-sync-popover hidden" id="v69SyncPopover" role="dialog" aria-modal="false" aria-labelledby="v69SyncTitle"><div class="v69-popover-header"><div><p class="eyebrow">Shared Database</p><h3 id="v69SyncTitle">Synchronization Status</h3></div><button class="icon-button" id="v69CloseSync" type="button" aria-label="Close synchronization status">×</button></div><div class="v69-sync-grid"><div><span>Connection</span><strong id="v69SyncConnection">Checking…</strong></div><div><span>Pending</span><strong id="v69SyncPending">0 changes</strong></div><div><span>Last synchronized</span><strong id="v69SyncLast">Not yet</strong></div><div><span>Conflicts</span><strong id="v69SyncConflicts">None</strong></div></div><div id="v69ConflictList" class="v69-conflict-list"></div><div class="inline-actions"><button class="button button-secondary" id="v69SyncNow" type="button">Sync Now</button></div></section>
+
+<div class="modal-backdrop hidden v69-help-modal" id="v69HelpModal" role="dialog" aria-modal="true" aria-labelledby="v69HelpTitle"><div class="modal-card v69-help-card"><div class="modal-header"><div><p class="eyebrow">System-wide Help</p><h2 id="v69HelpTitle">LSO Help Center</h2><p>Search concise workflow guidance for every major module.</p></div><button class="icon-button" id="v69CloseHelp" type="button" aria-label="Close Help Center">×</button></div><div class="v69-help-toolbar"><label class="field search-field"><span>Search Help</span><input id="v69HelpSearch" type="search" placeholder="Attendance finalize, duty punch, permissions…"/></label></div><div id="v69HelpContent" class="v69-help-content"></div><div class="modal-footer"><button class="button button-secondary" id="v69CloseHelpFooter" type="button">Close</button></div></div></div>
+
 <div class="system-error-dialog hidden" id="systemErrorDialog" role="dialog" aria-modal="true" aria-labelledby="systemErrorTitle">
 <div class="system-error-card"><div class="system-error-icon">!</div><div><p class="eyebrow">System Notice</p><h2 id="systemErrorTitle">The requested action could not be completed</h2><p id="systemErrorMessage">A safe error message will appear here.</p><div class="system-error-code"><span>Error Code</span><strong id="systemErrorCode">SYS-UNEXPECTED-999</strong></div><details id="systemErrorTechnicalDetails"><summary>Technical details</summary><pre id="systemErrorTechnicalText"></pre></details><div class="modal-footer"><button class="button button-secondary" id="copySystemErrorButton" type="button">Copy Details</button><button class="button button-secondary admin-only" id="openHealthFromErrorButton" type="button">Open System Health</button><button class="button button-primary" id="dismissSystemErrorButton" type="button">Dismiss</button></div></div></div>
 </div>
@@ -1489,17 +1518,17 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260811-permission-attendance-v67"></script>
+<script src="lso-system-core-v4.js?v=20260811-auth-input-v72"></script>
 <script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
 <script src="role-access-v4.js?v=20260729-role-permission-v38"></script>
-<script src="cloud-staff-v5.js?v=20260807-maintenance-protected-sync-v62"></script>
-<script src="app-member-information-v5.js?v=20260811-permission-attendance-v67"></script>
+<script src="cloud-staff-v5.js?v=20260811-auth-input-v72"></script>
+<script src="app-member-information-v5.js?v=20260811-platform-v69"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
-<script src="auth.js?v=20260807-maintenance-gate-v62"></script>
+<script src="auth.js?v=20260811-auth-input-v72"></script>
 <script src="maintenance-mode-v62.js?v=20260807-maintenance-gate-v62"></script>
 <script src="management-attendance-member-info-v4.js?v=20260811-permission-attendance-v67"></script>
 <script src="ui-enhancements.js?v=20260803-role-scroll-performance-v39"></script>
-<script src="dashboard-enhancements.js?v=20260807-notification-inbox-v61"></script>
+<script src="dashboard-enhancements.js?v=20260811-platform-v69"></script>
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
 <script src="workflow-attendance-month-v6.js?v=20260805-attendance-workflow-v58"></script>
 <script src="attendance-governance-v2.js?v=20260811-permission-attendance-v67"></script>
@@ -1513,14 +1542,15 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*,*::before,*::after{bo
 <script src="official-pdf-assets-v51.js?v=20260805-pdf-fetch-repair-v51"></script>
 <script src="member-overall-record-v49.js?v=20260811-permission-attendance-v67"></script>
 <script src="member-photo-pdf-preview-v63.js?v=20260811-permission-attendance-v67"></script>
+<script src="platform-upgrade-v69.js?v=20260811-platform-v69"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260805-runtime-stability-v54"></script>
 <script src="permissions-dynamic-v38.js?v=20260811-permission-attendance-v67"></script>
 <script src="dashboard-command-center-v5.js?v=20260805-runtime-stability-v54"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v2.js?v=20260807-audit-v61"></script>
+<script src="system-enterprise-v2.js?v=20260811-auth-input-v72"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
-<script src="role-permission-center-v38.js?v=20260811-permission-attendance-v67"></script>
-<script src="operations-governance-v61.js?v=20260811-permission-attendance-v67"></script>
-<script src="pwa-enterprise-v38.js?v=20260811-permission-attendance-v67"></script>
+<script src="role-permission-center-v38.js?v=20260811-platform-v69"></script>
+<script src="operations-governance-v61.js?v=20260811-platform-v69"></script>
+<script src="pwa-enterprise-v38.js?v=20260811-auth-input-v72"></script>
 </body>
 </html>

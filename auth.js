@@ -2,6 +2,8 @@
   'use strict';
 
   const SESSION_KEY = 'lso_shared_session_v1';
+  const SESSION_BUILD_KEY = 'lso_shared_session_build_v1';
+  const SESSION_BUILD = 'v72-auth-input-stability';
   const LOGIN_SECURITY_KEY = 'lso_login_security_v1';
   const ACTIVITY_KEY = 'lso_last_activity_v1';
   const MAX_FAILED_ATTEMPTS = 5;
@@ -331,7 +333,7 @@
     clearLastActivity();
     clearSession();
     try { await window.LSOCloud.logout(); } catch { /* Local logout still continues. */ }
-    showLoginScreen();
+    showLoginScreen({ resetValues: true });
     setMessage('loginMessage', 'For your security, you were logged out after 15 minutes of inactivity.');
     automaticLogoutInProgress = false;
   }
@@ -400,8 +402,17 @@
 
   function readSession() {
     try {
+      // A session created by an older application build is deliberately not resumed.
+      // Major platform/database releases can invalidate the assumptions of a previous
+      // browser token; starting clean is safer than surfacing an expired-session loop.
+      const storedBuild = sessionStorage.getItem(SESSION_BUILD_KEY) || '';
+      if (storedBuild && storedBuild !== SESSION_BUILD) {
+        sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.setItem(SESSION_BUILD_KEY, SESSION_BUILD);
+        return null;
+      }
       const parsed = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-      return parsed && typeof parsed.token === 'string' ? parsed : null;
+      return parsed && typeof parsed.token === 'string' && parsed.token.length >= 32 ? parsed : null;
     } catch {
       return null;
     }
@@ -410,14 +421,19 @@
   function saveSession(token, account) {
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, account }));
+      sessionStorage.setItem(SESSION_BUILD_KEY, SESSION_BUILD);
       return true;
     } catch {
       return false;
     }
   }
 
-  function clearSession() {
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* Session may be blocked. */ }
+  function clearSession({ keepBuild = true } = {}) {
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+      if (keepBuild) sessionStorage.setItem(SESSION_BUILD_KEY, SESSION_BUILD);
+      else sessionStorage.removeItem(SESSION_BUILD_KEY);
+    } catch { /* Session may be blocked. */ }
   }
 
   function normalizeApprovalStatus(account) {
@@ -539,7 +555,55 @@
     startInactivityTracking();
   }
 
-  function showLoginScreen({ preserveMessage = false } = {}) {
+  function restoreLoginInteractivity({ resetValues = false } = {}) {
+    const auth = el('authScreen');
+    if (auth) {
+      auth.classList.remove('hidden');
+      auth.hidden = false;
+      auth.removeAttribute('hidden');
+      auth.removeAttribute('inert');
+      auth.setAttribute('aria-hidden', 'false');
+      auth.style.removeProperty('pointer-events');
+      auth.style.removeProperty('user-select');
+      auth.style.removeProperty('opacity');
+    }
+
+    ['loginForm', 'registerForm'].forEach((formId) => {
+      const form = el(formId);
+      if (!form) return;
+      form.classList.remove('is-busy');
+      form.removeAttribute('inert');
+      form.style.removeProperty('pointer-events');
+      form.style.removeProperty('opacity');
+    });
+
+    ['loginUsername', 'loginPassword', 'registerDisplayName', 'registerEmail', 'registerUsername', 'registerPassword', 'registerConfirmPassword'].forEach((id) => {
+      const input = el(id);
+      if (input) input.disabled = false;
+    });
+    ['loginTab', 'registerTab'].forEach((id) => { const button = el(id); if (button) button.disabled = false; });
+    document.querySelectorAll('[data-password-target]').forEach((button) => { button.disabled = false; });
+
+    // Authentication recovery must never leave an application overlay above the login form.
+    const maintenanceOverlay = el('maintenanceModeOverlay');
+    if (maintenanceOverlay) {
+      maintenanceOverlay.hidden = true;
+      maintenanceOverlay.classList.add('hidden');
+      maintenanceOverlay.setAttribute('aria-hidden', 'true');
+    }
+    document.body?.classList.remove('lso-maintenance-locked', 'lso-maintenance-preview');
+    if (document.body) {
+      document.body.dataset.maintenanceBlocked = 'false';
+      document.body.style.removeProperty('overflow');
+    }
+
+    if (resetValues) {
+      el('loginForm')?.reset();
+      el('registerForm')?.reset();
+    }
+  }
+
+  function showLoginScreen({ preserveMessage = false, resetValues = false } = {}) {
     window.LSOCurrentAccount = null;
     delete document.body.dataset.accountRole;
     delete document.body.dataset.accessMode;
@@ -554,10 +618,11 @@
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
     requestAnimationFrame(() => window.scrollTo(0, 0));
-    el('loginForm')?.reset();
-    el('registerForm')?.reset();
-    if (el('loginUsername')) el('loginUsername').value = '';
-    if (el('loginPassword')) el('loginPassword').value = '';
+    restoreLoginInteractivity({ resetValues });
+    if (resetValues) {
+      if (el('loginUsername')) el('loginUsername').value = '';
+      if (el('loginPassword')) el('loginPassword').value = '';
+    }
     if (!preserveMessage) switchAuthMode('login');
     emit('lso:auth-changed', null);
     stopAccountRefresh();
@@ -657,8 +722,13 @@
       console.error('Shared database initialization failed:', error);
       clearSession();
       await window.LSOCloud.disconnect();
-      showLoginScreen({ preserveMessage: true });
-      setMessage('loginMessage', error.message || 'The shared database could not be opened.');
+      if (error?.code === 'AUTH_SESSION_INVALID') {
+        showLoginScreen();
+        setMessage('loginMessage');
+      } else {
+        showLoginScreen({ preserveMessage: true });
+        setMessage('loginMessage', error.message || 'The shared database could not be opened.');
+      }
       return false;
     }
   }
@@ -762,7 +832,7 @@
     stopInactivityTracking();
     clearSession();
     try { await window.LSOCloud.logout(); } catch { /* The local session is still cleared. */ }
-    showLoginScreen();
+    showLoginScreen({ resetValues: true });
   }
 
   async function saveAccounts(accounts) {
@@ -801,23 +871,60 @@
       const result = await window.LSOCloud.resumeSession(stored.token);
       if (!result?.ok) {
         clearSession();
-        showLoginScreen({ preserveMessage: true });
-        setMessage('loginMessage', loginMessageForCode(result?.code));
+        await window.LSOCloud.disconnect();
+        // An old/expired browser token is normal lifecycle cleanup. Do not show a
+        // persistent red warning on the fresh login screen. Account-state failures
+        // (disabled/rejected/pending) remain visible because the user can act on them.
+        const code = String(result?.code || '');
+        const silentExpiry = code === 'session_expired';
+        showLoginScreen();
+        if (!silentExpiry) setMessage('loginMessage', loginMessageForCode(code));
         return false;
       }
       return authorize(result.account, stored.token, { resumed: true });
     } catch (error) {
+      if (error?.code === 'AUTH_SESSION_INVALID') {
+        clearSession();
+        await window.LSOCloud.disconnect();
+        showLoginScreen();
+        return false;
+      }
       showLoginScreen({ preserveMessage: true });
       setMessage('loginMessage', error.message || 'The shared database could not be reached.');
       return false;
     }
   }
 
+  let invalidSessionRecovery = null;
   async function handleInvalidSession(event) {
-    clearSession();
-    await window.LSOCloud.disconnect();
-    showLoginScreen({ preserveMessage: true });
-    setMessage('loginMessage', event?.detail?.message || 'Your session expired. Please log in again.');
+    const failedToken = String(event?.detail?.token || '');
+    const activeToken = String(window.LSOCloud?.getSessionToken?.() || '');
+    const stored = readSession();
+    const storedToken = String(stored?.token || '');
+    const authenticated = hasAuthenticatedApplicationState();
+
+    // Once the browser is already on a clean Login screen there is no session left to
+    // invalidate. Late failures from an old batch of RPCs must be ignored; otherwise
+    // every delayed event resets the form while the user is trying to type.
+    if (!authenticated && !activeToken && !storedToken) return;
+
+    // Token-bearing RPCs always report the token that failed. If the failure belongs
+    // to an older request, ignore it. This prevents a delayed response from an old
+    // browser session from tearing down a login that has just succeeded.
+    if (failedToken && activeToken && failedToken !== activeToken) return;
+    if (failedToken && storedToken && failedToken !== storedToken && activeToken === storedToken) return;
+
+    // Do not let several RPC failures perform several logout/login-screen transitions.
+    if (invalidSessionRecovery) return invalidSessionRecovery;
+    invalidSessionRecovery = (async () => {
+      clearSession();
+      await window.LSOCloud.disconnect();
+      showLoginScreen({ resetValues: authenticated });
+      setMessage('loginMessage');
+      window.dispatchEvent(new CustomEvent('lso:auth-session-recovered', { detail: { reason: 'expired-session', silent: true } }));
+      setTimeout(() => el('loginUsername')?.focus(), 30);
+    })().finally(() => { invalidSessionRecovery = null; });
+    return invalidSessionRecovery;
   }
 
   function wireAuthEvents() {
@@ -827,6 +934,16 @@
     el('registerForm')?.addEventListener('submit', handleRegistration);
     el('logoutButton')?.addEventListener('click', handleLogout);
     window.addEventListener('lso:session-invalid', handleInvalidSession);
+    // BFCache/tab restoration can revive DOM attributes from an interrupted login
+    // request. Reassert a usable Login form whenever an unauthenticated page returns.
+    window.addEventListener('pageshow', () => {
+      if (!hasAuthenticatedApplicationState()) restoreLoginInteractivity({ resetValues: false });
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !hasAuthenticatedApplicationState()) {
+        restoreLoginInteractivity({ resetValues: false });
+      }
+    });
 
     document.querySelectorAll('[data-password-target]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -841,6 +958,7 @@
   }
 
   window.LSOAuth = {
+    restoreLoginInteractivity: () => restoreLoginInteractivity({ resetValues: false }),
     loadAccounts: () => accountsCache.map((account) => ({ ...account })),
     saveAccounts,
     deleteAccount,
@@ -860,7 +978,14 @@
     installAuthenticationGateObserver();
     wireAuthEvents();
     bindActivityListeners();
-    showLoginScreen();
+    try {
+      const storedBuild = sessionStorage.getItem(SESSION_BUILD_KEY) || '';
+      if (storedBuild !== SESSION_BUILD) {
+        sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.setItem(SESSION_BUILD_KEY, SESSION_BUILD);
+      }
+    } catch { /* Browser storage can be blocked. */ }
+    showLoginScreen({ resetValues: true });
 
     if (!window.LSOCloud?.isConfigured?.()) {
       setMessage('loginMessage', 'Supabase is not configured correctly. Add the exact Project URL and publishable key to supabase-config.js.');

@@ -1,4 +1,4 @@
-# LSO Orchestra Management System — V67 Attendance & Permission Center Repair
+# LSO Orchestra Management System — V72 Authentication Input Stability Fix
 
 This release repairs Administrator Maintenance Mode with shared-database verification, a hard application gate for non-Administrator accounts, cross-tab synchronization, and a status refresh/preview workflow. All V61 governance features remain included.
 
@@ -260,7 +260,7 @@ This package adds `smooth-motion-v1.css`, a presentation-only animation layer fo
 - Stores newly uploaded portraits at up to 512×512 JPEG with adaptive high-quality compression (roughly up to 90 KB) instead of the previous 128×128 thumbnail.
 - Existing low-resolution photos must be re-uploaded from the original image to gain the higher-quality source; upscaling cannot restore detail already discarded in older thumbnails.
 
-## V67 Attendance & Permission Center Repair
+## V68 Member Overall Record PDF Table Layout
 
 - Repairs Attendance activity creation so **+ New Activity** and **Create on Selected Date** are governed by the currently selected month, not by a previously selected finalized activity.
 - Adds a submit-time workflow check so an activity cannot be accidentally created inside an In Review or Finalized month.
@@ -269,4 +269,37 @@ This package adds `smooth-motion-v1.css`, a presentation-only animation layer fo
 - Adds **Grant Full Operational Access** and **Clear Operational Access** working-copy actions. Security-owner controls remain protected from delegation.
 - Adds module/action dependency validation before a role profile can be saved.
 - Requires the separate V67 Supabase permission patch so the live permission center accepts the current operational permission model without legacy role-name restrictions.
-- Updates application/PWA/cache metadata to V67.
+- Updates application/PWA/cache metadata to V68 for the Members Overall Record PDF layout refresh.
+
+## V69 Platform Operations Upgrade
+- Advanced Dashboard Analytics with operational attendance, duty, membership-stage, and Monthly Report summaries.
+- Data Quality workflow with Active/Resolved history and Administrator resolution notes.
+- Per-account notification preferences plus Administrator role defaults.
+- Lightweight database metadata polling, server-side collection pagination API, JSONB/normalized indexes, and conflict-aware writes.
+- Detailed synchronization status with pending changes, last sync, and conflict resolution controls.
+- Centralized Document Center for member overviews, contract history, finalized attendance, Monthly Reports, and Duty records.
+- Mobile sticky action improvements and contained high-volume data tables.
+- Runtime integrity checker, Staging/Production badge, and searchable Help Center.
+- Requires `LSO_V69_PLATFORM_OPERATIONS_UPGRADE.sql` in Supabase to enable server pagination, conflict protection, database indexes, and shared notification preferences.
+
+### V69 deployment requirement
+Run `LSO_V69_PLATFORM_OPERATIONS_UPGRADE.sql` privately in the Supabase SQL Editor after deploying the V69 website. The SQL enables conflict-aware writes, metadata-only polling, server-side collection pagination, database indexes, shared notification preferences, and Document Center permission support. Do not upload the SQL file to the public GitHub Pages repository.
+
+For future pre-deployment checks, run `node predeploy-integrity-v69.js` from the website folder. It exits with a non-zero status if a structural deployment check fails.
+
+## V71 Authentication Clean Start Fix
+- Expired or legacy browser sessions are cleared silently instead of leaving a persistent red login warning.
+- Browser sessions are build-scoped so a token from an older application release is not automatically resumed after a major deployment.
+- Invalid-session recovery is deduplicated so several failed background requests cannot repeatedly reset the login screen.
+- Delayed invalid-session responses from an older token cannot disconnect a newly authenticated session.
+- Critical authentication, cloud, system-error, PWA, manifest, and core script cache-busting URLs now use the V71 deployment marker.
+- The pre-deployment integrity checker now validates V71 application/cache identity while retaining the V69 database schema target.
+
+
+## V72 Authentication Input Stability Fix
+- Prevents delayed expired-session events from repeatedly resetting the Login form while a user is typing.
+- Explicitly restores Login and Register form interactivity after authentication cleanup, including removing stale busy/inert/pointer-event states.
+- Ignores session-invalid broadcasts once no active/stored session exists.
+- The cloud layer broadcasts session invalidation only for the currently connected token.
+- Hides maintenance overlays when returning to the unauthenticated Login screen so they cannot intercept pointer or keyboard interaction.
+- Updates application, manifest, service worker, and critical authentication cache markers to V72.
