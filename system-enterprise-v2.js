@@ -9,16 +9,13 @@
   const ERROR_KEY = 'lso_local_error_log_v1';
   const ACCESSIBILITY_KEY = 'lso_accessibility_preferences_v1';
   const DAILY_RECOVERY_KEY = 'lso_daily_recovery_v1';
-  const ERROR_RESOLUTION_OVERRIDE_KEY = 'lso_system_error_resolution_overrides_v1';
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
   let lastHealth = null;
-  let serverErrors = [];
   let recoveryPoints = [];
   let loggingServerError = false;
   let lastShownErrorSignature = '';
   let lastShownErrorAt = 0;
-  let systemErrorFilter = 'open';
   let activeHealthPanel = 'overview';
 
   function safeText(value) {
@@ -80,15 +77,6 @@
     try { localStorage.setItem(ERROR_KEY, JSON.stringify((Array.isArray(records) ? records : []).slice(0, 100))); } catch { /* no-op */ }
   }
   function saveLocalError(record) { saveLocalErrors([record, ...localErrors()]); }
-  function resolutionOverrides() {
-    try { const value = JSON.parse(localStorage.getItem(ERROR_RESOLUTION_OVERRIDE_KEY) || '{}'); return value && typeof value === 'object' ? value : {}; } catch { return {}; }
-  }
-  function saveResolutionOverride(id, note) {
-    const overrides = resolutionOverrides();
-    overrides[String(id)] = { resolvedAt: new Date().toISOString(), resolvedBy: currentAccount()?.username || 'Administrator', note: String(note || '') };
-    try { localStorage.setItem(ERROR_RESOLUTION_OVERRIDE_KEY, JSON.stringify(overrides)); } catch { /* no-op */ }
-    return overrides[String(id)];
-  }
   function classifyError(detail = {}) {
     const technical = String(detail.technicalMessage || detail.message || detail.reason?.message || detail.reason || 'Unknown error');
     const publicMessage = String(detail.publicMessage || detail.message || 'The requested action could not be completed.');
@@ -127,7 +115,6 @@
         context: { ...record.context, rpc: record.rpc }, appVersion: VERSION.build, browserInfo: navigator.userAgent
       }); } catch { /* The local record remains available. */ } finally { loggingServerError = false; }
     }
-    renderSystemErrors();
     return record;
   }
   function closeErrorDialog() { el('systemErrorDialog')?.classList.add('hidden'); }
@@ -139,12 +126,17 @@
   // ---------------------------------------------------------------------------
   // Accessibility and display controls
   // ---------------------------------------------------------------------------
-  const defaultAccessibility = { textSize: 'normal', contrast: 'standard', motion: 'system', density: 'comfortable', tables: 'auto', focus: true };
+  const defaultAccessibility = { theme: 'light', textSize: 'normal', contrast: 'standard', motion: 'system', density: 'comfortable', tables: 'auto', focus: true };
   function loadAccessibility() {
     try { return { ...defaultAccessibility, ...JSON.parse(localStorage.getItem(ACCESSIBILITY_KEY) || '{}') }; } catch { return { ...defaultAccessibility }; }
   }
   function applyAccessibility(prefs = loadAccessibility()) {
     const root = document.documentElement;
+    const theme = prefs.theme === 'night' ? 'night' : 'light';
+    root.dataset.lsoTheme = theme;
+    root.style.colorScheme = theme === 'night' ? 'dark' : 'light';
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', theme === 'night' ? '#091712' : '#0B3D2E');
     root.dataset.lsoTextSize = prefs.textSize;
     root.dataset.lsoDensity = prefs.density;
     root.dataset.lsoTableMode = prefs.tables;
@@ -152,10 +144,16 @@
     const deviceReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     root.dataset.lsoReducedMotion = String(prefs.motion === 'reduced' || (prefs.motion === 'system' && deviceReduced));
     root.dataset.lsoFocus = String(Boolean(prefs.focus));
-    return prefs;
+    qsa('[data-theme-choice]').forEach((button) => {
+      const active = button.dataset.themeChoice === theme;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    return { ...prefs, theme };
   }
   function populateAccessibility() {
-    const prefs = loadAccessibility();
+    const prefs = applyAccessibility(loadAccessibility());
+    if (el('accessibilityTheme')) el('accessibilityTheme').value = prefs.theme;
     if (el('accessibilityTextSize')) el('accessibilityTextSize').value = prefs.textSize;
     if (el('accessibilityContrast')) el('accessibilityContrast').value = prefs.contrast;
     if (el('accessibilityMotion')) el('accessibilityMotion').value = prefs.motion;
@@ -167,6 +165,7 @@
   function closeAccessibility() { el('accessibilityDrawer')?.classList.add('hidden'); el('accessibilityOverlay')?.classList.add('hidden'); el('accessibilityDrawer')?.setAttribute('aria-hidden', 'true'); }
   function saveAccessibility() {
     const prefs = {
+      theme: el('accessibilityTheme')?.value === 'night' ? 'night' : 'light',
       textSize: el('accessibilityTextSize')?.value || 'normal', contrast: el('accessibilityContrast')?.value || 'standard',
       motion: el('accessibilityMotion')?.value || 'system', density: el('accessibilityDensity')?.value || 'comfortable',
       tables: el('accessibilityTables')?.value || 'auto', focus: Boolean(el('accessibilityFocus')?.checked)
@@ -176,10 +175,10 @@
   function resetAccessibility() { localStorage.removeItem(ACCESSIBILITY_KEY); applyAccessibility(defaultAccessibility); populateAccessibility(); }
 
   // ---------------------------------------------------------------------------
-  // System Health and migration center
+  // System Administration and diagnostics
   // ---------------------------------------------------------------------------
   function setHealthPanel(panelName = 'overview') {
-    const available = ['overview', 'access', 'diagnostics', 'errors'];
+    const available = ['overview', 'access', 'diagnostics'];
     activeHealthPanel = available.includes(panelName) ? panelName : 'overview';
     qsa('[data-health-panel]').forEach((button) => {
       const active = button.dataset.healthPanel === activeHealthPanel;
@@ -199,21 +198,18 @@
     const summary = el('healthWorkflowSummary');
     if (!summary) return;
     if (!health) {
-      summary.textContent = navigator.onLine ? 'Health status has not been verified in this session.' : 'Offline: reconnect before running a complete health check.';
+      summary.textContent = navigator.onLine ? 'System status has not been verified in this session.' : 'Offline: reconnect before running a complete diagnostics check.';
       summary.dataset.state = 'pending';
       return;
     }
     const failed = (health.checks || []).filter((check) => !check.ok).length;
-    const unresolved = effectiveUnresolvedErrors(health);
-    if (!failed && !unresolved) {
-      summary.textContent = 'All verified checks passed and no unresolved server errors were reported.';
+    if (!failed) {
+      summary.textContent = 'All verified compatibility and connection checks passed.';
       summary.dataset.state = 'healthy';
     } else {
-      summary.textContent = `${failed} compatibility check${failed === 1 ? '' : 's'} and ${unresolved} unresolved error${unresolved === 1 ? '' : 's'} need attention.`;
+      summary.textContent = `${failed} compatibility check${failed === 1 ? '' : 's'} need attention.`;
       summary.dataset.state = 'attention';
     }
-    const errorsButton = document.querySelector('[data-health-panel="errors"]');
-    if (errorsButton) errorsButton.classList.toggle('has-attention', unresolved > 0);
     const diagnosticsButton = document.querySelector('[data-health-panel="diagnostics"]');
     if (diagnosticsButton) diagnosticsButton.classList.toggle('has-attention', failed > 0);
   }
@@ -248,12 +244,12 @@
   function renderHealthCounts(health = null) {
     const container = el('healthCountGrid'); if (!container) return;
     const c = health?.counts || {};
-    const items = [['Members', c.members || 0], ['Activities', c.events || 0], ['Attendance Marks', c.attendance || 0], ['Duty Entries', c.dutyEntries || 0], ['Accounts', c.accounts || 0], ['Recovery Points', c.recoveryPoints || 0], ['Unresolved Errors', effectiveUnresolvedErrors(health)], ['State Updated', health?.stateUpdatedAt ? dateTimeLabel(health.stateUpdatedAt) : '—']];
+    const items = [['Members', c.members || 0], ['Activities', c.events || 0], ['Attendance Marks', c.attendance || 0], ['Duty Entries', c.dutyEntries || 0], ['Accounts', c.accounts || 0], ['Recovery Points', c.recoveryPoints || 0], ['State Updated', health?.stateUpdatedAt ? dateTimeLabel(health.stateUpdatedAt) : '—']];
     container.innerHTML = items.map(([label, value]) => `<div class="health-count-card"><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
     renderHealthWorkflowSummary(health);
   }
   const permissionLabels = {
-    manageAccounts:'Manage accounts',manageMembers:'Manage member records',generateContract:'Generate contracts',editMonthlyReport:'Edit Monthly Reports',finalizeMonthlyReport:'Finalize Monthly Reports',reopenMonthlyReport:'Reopen Monthly Reports',manageEvents:'Create/edit activities',deleteEvents:'Delete activities',saveDraftAttendance:'Save draft attendance',finalizeAttendance:'Finalize attendance',unlockAttendance:'Unlock attendance',reviewDutyPunches:'Approve/reject Duty punches',manageDutyHours:'Manually manage Duty Hours',manageDutyRequirements:'Set Duty requirements',certifyDutyHours:'Generate Duty certification',manageSettings:'Manage system settings',manageInventory:'Manage inventory',manageData:'Import/export/clear data',manageRecovery:'Manage recovery points',viewSystemHealth:'View System Health',manageSystemErrors:'Resolve system errors',writeActivityLog:'Write audit activity',selfDutyPunch:'Submit personal Duty punches',manageAccessibility:'Use accessibility controls'
+    manageAccounts:'Manage accounts',manageMembers:'Manage member records',generateContract:'Generate contracts',editMonthlyReport:'Edit Monthly Reports',finalizeMonthlyReport:'Finalize Monthly Reports',reopenMonthlyReport:'Reopen Monthly Reports',manageEvents:'Create/edit activities',deleteEvents:'Delete activities',saveDraftAttendance:'Save draft attendance',finalizeAttendance:'Finalize attendance',unlockAttendance:'Unlock attendance',reviewDutyPunches:'Approve/reject Duty punches',manageDutyHours:'Manually manage Duty Hours',manageDutyRequirements:'Set Duty requirements',certifyDutyHours:'Generate Duty certification',manageSettings:'Manage system settings',manageInventory:'Manage inventory',manageData:'Import/export/clear data',manageRecovery:'Manage recovery points',viewSystemHealth:'View System Administration',writeActivityLog:'Write audit activity',selfDutyPunch:'Submit personal Duty punches',manageAccessibility:'Use accessibility controls'
   };
   function renderPermissionMatrix() {
     const head = el('permissionMatrixHead'); const body = el('permissionMatrixBody'); if (!head || !body) return;
@@ -261,7 +257,7 @@
     head.innerHTML = `<tr><th scope="col">Permission</th>${roles.map((roleName)=>`<th scope="col">${safeText(roleName)}</th>`).join('')}</tr>`;
     const rows=[];
     rows.push(`<tr class="permission-category-row"><th colspan="${roles.length+1}">Module access</th></tr>`);
-    const viewLabels={dashboardView:'Dashboard',membersView:'Members',lookupView:'Members Overall Record',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',alertsView:'Action Center',accountsView:'Accounts',systemHealthView:'System Health',dataView:'Data & Recovery'};
+    const viewLabels={dashboardView:'Dashboard',membersView:'Members',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',accountsView:'Accounts',systemHealthView:'System Administration',dataView:'Data & Recovery'};
     const allViews=[...new Set(Object.values(manifest.views||{}).flat())];
     allViews.forEach((viewId)=>rows.push(`<tr><th scope="row">${safeText(viewLabels[viewId]||viewId)}</th>${roles.map((roleName)=>{const granted=(manifest.views?.[roleName]||[]).includes(viewId);return `<td><span class="${granted?'permission-granted':'permission-denied'}" aria-label="${granted?'Allowed':'Not allowed'}">${granted?'Yes':'—'}</span></td>`;}).join('')}</tr>`));
     rows.push(`<tr class="permission-category-row"><th colspan="${roles.length+1}">Action permissions</th></tr>`);
@@ -270,7 +266,7 @@
   }
   function exportPermissionMatrix() {
     const roles=Object.values(CORE.ROLES||{});const manifest=window.LSORoleAccess?.permissionManifest?.()||CORE.PERMISSIONS||{actions:{},views:{}};const rows=[['Category','Permission',...roles]];
-    const viewLabels={dashboardView:'Dashboard',membersView:'Members',lookupView:'Members Overall Record',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',alertsView:'Action Center',accountsView:'Accounts',systemHealthView:'System Health',dataView:'Data & Recovery'};
+    const viewLabels={dashboardView:'Dashboard',membersView:'Members',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',accountsView:'Accounts',systemHealthView:'System Administration',dataView:'Data & Recovery'};
     [...new Set(Object.values(manifest.views||{}).flat())].forEach((viewId)=>rows.push(['Module',viewLabels[viewId]||viewId,...roles.map((roleName)=>(manifest.views?.[roleName]||[]).includes(viewId)?'Allowed':'Not allowed')]));
     Object.entries(manifest.actions||{}).forEach(([action,allowedRoles])=>rows.push(['Action',permissionLabels[action]||action,...roles.map((roleName)=>(allowedRoles||[]).includes(roleName)?'Allowed':'Not allowed')]));
     download(`LSO_Role_Permission_Matrix_${todayPH()}.csv`,rows.map((row)=>row.map(csvEscape).join(',')).join('\n'),'text/csv');
@@ -282,86 +278,19 @@
     try {
       if (!window.LSOCloud?.getSystemHealth) throw new Error('The website health connector is unavailable. Upload the complete enterprise package.');
       lastHealth = await window.LSOCloud.getSystemHealth();
-      try { serverErrors = await window.LSOCloud.listSystemErrors(100); } catch { serverErrors = []; }
-      renderHealthVersions(lastHealth); renderHealthChecks(lastHealth); renderMigrations(lastHealth); renderHealthCounts(lastHealth); renderSystemErrors(); renderHealthWorkflowSummary(lastHealth);
+      renderHealthVersions(lastHealth); renderHealthChecks(lastHealth); renderMigrations(lastHealth); renderHealthCounts(lastHealth); renderHealthWorkflowSummary(lastHealth);
       window.dispatchEvent(new CustomEvent('lso:system-health-changed', { detail: clone(lastHealth) }));
-      if (!quiet) toast('System health check completed.');
+      if (!quiet) toast('System diagnostics completed.');
     } catch (error) {
       lastHealth = null; renderHealthVersions(); renderHealthChecks(); renderMigrations(); renderHealthCounts(); renderHealthWorkflowSummary();
-      reportError({ module: 'System Health', publicMessage: 'The website could not verify the database schema. Run LSO_MASTER_MIGRATION_INSTALLER.sql in Supabase, then refresh.', technicalMessage: error.message, errorCode: CORE.ERROR_CODES?.MIGRATION || 'DB-MIGRATION-004' }, { show: !quiet });
-    } finally { if (button) { button.disabled = false; button.textContent = 'Run Health Check'; } }
+      reportError({ module: 'System Administration', publicMessage: 'System diagnostics could not verify the shared database compatibility. Check the migration status and connection, then try again.', technicalMessage: error.message, errorCode: CORE.ERROR_CODES?.MIGRATION || 'DB-MIGRATION-004' }, { show: !quiet });
+    } finally { if (button) { button.disabled = false; button.textContent = 'Run Diagnostics'; } }
   }
   function copyHealthReport() {
     const report = { website: VERSION, database: lastHealth || null, generatedAt: new Date().toISOString(), browser: navigator.userAgent, online: navigator.onLine };
     const text = JSON.stringify(report, null, 2);
-    navigator.clipboard?.writeText(text).then(() => toast('Health report copied.')).catch(() => download(`LSO_Health_Report_${todayPH()}.json`, text, 'application/json'));
+    navigator.clipboard?.writeText(text).then(() => toast('Diagnostics report copied.')).catch(() => download(`LSO_System_Diagnostics_${todayPH()}.json`, text, 'application/json'));
   }
-  function combinedSystemErrors() {
-    const overrides = resolutionOverrides();
-    const server = (Array.isArray(serverErrors) ? serverErrors : []).map((record) => ({ ...record, _source: 'server', _override: overrides[String(record.id || '')] || null }));
-    const serverKeys = new Set(server.map((record) => `${record.error_code || record.errorCode}|${record.module || 'System'}|${record.public_message || record.publicMessage || ''}`));
-    const local = localErrors().filter((record) => !serverKeys.has(`${record.error_code || record.errorCode}|${record.module || 'System'}|${record.public_message || record.publicMessage || ''}`)).map((record) => ({ ...record, _source: 'local' }));
-    return [...server, ...local].sort((a, b) => String(b.created_at || b.createdAt || '').localeCompare(String(a.created_at || a.createdAt || ''))).slice(0, 100);
-  }
-  function errorResolved(record) { return Boolean(record.resolved_at || record.resolvedAt || record._override?.resolvedAt); }
-  function effectiveUnresolvedErrors(health = lastHealth) {
-    const combined = combinedSystemErrors();
-    if (combined.length) return combined.filter((record) => !errorResolved(record)).length;
-    return Math.max(0, Number(health?.counts?.unresolvedErrors || 0));
-  }
-  function renderSystemErrors() {
-    const container = el('systemErrorLog'); if (!container) return;
-    const all = combinedSystemErrors();
-    const combined = systemErrorFilter === 'open' ? all.filter((record) => !errorResolved(record)) : all;
-    container.innerHTML = combined.length ? combined.map((record) => {
-      const resolved = errorResolved(record);
-      const id = record.id || '';
-      const note = record.resolution_note || record.resolutionNote || record._override?.note || '';
-      const resolvedAt = record.resolved_at || record.resolvedAt || record._override?.resolvedAt || '';
-      const sourceLabel = record._source === 'server' ? 'Shared log' : 'This device';
-      return `<article class="system-error-record ${resolved ? 'is-resolved' : 'is-unresolved'}"><div class="system-error-record-header"><div><h4>${safeText(record.error_code || record.errorCode || 'SYS-UNEXPECTED-999')} • ${safeText(record.module || 'System')}</h4><div class="system-error-meta"><span>${safeText(dateTimeLabel(record.created_at || record.createdAt))}</span><span>${safeText(record.created_by_username || record.username || 'Local device')}</span><span>${safeText(sourceLabel)}</span></div></div><span class="badge ${resolved ? 'badge-green' : 'badge-red'}">${resolved ? 'Resolved' : 'Open'}</span></div><p class="system-error-message">${safeText(record.public_message || record.publicMessage || '')}</p>${resolved ? `<div class="system-error-resolution"><strong>Resolution recorded</strong><small>${safeText(note || 'No note provided.')} • ${safeText(dateTimeLabel(resolvedAt))}</small></div>` : ''}${isAdmin() && !resolved && id ? `<div class="system-error-actions"><button class="button button-secondary" data-resolve-system-error="${safeText(id)}" data-error-source="${safeText(record._source)}" type="button">Mark Resolved</button></div>` : ''}</article>`;
-    }).join('') : `<div class="system-error-empty"><strong>${systemErrorFilter === 'open' ? 'No open system errors' : 'No system errors recorded'}</strong><p>${systemErrorFilter === 'open' ? 'The current error-resolution queue is clear.' : 'The error log is clear.'}</p></div>`;
-    el('showOpenSystemErrorsButton')?.classList.toggle('button-primary', systemErrorFilter === 'open');
-    el('showAllSystemErrorsButton')?.classList.toggle('button-primary', systemErrorFilter === 'all');
-  }
-  async function resolveSystemError(id, source = 'server') {
-    const note = window.prompt('Enter a brief resolution note:'); if (note === null) return;
-    const trimmedNote = note.trim();
-    if (!trimmedNote) { toast('Enter a short resolution note before closing the error.', true); return; }
-    try {
-      if (source === 'local') {
-        const records = localErrors();
-        const index = records.findIndex((record) => String(record.id) === String(id));
-        if (index < 0) throw new Error('The local error record is no longer available.');
-        records[index] = { ...records[index], resolvedAt: new Date().toISOString(), resolvedBy: currentAccount()?.username || 'Administrator', resolutionNote: trimmedNote };
-        saveLocalErrors(records);
-      } else {
-        if (!window.LSOCloud?.resolveSystemError) throw new Error('The shared error-resolution connector is unavailable.');
-        const result = await window.LSOCloud.resolveSystemError(id, trimmedNote);
-        if (result === false || result?.ok === false) throw new Error(result?.message || 'The shared error record was not marked resolved.');
-        saveResolutionOverride(id, trimmedNote);
-        try { serverErrors = await window.LSOCloud.listSystemErrors(100); } catch { /* Keep current list and local confirmation. */ }
-      }
-      const unresolved = effectiveUnresolvedErrors(lastHealth);
-      if (lastHealth) lastHealth = { ...lastHealth, counts: { ...(lastHealth.counts || {}), unresolvedErrors: unresolved } };
-      renderSystemErrors();
-      renderHealthCounts(lastHealth);
-      renderHealthWorkflowSummary(lastHealth);
-      window.dispatchEvent(new CustomEvent('lso:system-health-changed', { detail: clone(lastHealth || { counts: { unresolvedErrors: unresolved } }) }));
-      window.LSOOperations?.logActivity?.('Resolved system error', 'System Health', `${id} • ${source} • ${trimmedNote}`);
-      toast('System error marked resolved.');
-    } catch (error) {
-      console.error('Unable to resolve system error:', error);
-      toast(error.message || 'The error record could not be resolved.', true);
-    }
-  }
-  function exportErrors() {
-    const combined = combinedSystemErrors();
-    const rows = [['Error Code','Severity','Module','Message','Technical Details','Created At','Created By','Source','Resolved At','Resolution Note']];
-    combined.forEach((r) => rows.push([r.error_code || r.errorCode, r.severity, r.module, r.public_message || r.publicMessage, r.technical_message || r.technicalMessage, r.created_at || r.createdAt, r.created_by_username || r.username, r._source, r.resolved_at || r.resolvedAt || r._override?.resolvedAt, r.resolution_note || r.resolutionNote || r._override?.note]));
-    download(`LSO_System_Errors_${todayPH()}.csv`, rows.map((row) => row.map(csvEscape).join(',')).join('\n'), 'text/csv');
-  }
-
 
   // ---------------------------------------------------------------------------
   // Automated backup and recovery
@@ -387,7 +316,7 @@
   async function refreshRecoveryPoints({ quiet = false } = {}) {
     if (!isAdmin()) return;
     try { recoveryPoints = await window.LSOCloud?.listRecoveryPoints?.() || []; renderRecoveryPoints(); if (!quiet) toast('Recovery history refreshed.'); }
-    catch (error) { recoveryPoints = []; renderRecoveryPoints(); if (!quiet) reportError({ module: 'Backup & Recovery', publicMessage: 'Recovery points are unavailable. Run the master migration installer in Supabase.', technicalMessage: error.message, errorCode: CORE.ERROR_CODES?.MIGRATION || 'DB-MIGRATION-004' }); }
+    catch (error) { recoveryPoints = []; renderRecoveryPoints(); renderRecoveryWorkspaceStatus(); if (!quiet) toast('Server recovery points are unavailable. Complete portable backup remains available.', true); }
   }
   async function restoreRecovery(id) {
     const point = recoveryPoints.find((item) => String(item.id) === String(id)); if (!point) return;
@@ -431,7 +360,7 @@
       element.dataset.enterpriseRecoveryPrepared = 'true';
       if (event.type === 'click') element.click(); else element.dispatchEvent(new Event(event.type, { bubbles: true }));
       return true;
-    } catch (error) { reportError({ module: 'Backup & Recovery', publicMessage: 'The operation was stopped because a safe recovery point could not be created.', technicalMessage: error.message, errorCode: CORE.ERROR_CODES?.BACKUP || 'DATA-BACKUP-006' }); return false; }
+    } catch (error) { setView('dataView'); setRecoveryPanel('backup'); toast('The operation was paused because server recovery protection is unavailable. Download a Complete System Backup, then retry.', true); setTimeout(()=>el('backupCompleteSystem')?.focus(),80); return false; }
   }
 
   // ---------------------------------------------------------------------------
@@ -550,8 +479,8 @@
     const notifications=[];const account=currentAccount();const accountRole=role();const data=dutyData();
     const dutyTarget=(entry,punchType)=>`${entry.id}::${punchType}`;
 
-    // Reviewer-facing pending punch alerts are generated by the Action Center so
-    // the notification center and workflow list share one permission-aware source.
+    // Reviewer-facing pending punch alerts are generated by the notification workflow so
+    // the notification center and Duty Hours review use one permission-aware source.
     // This block adds private status updates only for the submitting trainee account.
     if(accountRole==='Trainee/Probationary'){
       const ownerEntries=(data.entries||[]).filter((entry)=>entry.memberId===account?.memberId||entry.submittedByAccountId===account?.id||entry.submittedByUsername===account?.username);
@@ -567,10 +496,51 @@
       });
     }
 
-    const unresolvedHealthErrors=effectiveUnresolvedErrors(lastHealth);const failedHealthChecks=(lastHealth?.checks||[]).filter((check)=>!check.ok).length;if(isAdmin()&&lastHealth&&(unresolvedHealthErrors>0||failedHealthChecks>0))notifications.push({id:'enterprise-system-health',category:'System Health',severity:'high',title:'System Health needs attention',detail:`${unresolvedHealthErrors} unresolved error${unresolvedHealthErrors===1?'':'s'} and ${failedHealthChecks} compatibility check${failedHealthChecks===1?'':'s'} require review.`,timestamp:lastHealth.stateUpdatedAt||lastHealth.checkedAt||'',actionType:'system-health',targetId:'',icon:'!'});
+    const failedHealthChecks=(lastHealth?.checks||[]).filter((check)=>!check.ok).length;if(isAdmin()&&lastHealth&&failedHealthChecks>0)notifications.push({id:'enterprise-system-administration',category:'System Administration',severity:'high',title:'System diagnostics need attention',detail:`${failedHealthChecks} compatibility check${failedHealthChecks===1?'':'s'} require review.`,timestamp:lastHealth.stateUpdatedAt||lastHealth.checkedAt||'',actionType:'system-health',targetId:'diagnostics',icon:'!'});
     return notifications;
   }
 
+  // ---------------------------------------------------------------------------
+  // Data & Recovery workspace
+  // ---------------------------------------------------------------------------
+  let activeRecoveryPanel = 'backup';
+  const LAST_PORTABLE_BACKUP_KEY = 'lso_last_portable_backup_v73';
+  function setRecoveryPanel(panelName = 'backup') {
+    const available = ['backup', 'recovery', 'transfer', 'governance'];
+    activeRecoveryPanel = available.includes(panelName) ? panelName : 'backup';
+    qsa('[data-recovery-panel]').forEach((button) => {
+      const active = button.dataset.recoveryPanel === activeRecoveryPanel;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
+    });
+    qsa('[data-recovery-workflow-panel]').forEach((panel) => {
+      const active = panel.dataset.recoveryWorkflowPanel === activeRecoveryPanel;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
+    });
+    renderRecoveryWorkspaceStatus();
+  }
+  function renderRecoveryWorkspaceStatus() {
+    const host = el('v73RecoveryStatusCards');
+    if (!host) return;
+    const lastPortable = localStorage.getItem(LAST_PORTABLE_BACKUP_KEY) || '';
+    const sharedStatus = window.LSOCloud?.isOnline?.() === false || !navigator.onLine ? 'Offline' : 'Connected';
+    const recoveryStatus = window.LSOCloud?.createRecoveryPoint ? 'Available' : 'Portable backup only';
+    const cards = [
+      { icon: 'DB', label: 'Shared Database', value: sharedStatus, note: sharedStatus === 'Connected' ? 'Cloud operations are available.' : 'Reconnect before shared recovery actions.', tone: sharedStatus === 'Connected' ? 'success' : 'warning' },
+      { icon: 'BK', label: 'Portable Backup', value: lastPortable ? dateTimeLabel(lastPortable) : 'Not created yet', note: lastPortable ? 'Latest complete-system download on this browser.' : 'Create a complete-system backup before major changes.', tone: lastPortable ? 'success' : 'neutral' },
+      { icon: 'RP', label: 'Server Recovery', value: recoveryStatus, note: recoveryPoints.length ? `${recoveryPoints.length} recovery point${recoveryPoints.length===1?'':'s'} available.` : 'Refresh Recovery Points to verify server history.', tone: recoveryStatus === 'Available' ? 'success' : 'neutral' },
+      { icon: 'V', label: 'System Version', value: `v${VERSION.app}`, note: VERSION.build, tone: 'info' }
+    ];
+    host.innerHTML = cards.map((card) => `<article class="data-recovery-status-card is-${safeText(card.tone)}"><span class="data-recovery-status-icon">${safeText(card.icon)}</span><div><span>${safeText(card.label)}</span><strong>${safeText(card.value)}</strong><small>${safeText(card.note)}</small></div></article>`).join('');
+    if (el('v73LastPortableBackup')) el('v73LastPortableBackup').textContent = lastPortable ? `Last complete backup: ${dateTimeLabel(lastPortable)}` : 'No complete portable backup has been recorded on this browser yet.';
+  }
+  function recordPortableBackup() {
+    const now = new Date().toISOString();
+    try { localStorage.setItem(LAST_PORTABLE_BACKUP_KEY, now); } catch { /* no-op */ }
+    renderRecoveryWorkspaceStatus();
+  }
   // ---------------------------------------------------------------------------
   // Event wiring
   // ---------------------------------------------------------------------------
@@ -580,8 +550,9 @@
   }
   function wireEvents() {
     el('accessibilityButton')?.addEventListener('click',openAccessibility);el('closeAccessibilityButton')?.addEventListener('click',closeAccessibility);el('accessibilityOverlay')?.addEventListener('click',closeAccessibility);el('saveAccessibilityButton')?.addEventListener('click',saveAccessibility);el('resetAccessibilityButton')?.addEventListener('click',resetAccessibility);
-    el('dismissSystemErrorButton')?.addEventListener('click',closeErrorDialog);el('copySystemErrorButton')?.addEventListener('click',copyErrorDetails);el('openHealthFromErrorButton')?.addEventListener('click',()=>{closeErrorDialog();setView('systemHealthView');setHealthPanel('errors');setTimeout(()=>refreshSystemHealth(),50);});
-    el('refreshSystemHealthButton')?.addEventListener('click',()=>refreshSystemHealth());el('copyHealthReportButton')?.addEventListener('click',copyHealthReport);el('exportSystemErrorsButton')?.addEventListener('click',exportErrors);el('exportPermissionMatrixButton')?.addEventListener('click',exportPermissionMatrix);
+    qsa('[data-theme-choice]').forEach((button)=>button.addEventListener('click',()=>{const theme=button.dataset.themeChoice==='night'?'night':'light';if(el('accessibilityTheme'))el('accessibilityTheme').value=theme;applyAccessibility({...loadAccessibility(),theme});}));
+    el('dismissSystemErrorButton')?.addEventListener('click',closeErrorDialog);el('copySystemErrorButton')?.addEventListener('click',copyErrorDetails);el('openHealthFromErrorButton')?.addEventListener('click',()=>{closeErrorDialog();setView('systemHealthView');setHealthPanel('diagnostics');setTimeout(()=>refreshSystemHealth(),50);});
+    el('refreshSystemHealthButton')?.addEventListener('click',()=>refreshSystemHealth());el('copyHealthReportButton')?.addEventListener('click',copyHealthReport);el('exportPermissionMatrixButton')?.addEventListener('click',exportPermissionMatrix);
     const healthButtons=qsa('[data-health-panel]');
     healthButtons.forEach((button,index)=>{
       button.addEventListener('click',()=>setHealthPanel(button.dataset.healthPanel));
@@ -594,10 +565,9 @@
         next.focus();
       });
     });
-    el('showOpenSystemErrorsButton')?.addEventListener('click',()=>{systemErrorFilter='open';renderSystemErrors();});
-    el('showAllSystemErrorsButton')?.addEventListener('click',()=>{systemErrorFilter='all';renderSystemErrors();});
-    el('systemErrorLog')?.addEventListener('click',(event)=>{const button=event.target.closest('[data-resolve-system-error]');if(button)resolveSystemError(button.dataset.resolveSystemError,button.dataset.errorSource||'server');});
-    el('createRecoveryPointButton')?.addEventListener('click',async()=>{const label=window.prompt('Recovery point label:','Manual recovery point');if(label===null)return;const reason=window.prompt('Reason or note (optional):','');try{await createRecoveryPoint(label,reason||'',{type:'manual'});toast('Recovery point created.');}catch(error){reportError({module:'Backup & Recovery',publicMessage:'The recovery point could not be created.',technicalMessage:error.message,errorCode:CORE.ERROR_CODES?.BACKUP||'DATA-BACKUP-006'});}});
+    const recoveryButtons=qsa('[data-recovery-panel]');
+    recoveryButtons.forEach((button,index)=>{button.addEventListener('click',()=>setRecoveryPanel(button.dataset.recoveryPanel));button.addEventListener('keydown',(event)=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const nextIndex=event.key==='Home'?0:event.key==='End'?recoveryButtons.length-1:(index+(event.key==='ArrowRight'?1:-1)+recoveryButtons.length)%recoveryButtons.length;const next=recoveryButtons[nextIndex];setRecoveryPanel(next.dataset.recoveryPanel);next.focus();});});
+    el('createRecoveryPointButton')?.addEventListener('click',async()=>{const label=window.prompt('Recovery point label:','Manual recovery point');if(label===null)return;const reason=window.prompt('Reason or note (optional):','');try{await createRecoveryPoint(label,reason||'',{type:'manual'});renderRecoveryWorkspaceStatus();toast('Recovery point created.');}catch(error){setRecoveryPanel('backup');toast('Server recovery is unavailable. Create a Complete System Backup instead.',true);el('backupCompleteSystem')?.focus();}});
     el('refreshRecoveryPointsButton')?.addEventListener('click',()=>refreshRecoveryPoints());el('recoveryPointList')?.addEventListener('click',(event)=>{const restore=event.target.closest('[data-restore-recovery]');const remove=event.target.closest('[data-delete-recovery]');if(restore)restoreRecovery(restore.dataset.restoreRecovery);if(remove)deleteRecovery(remove.dataset.deleteRecovery);});
     el('validateBackupFile')?.addEventListener('change',(event)=>validateBackupFile(event.target.files?.[0]));
     el('applyDefaultDutyRequirements')?.addEventListener('click',applyDefaultDutyRequirements);el('printDutyCertification')?.addEventListener('click',printDutyCertification);
@@ -606,7 +576,7 @@
     document.addEventListener('click',(event)=>{const target=event.target.closest?.('#monthlyReportView [data-monthly-write]');if(target&&monthlyReport()?.workflowStatus==='Finalized'){event.preventDefault();event.stopImmediatePropagation();toast('This Monthly Report is finalized. An Administrator must reopen it before editing.',true);}},true);
     document.addEventListener('input',(event)=>{if(event.target.closest?.('#monthlyReportView')&&event.target.matches?.('[data-monthly-edit]')&&monthlyReport()?.workflowStatus==='Finalized'){event.preventDefault();event.stopImmediatePropagation();window.LSOMonthlyReport?.refresh?.();toast('This Monthly Report is finalized and locked.',true);}},true);
     document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click',()=>setTimeout(()=>refreshSystemHealth({quiet:true}),50));
-    document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>refreshRecoveryPoints({quiet:true}),50));
+    document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>{setRecoveryPanel(activeRecoveryPanel);refreshRecoveryPoints({quiet:true});renderRecoveryWorkspaceStatus();},50));
     ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-duty-enhancements',renderDutyEnhancements,120,{viewId:'dutyHoursView'})));
     ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-monthly-workflow',renderMonthlyWorkflow,120,{viewId:'monthlyReportView'})));
     window.addEventListener('lso:system-error',(event)=>{
@@ -630,12 +600,12 @@
   }
   function initialize() {
     if (el('systemVersionFooter')) el('systemVersionFooter').textContent = `LSO System v${VERSION.app} • Database target ${String(VERSION.schemaTarget || '').split('_')[0] || '—'}`;
-    applyAccessibility();injectDutySettings();renderDutySettings();renderHealthVersions();renderHealthChecks();renderMigrations();renderHealthCounts();renderPermissionMatrix();renderRecoveryPoints();renderSystemErrors();renderDutyEnhancements();renderMonthlyWorkflow();wireEvents();setHealthPanel(activeHealthPanel);renderHealthWorkflowSummary();
+    applyAccessibility();injectDutySettings();renderDutySettings();renderHealthVersions();renderHealthChecks();renderMigrations();renderHealthCounts();renderPermissionMatrix();renderRecoveryPoints();renderDutyEnhancements();renderMonthlyWorkflow();wireEvents();setHealthPanel(activeHealthPanel);setRecoveryPanel(activeRecoveryPanel);renderHealthWorkflowSummary();renderRecoveryWorkspaceStatus();
     window.dispatchEvent(new CustomEvent('lso:enterprise-ready', { detail: { version: VERSION } }));
     if(isAdmin()){setTimeout(()=>{ensureDailyRecovery();refreshSystemHealth({quiet:true});refreshRecoveryPoints({quiet:true});},900);}
   }
 
-  window.LSOEnterprise = { VERSION, reportError, getNotifications: enterpriseNotifications, refreshHealth: refreshSystemHealth, refreshRecovery: refreshRecoveryPoints, applyAccessibility, validateBackupObject, renderDutyEnhancements, renderMonthlyWorkflow };
+  window.LSOEnterprise = { VERSION, reportError, getNotifications: enterpriseNotifications, refreshHealth: refreshSystemHealth, refreshRecovery: refreshRecoveryPoints, applyAccessibility, validateBackupObject, renderDutyEnhancements, renderMonthlyWorkflow, setRecoveryPanel, renderRecoveryWorkspaceStatus };
   window.addEventListener('lso:permissions-changed',()=>setTimeout(()=>{renderPermissionMatrix();window.LSORolePermissionCenter?.render?.();},20));
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
 })();

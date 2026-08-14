@@ -9,19 +9,16 @@
   const VIEW_DEFS = [
     ['dashboardView','Dashboard','Operational overview, quick actions, workflow cards, alerts, and live summaries.'],
     ['membersView','Members','Member directory, stage monitoring, profile information, and member photo management.'],
-    ['lookupView','Members Overall Record','Unified member profile with contracts, Monthly Reports, Attendance, Duty Hours, corrections, PDF preview, and PDF download.'],
-    ['documentsView','Document Center','Centralized access to member overview PDFs, contracts, finalized Attendance archives, Monthly Reports, and Duty Hours documents.'],
     ['contractView','Contract','Membership contract preparation, preview, generation, and tracked contract output.'],
     ['monthlyReportView','Monthly Report','Three-phase monthly filing, validation, PDF preview/download, finalization, and report archive.'],
     ['attendanceView','Attendance','Activity creation, Official/Trainee/Probationary rosters, LOA/Excused rules, Review, Finalize, Archive, revisions, and semester ratings.'],
     ['dutyHoursView','Duty Hours','Trainee/Probationary live rosters, Time In/Out punches, approvals, manual ledgers, archives, totals, and certifications.'],
-    ['alertsView','Action Center','Notification Inbox, workflow alerts, exact-record routing, and follow-up actions.'],
     ['accountsView','Accounts','Security owner area for account approval, role assignment, activation, and account maintenance.'],
-    ['systemHealthView','System Health','Security owner area for diagnostics, Role Management, Audit Trail, Data Quality, Maintenance Mode, and Error Resolution.'],
-    ['dataView','Data & Recovery','Security owner area for system settings, backup, restore, recovery points, imports, and controlled clearing.']
+    ['systemHealthView','System Administration','Security owner area for diagnostics, Role Management, Maintenance Mode, and protected system controls.'],
+    ['dataView','Data & Recovery','Security owner protection workspace for backup, validation, recovery points, restore, data transfer, Data Quality, Audit Trail, and deployment integrity.']
   ];
   const ACTION_DEFS = [
-    ['manageMembers','Manage member & Overall Records','Add/edit member profiles and photos, and correct member-linked Overall Record data through its source workflow.'],
+    ['manageMembers','Manage member records & photos','Add and edit member profiles, membership details, and profile photos.'],
     ['generateContract','Generate contracts','Prepare, preview, download, and regenerate official membership contracts.'],
     ['editMonthlyReport','Edit Monthly Reports','Create, revise, and save three-phase Monthly Report filing information.'],
     ['finalizeMonthlyReport','Finalize & manage Monthly Report outputs','Finalize/reopen reports and control the validated Monthly Report archive output.'],
@@ -43,8 +40,7 @@
     ['manageInventory','Manage inventory','Protected legacy inventory maintenance permission.'],
     ['manageData','Import/export/clear data','Protected security-owner data administration permission.'],
     ['manageRecovery','Manage recovery points','Protected security-owner backup and restore permission.'],
-    ['viewSystemHealth','View System Health','Protected security-owner diagnostics and compatibility information.'],
-    ['manageSystemErrors','Resolve system errors','Protected security-owner System Error Log resolution permission.']
+    ['viewSystemHealth','View System Administration','Protected security-owner diagnostics and compatibility information.'],
   ];
   const GROUP_DEFS = [
     ['Official Members','Official Members Calendar'],
@@ -52,7 +48,7 @@
     ['Probationary Members','Probationary Members Calendar']
   ];
   const PROTECTED_VIEWS = new Set(['accountsView','systemHealthView','dataView']);
-  const PROTECTED_ACTIONS = new Set(['manageAccounts','manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth','manageSystemErrors']);
+  const PROTECTED_ACTIONS = new Set(['manageAccounts','manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth']);
   const ROLE_RESTRICTED_ACTIONS = {
     // Self-service Duty punches require a linked Trainee/Probationary account.
     // All other operational permissions are assigned by the Administrator.
@@ -177,7 +173,7 @@
     if (el('permissionEditorProtectionNote')) {
       el('permissionEditorProtectionNote').innerHTML = roleName === ADMIN
         ? '<strong>Administrator is protected.</strong> Full access and Dashboard landing cannot be removed, preventing system lockout.'
-        : '<strong>Administrator-controlled operational access:</strong> Every supported operational permission is open for assignment. Accounts, System Health, Data & Recovery, and identity-bound self-service remain protected because their server functions are security-owner controls.';
+        : '<strong>Administrator-controlled operational access:</strong> Every supported operational permission is open for assignment. Accounts, System Administration, Data & Recovery, and identity-bound self-service remain protected because their server functions are security-owner controls.';
     }
     updateSummary();
   }

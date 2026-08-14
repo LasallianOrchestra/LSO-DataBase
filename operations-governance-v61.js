@@ -35,31 +35,31 @@
   const TEMPLATE_DEFS = Object.freeze({
     membership: {
       label: 'Membership Operations', landing: 'dashboardView',
-      views: ['dashboardView','membersView','lookupView','documentsView','contractView','monthlyReportView','attendanceView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','contractView','monthlyReportView','attendanceView','dutyHoursView'],
       actions: ['manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     secretary: {
       label: 'General Secretary Operations', landing: 'dashboardView',
-      views: ['dashboardView','membersView','lookupView','documentsView','attendanceView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','attendanceView','dutyHoursView'],
       actions: ['manageEvents','saveDraftAttendance','reviewDutyPunches','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     attendance: {
       label: 'Attendance Officer', landing: 'attendanceView',
-      views: ['dashboardView','membersView','lookupView','documentsView','attendanceView','alertsView'],
+      views: ['dashboardView','membersView','attendanceView'],
       actions: ['manageEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance','writeActivityLog','manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
     duty: {
       label: 'Duty Hours Reviewer', landing: 'dutyHoursView',
-      views: ['dashboardView','membersView','lookupView','documentsView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','dutyHoursView'],
       actions: ['reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'],
       groups: []
     },
     monitor: {
       label: 'Read-only Operations Monitor', landing: 'dashboardView',
-      views: ['dashboardView','membersView','lookupView','documentsView','attendanceView','dutyHoursView','alertsView'],
+      views: ['dashboardView','membersView','attendanceView','dutyHoursView'],
       actions: ['manageAccessibility'],
       groups: ['Official Members','Trainee Members','Probationary Members']
     },
@@ -501,7 +501,7 @@
     if (action === 'duty') { window.LSOOperations?.openDutyRecord?.(targetId, ''); return; }
     if (action === 'accounts') { window.LSODashboardNotifications?.performNotificationAction?.('accounts', targetId); return; }
     if (action === 'monthly-report') { window.LSODashboardNotifications?.performNotificationAction?.('monthly-report', targetId); return; }
-    if (action === 'data' || action === 'data-quality') { window.LSOApp?.setView?.('dataView'); setTimeout(() => el('dataQualityCenter')?.scrollIntoView({block:'start',behavior:'smooth'}),60); return; }
+    if (action === 'data' || action === 'data-quality') { window.LSOApp?.setView?.('dataView'); setTimeout(() => { window.LSOEnterprise?.setRecoveryPanel?.('governance'); el('dataQualityCenter')?.scrollIntoView({block:'start',behavior:'smooth'}); },60); return; }
     if (action === 'maintenance') { window.LSOApp?.setView?.('systemHealthView'); setTimeout(() => { document.querySelector('[data-health-panel="access"]')?.click(); el('maintenanceModePanel')?.scrollIntoView({block:'center',behavior:'smooth'}); },60); }
   }
   function download(filename, content, type) { const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500); }
@@ -525,7 +525,7 @@
       if(read)setNotificationStatus(fp,'read',!row.read); if(resolve)setNotificationStatus(fp,'resolved',!row.resolved); if(archive)setNotificationStatus(fp,'archived',!row.archived);
     });
     document.querySelector('[data-view="dataView"]')?.addEventListener('click', () => { setTimeout(() => { renderAuditTrail(); renderDataQuality(); }, 40); });
-    document.querySelector('[data-view="alertsView"]')?.addEventListener('click', () => setTimeout(renderNotificationInbox, 40));
+    
     document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click', () => setTimeout(() => { permissionTemplateOptions(); renderMaintenanceSettings(); }, 50));
   }
   function scheduleAuditRender() { clearTimeout(auditRenderTimer); auditRenderTimer=setTimeout(()=>{if(window.LSORuntimeStability?.isViewActive?.('dataView'))renderAuditTrail();},100); }
@@ -540,7 +540,7 @@
   }
   function initialize() {
     installAuditStorageInterceptor(); wireUi(); wireEvents(); renderMaintenanceSettings(); applyMaintenanceMode();
-    setTimeout(()=>{if(window.LSORuntimeStability?.isViewActive?.('dataView')){renderAuditTrail();renderDataQuality();}if(window.LSORuntimeStability?.isViewActive?.('alertsView'))renderNotificationInbox();window.LSODashboardNotifications?.renderNotifications?.();},350);
+    setTimeout(()=>{if(window.LSORuntimeStability?.isViewActive?.('dataView')){renderAuditTrail();renderDataQuality();}window.LSODashboardNotifications?.renderNotifications?.();},350);
     window.dispatchEvent(new CustomEvent('lso:v61-ready',{detail:{version:VERSION}}));
   }
 

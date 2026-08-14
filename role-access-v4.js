@@ -53,7 +53,7 @@
       const roleName = String(row?.roleName || row?.role || '');
       if (!Object.values(ROLES).includes(roleName) || roleName === ROLES.ADMIN) return;
 
-      next.views[roleName] = normalizeList(row.views);
+      next.views[roleName] = normalizeList(row.views).filter((viewId) => Boolean(document.getElementById(viewId)));
       next.columns[roleName] = normalizeList(row.columns);
       next.attendanceGroups[roleName] = normalizeList(row.attendanceGroups);
       actionKeys.forEach((action) => {

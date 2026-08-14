@@ -118,9 +118,9 @@
         <div class="readiness-copy"><h4>${data.averageQuality >= 90 ? 'Records are in strong shape' : data.averageQuality >= 70 ? 'Some profiles need attention' : 'Record completion needs action'}</h4><p>Completeness is calculated from the required member-profile fields already used by the database.</p></div>
       </div>
       <div class="readiness-list">
-        <button class="readiness-item" data-readiness-action="alerts" type="button"><span class="readiness-icon">!</span><span><strong>Incomplete profiles</strong><small>Below 90% record completeness</small></span><b class="readiness-value">${data.incomplete}</b></button>
-        <button class="readiness-item" data-readiness-action="alerts" type="button"><span class="readiness-icon">ID</span><span><strong>Missing gender entry</strong><small>Not included as Male or Female</small></span><b class="readiness-value">${data.missingGender}</b></button>
-        <button class="readiness-item" data-readiness-action="alerts" type="button"><span class="readiness-icon">↻</span><span><strong>Profiles due for review</strong><small>For Review or Overdue</small></span><b class="readiness-value">${data.reviewDue}</b></button>
+        <button class="readiness-item" data-readiness-action="members" type="button"><span class="readiness-icon">!</span><span><strong>Incomplete profiles</strong><small>Below 90% record completeness</small></span><b class="readiness-value">${data.incomplete}</b></button>
+        <button class="readiness-item" data-readiness-action="members" type="button"><span class="readiness-icon">ID</span><span><strong>Missing gender entry</strong><small>Not included as Male or Female</small></span><b class="readiness-value">${data.missingGender}</b></button>
+        <button class="readiness-item" data-readiness-action="members" type="button"><span class="readiness-icon">↻</span><span><strong>Profiles due for review</strong><small>For Review or Overdue</small></span><b class="readiness-value">${data.reviewDue}</b></button>
         <button class="readiness-item" data-readiness-action="attendance" type="button"><span class="readiness-icon">7D</span><span><strong>Activities in the next 7 days</strong><small>Upcoming rehearsals and events</small></span><b class="readiness-value">${data.nextSevenDays}</b></button>
         ${accountRow}
       </div>
@@ -167,7 +167,7 @@
       window.LSOApp?.setView?.('attendanceView');
       return;
     }
-    window.LSOApp?.setView?.('alertsView');
+    window.LSOApp?.setView?.('membersView');
   }
 
   function wire() {

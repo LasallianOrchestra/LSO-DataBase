@@ -196,7 +196,7 @@
 
     return {
       id: `alert:${alert.type}:${targetId || stableTitle}`,
-      category: alert.module || 'Action Center',
+      category: alert.module || 'Operations',
       severity: alert.severity || 'medium',
       title: alert.title || 'Action required',
       detail: alert.detail || 'Open the related system record for details.',
@@ -452,8 +452,8 @@
     if (action === 'system-health') {
       showView('systemHealthView');
       setTimeout(() => {
-        document.querySelector('[data-health-panel="errors"]')?.click();
-        const target = document.getElementById('systemErrorLogPanel') || document.getElementById('systemHealthView');
+        document.querySelector('[data-health-panel="diagnostics"]')?.click();
+        const target = document.getElementById('systemHealthDiagnosticsPanel') || document.getElementById('systemHealthView');
         target?.classList.add('notification-target-highlight');
         target?.scrollIntoView({ block: 'start', behavior: 'smooth' });
         setTimeout(() => target?.classList.remove('notification-target-highlight'), 4200);
@@ -462,7 +462,7 @@
     }
     if (action === 'data-quality') {
       showView('dataView');
-      setTimeout(() => document.getElementById('dataQualityCenter')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 70);
+      setTimeout(() => { window.LSOEnterprise?.setRecoveryPanel?.('governance'); document.getElementById('dataQualityCenter')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 70);
       return;
     }
     if (action === 'maintenance') {
@@ -473,7 +473,7 @@
       }, 70);
       return;
     }
-    showView('alertsView');
+    showView('dashboardView');
   }
 
   function renderGreeting() {
@@ -641,7 +641,7 @@
       return;
     }
     if (action === 'alerts') {
-      showView('alertsView');
+      showView('dashboardView');
       return;
     }
     if (action === 'data') {
@@ -659,10 +659,7 @@
     });
     el('notificationCloseButton')?.addEventListener('click', () => toggleNotificationPopover(false));
     el('markAllNotificationsRead')?.addEventListener('click', markAllNotificationsRead);
-    el('openActionCenterFromNotifications')?.addEventListener('click', () => {
-      toggleNotificationPopover(false);
-      showView('alertsView');
-    });
+    el('openNotificationSettingsFromNotifications')?.addEventListener('click', () => { toggleNotificationPopover(false); });
     el('notificationPopover')?.addEventListener('click', (event) => event.stopPropagation());
     el('notificationList')?.addEventListener('click', (event) => {
       const item = event.target.closest('[data-notification-id]');

@@ -315,6 +315,7 @@
   }
 
   function setView(viewId) {
+    if (!document.getElementById(viewId)) viewId = 'dashboardView';
     const account = window.LSOAuth?.getActiveAccount?.() || window.LSOCurrentAccount || null;
     if (window.LSORoleAccess && !window.LSORoleAccess.canAccessView(viewId, account)) {
       const fallback = window.LSORoleAccess.defaultView(account);
@@ -326,19 +327,16 @@
     const titleMap = {
       dashboardView: 'Dashboard',
       membersView: 'Members',
-      lookupView: 'Members Overall Record',
-      documentsView: 'Document Center',
       contractView: 'Contract Maker',
       monthlyReportView: 'Overall Monthly Report',
       attendanceView: 'Attendance',
       dutyHoursView: 'Duty Hours',
-      alertsView: 'Action Center',
       accountsView: 'Account Management',
-      dataView: 'Data & Backup'
+      systemHealthView: 'System Administration',
+      dataView: 'Data & Recovery'
     };
     el('pageTitle').textContent = titleMap[viewId] || 'LSO Member Database';
     el('sidebar').classList.remove('open');
-    if (viewId === 'lookupView') renderLookupResults();
   }
 
   function metricCard(label, value, helper) {
@@ -515,66 +513,10 @@
     setMembershipDirectory(mode === 'trainee' ? 'Trainee Period' : mode === 'probationary' ? 'Probationary Period' : 'Membership Period');
   }
 
-  function lookupMatches() {
-    const search = normalize(el('lookupSearch').value);
-    const source = search ? members.filter((member) => [
-      member.fullName, member.membershipId, member.studentNumber, member.membershipStage, member.periodGroup,
-      member.memberStatus, member.college, member.course, member.yearLevel, member.section, member.cys,
-      member.orchestraSection, member.primaryInstrument, member.organizationPosition, member.organizationRole
-    ].map(normalize).join(' ').includes(search)) : members;
-    return source.sort((a, b) => String(a.fullName).localeCompare(String(b.fullName))).slice(0, 100);
-  }
-
-  function renderLookupResults() {
-    const results = lookupMatches();
-    el('lookupResults').innerHTML = results.length ? results.map((member) => `
-      <button class="lookup-result ${selectedMemberId === member.id ? 'active' : ''}" data-lookup-id="${safeText(member.id)}">
-        ${memberAvatarMarkup(member)}
-        <div><strong>${safeText(member.fullName)}</strong><small>${safeText(member.membershipId)} • ${safeText(member.periodGroup)} • ${safeText(member.studentNumber || 'No student number')}</small></div>
-      </button>
-    `).join('') : `<div class="empty-state"><div class="empty-icon">?</div><h4>No matching member</h4><p>Try a different name or number.</p></div>`;
-    if (selectedMemberId) renderMemberRecord(selectedMemberId);
-  }
-
-  function recordField(label, value) {
-    return `<div class="record-field"><span>${safeText(label)}</span><strong>${safeText(value || '—')}</strong></div>`;
-  }
-
-  function renderMemberRecord(id) {
-    const member = members.find((item) => item.id === id);
-    if (!member) {
-      selectedMemberId = null;
-      el('recordPlaceholder').classList.remove('hidden');
-      el('memberRecord').classList.add('hidden');
-      return;
-    }
-    selectedMemberId = id;
-    el('recordPlaceholder').classList.add('hidden');
-    el('memberRecord').classList.remove('hidden');
-    el('recordName').textContent = member.fullName;
-    el('recordIdentity').textContent = `${member.membershipId} • Student No. ${member.studentNumber || '—'}`;
-    el('recordBadges').innerHTML = `
-      <span class="badge ${getStatusBadge(member.memberStatus)}">${safeText(member.memberStatus || 'Unspecified')}</span>
-      <span class="badge ${getPeriodBadge(member.periodGroup)}">${safeText(member.periodGroup)}</span>
-      <span class="badge badge-blue">${safeText(member.orchestraSection || 'No section')}</span>
-      <span class="badge ${getReviewBadge(member.reviewStatus)}">${safeText(member.reviewStatus)}</span>
-      <span class="badge ${member.recordQuality >= 90 ? 'badge-green' : member.recordQuality >= 70 ? 'badge-gold' : 'badge-red'}">${safeText(member.recordQuality)}% complete</span>`;
-    el('recordGrid').innerHTML = [
-      recordField('Birthdate', toDateLabel(member.birthdate)), recordField('Age', member.age), recordField('Sex', member.sex),
-      recordField('Home Address', member.homeAddress), recordField('DLSUD Outlook', member.outlook),
-      recordField('College', member.college), recordField('Course', member.course), recordField('Year Level', member.yearLevel),
-      recordField('Section', member.section), recordField('CYS', member.cys), recordField('Academic Status', member.academicStatus),
-      recordField('Position in Organization', member.organizationPosition), recordField('Specific Organization Role', member.organizationRole), recordField('Member Status', member.memberStatus),
-      recordField('Current Membership Period', member.periodGroup), recordField('Trainee Period Start', toDateLabel(member.traineeStartDate)),
-      recordField('Probationary Period Start', member.probationarySkipped ? 'Skipped' : toDateLabel(member.probationaryStartDate)), recordField('Membership Period Start', toDateLabel(member.regularMemberDate)),
-      recordField('Stage Timeline Status', member.stagePeriodStatus), recordField('Orchestra Section', member.orchestraSection),
-      recordField('Primary Instrument', member.primaryInstrument),
-      recordField('Date Registered', toDateLabel(member.dateRegistered)), recordField('Last Profile Review', toDateLabel(member.lastProfileReview)), recordField('Record Quality', `${member.recordQuality}%`)
-    ].join('');
-    const notes = [member.stageNotes ? `Recruitment / stage notes:\n${member.stageNotes}` : '', member.remarks || ''].filter(Boolean).join('\n\n');
-    el('recordRemarks').textContent = notes || 'No remarks recorded.';
-    qsa('[data-lookup-id]').forEach((button) => button.classList.toggle('active', button.dataset.lookupId === id));
-  }
+  // V73 login fix: the retired Member Lookup / Overall Record panel was removed
+  // from index.html during the system refresh. Do not render against those deleted
+  // DOM nodes; doing so threw `Cannot read properties of null (reading 'value')`
+  // and caused a valid login to be treated as a failed database initialization.
 
   function printSelectedMemberRecord() {
     const member = members.find((item) => item.id === selectedMemberId);
@@ -611,7 +553,6 @@
   function renderAll() {
     renderDashboard();
     renderMembersTable();
-    renderLookupResults();
     renderStorage();
   }
 
@@ -1011,8 +952,8 @@
       if (button.dataset.action === 'delete') deleteMember(member.id);
       if (button.dataset.action === 'view') {
         selectedMemberId = member.id;
-        setView('lookupView');
-        renderMemberRecord(member.id);
+        setView('membersView');
+        openMemberModal(member);
       }
     };
     el('membersTableBody').addEventListener('click', handleDirectoryAction);
@@ -1022,21 +963,10 @@
       const button = event.target.closest('[data-open-record]');
       if (!button) return;
       selectedMemberId = button.dataset.openRecord;
-      setView('lookupView');
-      renderMemberRecord(selectedMemberId);
-    });
-
-    el('lookupSearch').addEventListener('input', renderLookupResults);
-    el('lookupResults').addEventListener('click', (event) => {
-      const button = event.target.closest('[data-lookup-id]');
-      if (!button) return;
-      renderMemberRecord(button.dataset.lookupId);
-    });
-    el('editRecordButton').addEventListener('click', () => {
+      setView('membersView');
       const member = members.find((item) => item.id === selectedMemberId);
       if (member) openMemberModal(member);
     });
-    el('printRecordButton').addEventListener('click', printSelectedMemberRecord);
 
     ['exportCsvTop', 'exportCsvData'].forEach((id) => el(id).addEventListener('click', () => exportCsv()));
     el('backupJson').addEventListener('click', backupJson);
@@ -1062,8 +992,9 @@
     },
     openRecord: (id) => {
       selectedMemberId = id;
-      setView('lookupView');
-      renderMemberRecord(id);
+      setView('membersView');
+      const member = members.find((item) => item.id === id);
+      if (member) openMemberModal(member);
     },
     showToast,
     getToday,
@@ -1080,9 +1011,6 @@
     else if (viewId === 'membersView') {
       renderMembersTable();
       renderStorage();
-    } else if (viewId === 'lookupView') {
-      renderLookupResults();
-      renderStorage();
     }
   }
 
@@ -1092,7 +1020,7 @@
     members = loadMembers();
     if (window.LSORuntimeStability?.schedule) {
       window.LSORuntimeStability.schedule('member-core-visible-render', renderVisibleMemberSurface, 90, {
-        viewId: ['dashboardView', 'membersView', 'lookupView'].includes(activeApplicationView()) ? activeApplicationView() : ''
+        viewId: ['dashboardView', 'membersView'].includes(activeApplicationView()) ? activeApplicationView() : ''
       });
     } else {
       window.setTimeout(renderVisibleMemberSurface, 90);

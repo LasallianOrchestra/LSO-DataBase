@@ -1051,7 +1051,7 @@
 
     if (isAdmin()) {
       const enterprise = window.LSOEnterprise?.getNotifications?.() || [];
-      enterprise.filter((notice) => notice.actionType === 'system-health').forEach((notice) => alerts.push(actionItem({ id: notice.id, type: 'system', module: 'System Health', stage: 'verify', severity: notice.severity || 'high', title: notice.title, detail: notice.detail, viewId: 'systemHealthView', targetId: 'errors', actionLabel: 'Open Health Center' })));
+      enterprise.filter((notice) => notice.actionType === 'system-health').forEach((notice) => alerts.push(actionItem({ id: notice.id, type: 'system', module: 'System Administration', stage: 'verify', severity: notice.severity || 'high', title: notice.title, detail: notice.detail, viewId: 'systemHealthView', targetId: 'diagnostics', actionLabel: 'Open Diagnostics' })));
     }
 
     const unique = new Map();
@@ -1596,13 +1596,13 @@
     const settings = loadSettings();
     node.textContent = timelineConfigured(settings)
       ? `Configured: ${settings.traineeDays} trainee days and ${settings.probationaryDays} probationary days.`
-      : 'Configure the Trainee and Probationary durations in Data & Backup before using automatic date calculation.';
+      : 'Configure the Trainee and Probationary durations in Data & Recovery before using automatic date calculation.';
   }
 
   function applyTimelineDefaults(showMessage = true) {
     const settings = loadSettings();
     if (!timelineConfigured(settings)) {
-      if (showMessage) toast('Configure the Trainee and Probationary durations in Data & Backup first.', true);
+      if (showMessage) toast('Configure the Trainee and Probationary durations in Data & Recovery first.', true);
       return false;
     }
     const start = el('traineeStartDate')?.value;
@@ -1638,7 +1638,10 @@
       activityLog: loadArray(ACTIVITY_KEY)
     };
     downloadBlob(`LSO_Complete_Backup_${today()}.json`, new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
-    logActivity('Downloaded complete backup', 'Data', `${backup.members.length} members • ${events.length} events`);
+    logActivity('Downloaded complete backup', 'Data & Recovery', `${backup.members.length} members • ${events.length} events`);
+    try { localStorage.setItem('lso_last_portable_backup_v73', backup.exportedAt); } catch { /* no-op */ }
+    window.dispatchEvent(new CustomEvent('lso:portable-backup-created', { detail: { exportedAt: backup.exportedAt } }));
+    window.LSOEnterprise?.renderRecoveryWorkspaceStatus?.();
     toast('Complete system backup downloaded.');
   }
 
@@ -1704,7 +1707,6 @@
     if (viewId === 'dutyHoursView') window.LSODutyHours?.refresh?.();
     if (viewId === 'monthlyReportView') window.LSOMonthlyReport?.refresh?.();
     if (viewId === 'instrumentsView') renderInstruments();
-    if (viewId === 'alertsView') renderAlerts();
     if (viewId === 'accountsView') renderAccounts();
     if (viewId === 'dataView') {
       renderSettings();
@@ -1724,7 +1726,6 @@
     const force = Boolean(options.force);
     if (force || active === 'attendanceView') renderAttendance();
     if (force || active === 'instrumentsView') { renderInstruments(); renderInstrumentMemberOptions(); }
-    if (force || active === 'alertsView') renderAlerts();
     if (force || active === 'dataView') { renderSettings(); renderActivityLog(); }
     if (!active) {
       // Keep startup light. Hidden data-heavy modules render when opened.
@@ -1788,28 +1789,8 @@
     });
     el('exportInstrumentCsv').addEventListener('click', exportInstrumentCsv);
 
-    el('refreshAlertsButton').addEventListener('click', async (event) => {
-      const button = event.currentTarget;
-      button.disabled = true; button.textContent = 'Refreshing…';
-      try {
-        const jobs = [];
-        if (isAdmin()) jobs.push(window.LSOAuth?.refreshAccounts?.({ forceNotify: false }));
-        if (can('reviewDutyPunches')) jobs.push(window.LSODutyHours?.refreshFromServer?.());
-        await Promise.allSettled(jobs.filter(Boolean));
-        renderAlerts();
-        toast('Action Center refreshed.');
-      } finally { button.disabled = false; button.textContent = 'Refresh Action Center'; }
-    });
-    el('actionCenterSearch')?.addEventListener('input', (event) => { actionCenterState.search = event.target.value; renderAlerts(); });
-    el('actionCenterModuleFilter')?.addEventListener('change', (event) => { actionCenterState.module = event.target.value; renderAlerts(); });
-    el('actionCenterPriorityFilter')?.addEventListener('change', (event) => { actionCenterState.priority = event.target.value; renderAlerts(); });
-    el('clearActionCenterFilters')?.addEventListener('click', () => {
-      actionCenterState.search = ''; actionCenterState.module = ''; actionCenterState.priority = '';
-      if (el('actionCenterSearch')) el('actionCenterSearch').value = '';
-      if (el('actionCenterPriorityFilter')) el('actionCenterPriorityFilter').value = '';
-      renderAlerts();
-    });
-    el('alertSections').addEventListener('click', (event) => {
+
+    el('alertSections')?.addEventListener('click', (event) => {
       const attendanceMemberButton = event.target.closest('[data-alert-attendance-member]');
       const attendanceMonthButton = event.target.closest('[data-alert-attendance-month]');
       const dutyPunchButton = event.target.closest('[data-alert-duty-entry]');
@@ -1858,7 +1839,7 @@
         if (viewId === 'monthlyReportView' && /^\d{4}-\d{2}$/.test(targetId)) setTimeout(() => {
           if (el('monthlyReportMonth')) { el('monthlyReportMonth').value = targetId; el('monthlyReportMonth').dispatchEvent(new Event('change', { bubbles: true })); }
         }, 60);
-        if (viewId === 'systemHealthView') setTimeout(() => document.querySelector('[data-health-panel="errors"]')?.click(), 50);
+        if (viewId === 'systemHealthView') setTimeout(() => document.querySelector('[data-health-panel="diagnostics"]')?.click(), 50);
       }
     });
 
@@ -1895,11 +1876,10 @@
       const active = activeViewId();
       if (active === 'attendanceView') renderAttendanceRoster();
       if (active === 'instrumentsView') { renderInstrumentMemberOptions(); renderInstruments(); }
-      if (active === 'alertsView') renderAlerts();
     });
     window.addEventListener('lso:accounts-changed', () => { renderAccounts(); renderAlerts(); });
     ['lso:duty-hours-changed', 'lso:monthly-report-changed', 'lso:system-health-changed', 'lso:system-errors-changed'].forEach((eventName) => {
-      window.addEventListener(eventName, () => renderAlerts());
+      window.addEventListener(eventName, () => { renderDashboardAlerts(); window.LSODashboardNotifications?.renderNotifications?.(); });
     });
     window.addEventListener('lso:cloud-state-changed', (event) => {
       scheduleCloudRefresh(event.detail || {});

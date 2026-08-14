@@ -1074,8 +1074,6 @@
         window.LSOApp?.setView?.('membersView');
         window.LSOApp?.setMembershipDirectory?.(stage.dataset.dashboardStage);
       }
-      const action = event.target.closest('[data-dashboard-action="member-lookup"]');
-      if (action) window.LSOApp?.setView?.('lookupView');
       const membersAction = event.target.closest('[data-dashboard-action="members"]');
       if (membersAction) window.LSOApp?.setView?.('membersView');
       const dutyAction = event.target.closest('[data-dashboard-action="duty-hours"]');

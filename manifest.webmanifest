@@ -1,9 +1,9 @@
 {
-  "id": "./?lso-auth-input-v72",
+  "id": "./?lso-system-refresh-v73",
   "name": "LSO Orchestra Management System",
   "short_name": "LSO System",
   "description": "Lasallian Symphony Orchestra operations database with governed membership, attendance, Duty Hours, reporting, data quality, notifications, documents, synchronization, and administration.",
-  "start_url": "./index.html?build=auth-input-v72",
+  "start_url": "./index.html?build=system-refresh-v73",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",

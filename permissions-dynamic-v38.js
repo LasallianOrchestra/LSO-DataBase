@@ -75,7 +75,7 @@
     const assignedViews = window.LSORoleAccess?.viewsForRole?.(account()) || [];
     const content = [
       `${role()} Access`,
-      `${assignedViews.length} module${assignedViews.length === 1 ? '' : 's'} assigned by the Administrator. Permissions can be changed from System Health → Role & Permission Center.`
+      `${assignedViews.length} module${assignedViews.length === 1 ? '' : 's'} assigned by the Administrator. Permissions can be changed from System Administration → Role & Permission Center.`
     ];
     banner.innerHTML = `<span class="staff-readonly-icon" aria-hidden="true">◉</span><div><strong>${content[0]}</strong><p>${content[1]}</p></div>`;
     banner.classList.remove('hidden');

@@ -338,16 +338,53 @@
     const account = currentAccount();
     const firstName = String(account.displayName || account.username || 'LSO team').trim().split(/\s+/)[0];
     const urgent = actionCards(data).filter((item) => item.value > 0).length;
+    const openActions = actionCards(data).reduce((total, item) => total + Number(item.value || 0), 0);
+    const activeRoster = data.members.filter((member) => !isInactive(member) && !isLoa(member)).length;
+    const eligible = data.analytics.filter((item) => item.records > 0);
+    const totalIncluded = eligible.reduce((sum, item) => sum + item.present + item.late + item.absent, 0);
+    const totalAttended = eligible.reduce((sum, item) => sum + item.present + item.late, 0);
+    const attendanceRate = totalIncluded ? Math.round(totalAttended / totalIncluded * 100) : null;
     const workspaceLabel = isGeneralSecretaryFullDashboard() ? 'Full Dashboard monitoring and Attendance operations' : `${role()} workspace`;
-    return `<section class="dcc-hero">
+    return `<section class="dcc-hero dcc-premium-hero">
       <div class="dcc-hero-copy"><p class="dcc-kicker">Orchestra Command Center</p><h2>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, ${safe(firstName)}</h2><p>${safe(workspaceLabel)} • ${urgent ? `${urgent} action group${urgent === 1 ? '' : 's'} require attention` : 'operations are currently clear'}.</p><div class="dcc-role-row"><span class="dcc-role-pill">${safe(role())}</span><span>${safe(dateLabel(localDate()))}</span><span>Attendance threshold: ${data.threshold}%</span></div></div>
-      <div class="dcc-hero-actions">${canAction('manageMembers') ? '<button class="button button-light" data-dcc-action="add-member" type="button">+ Add Member</button>' : '<button class="button button-light" data-dcc-action="attendance" type="button">Open Attendance</button>'}${canAction('manageEvents') ? '<button class="button dcc-ghost" data-dcc-action="create-activity" type="button">Create Activity</button>' : canView('monthlyReportView') ? '<button class="button dcc-ghost" data-dcc-action="monthly-report" type="button">View Reports</button>' : ''}</div>
+      <div class="dcc-hero-side"><div class="dcc-hero-pulse" aria-label="Live organization pulse"><div><span>Active roster</span><strong>${activeRoster}</strong></div><div><span>Monthly attendance</span><strong>${attendanceRate === null ? '—' : `${attendanceRate}%`}</strong></div><div><span>Open actions</span><strong>${openActions}</strong></div><small><i></i> Live operational snapshot</small></div><div class="dcc-hero-actions">${canAction('manageMembers') ? '<button class="button button-light" data-dcc-action="add-member" type="button">+ Add Member</button>' : '<button class="button button-light" data-dcc-action="attendance" type="button">Open Attendance</button>'}${canAction('manageEvents') ? '<button class="button dcc-ghost" data-dcc-action="create-activity" type="button">Create Activity</button>' : canView('monthlyReportView') ? '<button class="button dcc-ghost" data-dcc-action="monthly-report" type="button">View Reports</button>' : ''}</div></div>
+    </section>`;
+  }
+
+  function renderExecutivePulse(data) {
+    const active = data.members.filter((member) => !isInactive(member) && !isLoa(member));
+    const official = active.filter((member) => memberStage(member) === 'Membership Period').length;
+    const trainee = active.filter((member) => memberStage(member) === 'Trainee Period').length;
+    const probationary = active.filter((member) => memberStage(member) === 'Probationary Period').length;
+    const profileReady = data.members.filter((member) => Number(member.recordQuality || 0) >= 90).length;
+    const profileRate = data.members.length ? Math.round(profileReady / data.members.length * 100) : 100;
+    const monthRows = monthEvents(data).filter((event) => event.date <= localDate() && !eventCancelled(event));
+    const finalized = monthRows.filter((event) => eventAttendanceState(event, data.attendance) === 'Finalized').length;
+    const finalizationRate = monthRows.length ? Math.round(finalized / monthRows.length * 100) : 100;
+    const duty = dutyRows(data);
+    const dutyConfigured = duty.filter((row) => row.committed > 0);
+    const dutyCompleted = dutyConfigured.filter((row) => row.balance <= 0).length;
+    const dutyRate = dutyConfigured.length ? Math.round(dutyCompleted / dutyConfigured.length * 100) : 100;
+    const qualityTotal = qualityRows(data).reduce((sum, row) => sum + row[1], 0);
+    const qualityTile = canView('dataView')
+      ? `<button data-dcc-action="data" type="button"><span>Data quality alerts</span><strong>${qualityTotal}</strong><small>${qualityTotal ? 'Review records that need attention' : 'No current structural alerts'}</small><em>Open Data & Recovery →</em></button>`
+      : `<div><span>Data quality alerts</span><strong>${qualityTotal}</strong><small>${qualityTotal ? 'Records require administrator review' : 'No current structural alerts'}</small><em>Dashboard monitoring only</em></div>`;
+    const composition = [['Official', official], ['Trainee', trainee], ['Probationary', probationary]];
+    const compositionTotal = Math.max(1, composition.reduce((sum, row) => sum + row[1], 0));
+    return `<section class="dcc-executive-grid" aria-label="Executive organization overview">
+      <article class="dcc-executive-card"><div class="dcc-executive-heading"><div><p class="dcc-kicker">Executive Pulse</p><h3>Organization readiness</h3><p>High-level operational indicators calculated from current system records.</p></div><span class="dcc-live-chip"><i></i> Live</span></div><div class="dcc-readiness-grid">
+        <div><span>Profile readiness</span><strong>${profileRate}%</strong><small>${profileReady} of ${data.members.length} records at 90%+</small><b><i style="width:${profileRate}%"></i></b></div>
+        <div><span>Attendance finalization</span><strong>${finalizationRate}%</strong><small>${finalized} of ${monthRows.length} past activities finalized</small><b><i style="width:${finalizationRate}%"></i></b></div>
+        <div><span>Duty completion</span><strong>${dutyRate}%</strong><small>${dutyCompleted} of ${dutyConfigured.length} configured requirements complete</small><b><i style="width:${dutyRate}%"></i></b></div>
+        ${qualityTile}
+      </div></article>
+      <article class="dcc-executive-card dcc-composition-card"><div class="dcc-executive-heading"><div><p class="dcc-kicker">Membership Mix</p><h3>Active roster composition</h3><p>${active.length} active member${active.length === 1 ? '' : 's'} across current membership stages.</p></div></div><div class="dcc-composition-total"><strong>${active.length}</strong><span>Active roster</span></div><div class="dcc-composition-list">${composition.map(([label, value]) => { const percent = Math.round(value / compositionTotal * 100); return `<div><span><strong>${safe(label)}</strong><em>${value}</em></span><b><i style="width:${percent}%"></i></b><small>${percent}% of active roster</small></div>`; }).join('')}</div></article>
     </section>`;
   }
 
   function renderActionCenter(data) {
     const cards = actionCards(data);
-    return `<section class="dcc-section"><div class="dcc-section-heading"><div><p class="dcc-kicker">Action Center</p><h3>What needs attention</h3><p>Each card opens the exact records behind the count.</p></div>${canView('alertsView') ? '<button class="dcc-text-button" data-dcc-action="alerts" type="button">Open full alerts →</button>' : ''}</div><div class="dcc-action-grid">${cards.map((card) => `<button class="dcc-action-card tone-${card.tone}${card.value ? ' has-items' : ''}" data-dcc-detail="${card.key}" type="button"><span class="dcc-action-icon">${safe(card.icon)}</span><span class="dcc-action-copy"><small>${safe(card.label)}</small><strong>${card.value}</strong><em>${safe(card.note)}</em></span><span class="dcc-card-arrow">→</span></button>`).join('')}</div></section>`;
+    return `<section class="dcc-section" id="dccOperationalAlerts"><div class="dcc-section-heading"><div><p class="dcc-kicker">Operational Alerts</p><h3>What needs attention</h3><p>Each card opens the exact source record behind the count.</p></div></div><div class="dcc-action-grid">${cards.map((card) => `<button class="dcc-action-card tone-${card.tone}${card.value ? ' has-items' : ''}" data-dcc-detail="${card.key}" type="button"><span class="dcc-action-icon">${safe(card.icon)}</span><span class="dcc-action-copy"><small>${safe(card.label)}</small><strong>${card.value}</strong><em>${safe(card.note)}</em></span><span class="dcc-card-arrow">→</span></button>`).join('')}</div></section>`;
   }
 
   function monthEvents(data) {
@@ -523,7 +560,7 @@
       return;
     }
     const data = dashboardData();
-    host.innerHTML = `${renderHeader(data)}${renderSnapshotStrip(data)}${renderActionCenter(data)}<div class="dcc-main-grid dcc-simple-main">${renderMonthlyOverview(data)}${renderUpcoming(data)}${renderAttendanceHealth(data)}${renderDutyProgress(data)}</div>${renderQuickActions()}${renderDetailModal()}`;
+    host.innerHTML = `${renderHeader(data)}${renderSnapshotStrip(data)}${renderExecutivePulse(data)}${renderActionCenter(data)}<div class="dcc-main-grid dcc-simple-main">${renderMonthlyOverview(data)}${renderUpcoming(data)}${renderAttendanceHealth(data)}${renderDutyProgress(data)}</div><div class="dcc-main-grid dcc-premium-secondary">${renderMemberStats(data)}${renderDataQuality(data)}${renderRecentActivity(data)}</div>${renderQuickActions()}${renderDetailModal()}`;
     document.body.classList.add('dashboard-command-center-ready');
     if (detailState) updateDetailModal(data);
   }
@@ -595,7 +632,7 @@
     }).join('') : '<div class="dcc-empty compact"><span>✓</span><strong>No matching records</strong><p>This action group is currently clear.</p></div>';
     const moduleButton = el('dccOpenModuleButton');
     moduleButton.dataset.module = detail.module;
-    const viewMap = { attendance: 'attendanceView', 'duty-hours': 'dutyHoursView', accounts: 'accountsView', alerts: 'alertsView', data: 'dataView', members: 'membersView', 'monthly-report': 'monthlyReportView' };
+    const viewMap = { attendance: 'attendanceView', 'duty-hours': 'dutyHoursView', accounts: 'accountsView', data: 'dataView', members: 'membersView', 'monthly-report': 'monthlyReportView' };
     moduleButton.classList.toggle('hidden', !detail.module || !canView(viewMap[detail.module]));
     modal.classList.remove('hidden');
   }
@@ -651,7 +688,7 @@
 
   function performAction(action) {
     closeDetail();
-    const views = { attendance: 'attendanceView', 'duty-hours': 'dutyHoursView', accounts: 'accountsView', alerts: 'alertsView', data: 'dataView', members: 'membersView', 'monthly-report': 'monthlyReportView' };
+    const views = { attendance: 'attendanceView', 'duty-hours': 'dutyHoursView', accounts: 'accountsView', data: 'dataView', members: 'membersView', 'monthly-report': 'monthlyReportView' };
     if (views[action]) {
       if (!canView(views[action])) { window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'This module is not assigned to your role.', true); return; }
       if (action === 'attendance') window.LSOOperations?.setAttendanceMonth?.(selectedMonth);
@@ -672,8 +709,13 @@
       return;
     }
     if (action === 'backup') {
+      if (!canView('dataView')) { window.LSOApp?.showToast?.(window.LSORoleAccess?.deniedMessage?.() || 'Data & Recovery is not assigned to this role.', true); return; }
       openView('dataView');
       setTimeout(() => el('backupCompleteSystem')?.click(), 80);
+      return;
+    }
+    if (action === 'alerts') {
+      el('dccOperationalAlerts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 

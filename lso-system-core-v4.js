@@ -21,10 +21,10 @@ window.renderAll = renderAll;
 
   const PERMISSIONS = Object.freeze({
     views: Object.freeze({
-      [ROLES.ADMIN]: ['dashboardView', 'membersView', 'lookupView', 'documentsView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView', 'accountsView', 'systemHealthView', 'dataView'],
-      [ROLES.STAFF]: ['dashboardView', 'membersView', 'lookupView', 'attendanceView', 'dutyHoursView', 'alertsView'],
-      [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'lookupView', 'documentsView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'alertsView'],
-      [ROLES.SECRETARY]: ['dashboardView', 'membersView', 'lookupView', 'attendanceView', 'dutyHoursView', 'alertsView'],
+      [ROLES.ADMIN]: ['dashboardView', 'membersView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'accountsView', 'systemHealthView', 'dataView'],
+      [ROLES.STAFF]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
+      [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView'],
+      [ROLES.SECRETARY]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
       [ROLES.TRAINEE]: ['dutyHoursView']
     }),
     actions: Object.freeze({
@@ -48,7 +48,6 @@ window.renderAll = renderAll;
       manageData: [ROLES.ADMIN],
       manageRecovery: [ROLES.ADMIN],
       viewSystemHealth: [ROLES.ADMIN],
-      manageSystemErrors: [ROLES.ADMIN],
       writeActivityLog: [ROLES.ADMIN, ROLES.MEMBERSHIP, ROLES.SECRETARY],
       selfDutyPunch: [ROLES.TRAINEE],
       manageAccessibility: [ROLES.ADMIN, ROLES.STAFF, ROLES.MEMBERSHIP, ROLES.SECRETARY, ROLES.TRAINEE]
@@ -70,10 +69,10 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '7.2.0',
-    build: '2026.08.11-auth-input-stability.1',
+    app: '7.3.0',
+    build: '2026.08.14-system-administration-refresh.1',
     schemaTarget: '012_platform_operations_v69',
-    cache: 'lso-enterprise-v72-auth-input-stability',
+    cache: 'lso-enterprise-v73-system-refresh',
     permissions: 'permissions-manifest-v5-operational-open',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });
