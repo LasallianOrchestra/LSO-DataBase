@@ -10,6 +10,7 @@
     ['dashboardView','Dashboard','Operational overview, quick actions, workflow cards, alerts, and live summaries.'],
     ['membersView','Members','Member directory, stage monitoring, profile information, and member photo management.'],
     ['contractView','Contract','Membership contract preparation, preview, generation, and tracked contract output.'],
+    ['interviewView','Interview','Applicant interview form preparation, official PDF preview, and official template download. Administrator access is enabled by default and may be assigned to other roles.'],
     ['monthlyReportView','Monthly Report','Three-phase monthly filing, validation, PDF preview/download, finalization, and report archive.'],
     ['attendanceView','Attendance','Activity creation, Official/Trainee/Probationary rosters, LOA/Excused rules, Review, Finalize, Archive, revisions, and semester ratings.'],
     ['dutyHoursView','Duty Hours','Trainee/Probationary live rosters, Time In/Out punches, approvals, manual ledgers, archives, totals, and certifications.'],
@@ -145,9 +146,12 @@
     const row = roleRow();
     const roleName = activeRole;
     const editable = isAdmin() && roleName !== ADMIN;
-    const views = new Set(row?.views || []);
-    const actions = new Set(row?.actions || []);
-    const groups = new Set(row?.attendanceGroups || []);
+    const runtimeManifest = window.LSORoleAccess?.permissionManifest?.() || {};
+    const runtimeLandings = window.LSORoleAccess?.landingManifest?.() || {};
+    const views = new Set(roleName === ADMIN ? (runtimeManifest.views?.[ADMIN] || []) : (row?.views || []));
+    const actions = new Set(roleName === ADMIN ? Object.entries(runtimeManifest.actions || {}).filter(([, roles]) => (roles || []).includes(ADMIN)).map(([key]) => key) : (row?.actions || []));
+    const groups = new Set(roleName === ADMIN ? (runtimeManifest.attendanceGroups?.[ADMIN] || []) : (row?.attendanceGroups || []));
+    const effectiveLanding = roleName === ADMIN ? (runtimeLandings[ADMIN] || 'dashboardView') : (row?.landingView || '');
 
     renderRoleOptions();
     const landing = el('permissionLandingViewSelect');
@@ -156,7 +160,7 @@
       landing.innerHTML = allowedViews.length
         ? allowedViews.map(([key,label]) => `<option value="${safe(key)}">${safe(label)}</option>`).join('')
         : '<option value="">Select at least one module first</option>';
-      landing.value = allowedViews.some(([key]) => key === row?.landingView) ? row.landingView : (allowedViews[0]?.[0] || '');
+      landing.value = allowedViews.some(([key]) => key === effectiveLanding) ? effectiveLanding : (allowedViews[0]?.[0] || '');
       landing.disabled = !editable || !allowedViews.length;
     }
 

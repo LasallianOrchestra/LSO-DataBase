@@ -328,6 +328,7 @@
       dashboardView: 'Dashboard',
       membersView: 'Members',
       contractView: 'Contract Maker',
+      interviewView: 'Interview',
       monthlyReportView: 'Overall Monthly Report',
       attendanceView: 'Attendance',
       dutyHoursView: 'Duty Hours',

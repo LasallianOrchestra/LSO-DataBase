@@ -21,7 +21,7 @@ window.renderAll = renderAll;
 
   const PERMISSIONS = Object.freeze({
     views: Object.freeze({
-      [ROLES.ADMIN]: ['dashboardView', 'membersView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'accountsView', 'systemHealthView', 'dataView'],
+      [ROLES.ADMIN]: ['dashboardView', 'membersView', 'contractView', 'interviewView', 'monthlyReportView', 'attendanceView', 'dutyHoursView', 'accountsView', 'systemHealthView', 'dataView'],
       [ROLES.STAFF]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
       [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView'],
       [ROLES.SECRETARY]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
@@ -69,11 +69,11 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '7.3.0',
-    build: '2026.08.14-system-administration-refresh.1',
+    app: '7.5.0',
+    build: '2026.08.17-interview-official-document.1',
     schemaTarget: '012_platform_operations_v69',
-    cache: 'lso-enterprise-v73-system-refresh',
-    permissions: 'permissions-manifest-v5-operational-open',
+    cache: 'lso-enterprise-v75-interview-official',
+    permissions: 'permissions-manifest-v6-interview-module',
     databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
   });
 

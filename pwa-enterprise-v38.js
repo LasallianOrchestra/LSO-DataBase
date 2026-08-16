@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v38.js';
-  const ACTIVE_CACHE_MARKER = 'enterprise-v73-premium-ui-r3';
+  const ACTIVE_CACHE_MARKER = 'v78-interview-professional-form-r1';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;

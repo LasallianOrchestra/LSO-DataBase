@@ -257,7 +257,7 @@
     head.innerHTML = `<tr><th scope="col">Permission</th>${roles.map((roleName)=>`<th scope="col">${safeText(roleName)}</th>`).join('')}</tr>`;
     const rows=[];
     rows.push(`<tr class="permission-category-row"><th colspan="${roles.length+1}">Module access</th></tr>`);
-    const viewLabels={dashboardView:'Dashboard',membersView:'Members',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',accountsView:'Accounts',systemHealthView:'System Administration',dataView:'Data & Recovery'};
+    const viewLabels={dashboardView:'Dashboard',membersView:'Members',contractView:'Contract',interviewView:'Interview',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',accountsView:'Accounts',systemHealthView:'System Administration',dataView:'Data & Recovery'};
     const allViews=[...new Set(Object.values(manifest.views||{}).flat())];
     allViews.forEach((viewId)=>rows.push(`<tr><th scope="row">${safeText(viewLabels[viewId]||viewId)}</th>${roles.map((roleName)=>{const granted=(manifest.views?.[roleName]||[]).includes(viewId);return `<td><span class="${granted?'permission-granted':'permission-denied'}" aria-label="${granted?'Allowed':'Not allowed'}">${granted?'Yes':'—'}</span></td>`;}).join('')}</tr>`));
     rows.push(`<tr class="permission-category-row"><th colspan="${roles.length+1}">Action permissions</th></tr>`);
@@ -266,7 +266,7 @@
   }
   function exportPermissionMatrix() {
     const roles=Object.values(CORE.ROLES||{});const manifest=window.LSORoleAccess?.permissionManifest?.()||CORE.PERMISSIONS||{actions:{},views:{}};const rows=[['Category','Permission',...roles]];
-    const viewLabels={dashboardView:'Dashboard',membersView:'Members',contractView:'Contract',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',accountsView:'Accounts',systemHealthView:'System Administration',dataView:'Data & Recovery'};
+    const viewLabels={dashboardView:'Dashboard',membersView:'Members',contractView:'Contract',interviewView:'Interview',monthlyReportView:'Monthly Report',attendanceView:'Attendance',dutyHoursView:'Duty Hours',accountsView:'Accounts',systemHealthView:'System Administration',dataView:'Data & Recovery'};
     [...new Set(Object.values(manifest.views||{}).flat())].forEach((viewId)=>rows.push(['Module',viewLabels[viewId]||viewId,...roles.map((roleName)=>(manifest.views?.[roleName]||[]).includes(viewId)?'Allowed':'Not allowed')]));
     Object.entries(manifest.actions||{}).forEach(([action,allowedRoles])=>rows.push(['Action',permissionLabels[action]||action,...roles.map((roleName)=>(allowedRoles||[]).includes(roleName)?'Allowed':'Not allowed')]));
     download(`LSO_Role_Permission_Matrix_${todayPH()}.csv`,rows.map((row)=>row.map(csvEscape).join(',')).join('\n'),'text/csv');

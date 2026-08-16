@@ -55,7 +55,7 @@
 <link href="favicon-32x32.png?v=20260717-logos" rel="icon" sizes="32x32" type="image/png"/>
 <link href="apple-touch-icon.png?v=20260721-pwa-v1" rel="apple-touch-icon"/>
 <link href="manifest.webmanifest?v=20260814-system-refresh-v73" rel="manifest"/>
-<link href="lso-ui-bundle-v73.css?v=20260814-premium-ui-r3" rel="stylesheet"/>
+<link href="lso-ui-bundle-v73.css?v=20260817-interview-access-v74" rel="stylesheet"/>
 <style id="lso-login-color-critical-v6">
 .auth-card .auth-heading p:not(.eyebrow){color:#42584E!important;opacity:1!important;-webkit-text-fill-color:#42584E!important}.auth-card .auth-heading h2{color:#0B3D2E!important}.auth-card .field>span{color:#2F453B!important}.auth-card input::placeholder{color:#66736D!important;opacity:1!important}.auth-tab{color:#4F6259!important}.auth-tab.active{color:#0B3D2E!important}.auth-submit{color:#fff!important}
 </style>
@@ -215,6 +215,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 
 
 <button class="nav-item" data-view="contractView">Contract</button>
+<button class="nav-item" data-view="interviewView">Interview</button>
 <button class="nav-item" data-view="monthlyReportView">Monthly Report</button>
 <button class="nav-item" data-view="attendanceView">Attendance</button>
 <button class="nav-item" data-view="dutyHoursView">Duty Hours</button>
@@ -485,6 +486,34 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 </div>
 <iframe class="contract-preview-frame hidden" id="contractPreviewFrame" title="Membership contract preview"></iframe>
 </div>
+</article>
+</div>
+</section>
+<section class="view" id="interviewView">
+<div class="interview-command-header">
+<div>
+<p class="eyebrow">Applicant Screening • Controlled Module</p>
+<h3>Official Interview Template</h3>
+<p>Prepare the official Lasallian Symphony Orchestra applicant interview form. Administrator access is enabled by default; other roles may use this module only when access is assigned in System Administration → Access Control.</p>
+</div>
+<div class="interview-access-badge"><span>PDF</span><strong>Official LSO Interview</strong><small>Manual applicant details • Live preview • Direct PDF download</small></div>
+</div>
+<div class="interview-grid">
+<article class="panel interview-form-panel">
+<div class="panel-header"><div><p class="eyebrow">Applicant Information</p><h3>Interview Details</h3><p class="panel-subtitle">Enter the applicant information exactly as it should appear on the official form.</p></div></div>
+<div class="form-grid">
+<label class="field"><span>Name *</span><input id="interviewName" autocomplete="off" placeholder="Applicant Name" required></label>
+<label class="field"><span>Student Number *</span><input id="interviewStudentNumber" autocomplete="off" placeholder="Student Number" required></label>
+<label class="field"><span>Schedule *</span><input id="interviewSchedule" autocomplete="off" placeholder="Date / Schedule" required></label>
+<label class="field"><span>Venue *</span><input id="interviewVenue" autocomplete="off" placeholder="Venue" required></label>
+<label class="field"><span>Time *</span><input id="interviewTime" autocomplete="off" placeholder="Interview Time" required></label>
+</div>
+<div aria-live="polite" class="form-message hidden" id="interviewFormMessage"></div>
+<div class="inline-actions interview-actions"><button class="button button-secondary" id="generateInterviewPdf" type="button">Generate Preview</button><button class="button button-primary" id="downloadInterviewPdf" type="button">Download Official PDF</button></div>
+</article>
+<article class="panel interview-preview-panel">
+<div class="panel-header"><div><p class="eyebrow">Document Preview</p><h3>Official Template Preview</h3><p class="panel-subtitle">Generate the document first, review the applicant information, then download the official PDF.</p></div><span class="interview-preview-status" id="interviewPreviewStatus">Waiting for details</span></div>
+<div class="interview-preview-shell"><div class="interview-preview-placeholder" id="interviewPreviewPlaceholder"><strong>PDF preview will appear here</strong><small>Complete the required fields and select Generate Preview.</small></div><iframe class="interview-preview-frame hidden" id="interviewPreview" title="Interview PDF Preview"></iframe></div>
 </article>
 </div>
 </section>
@@ -1264,11 +1293,11 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260814-system-refresh-v73"></script>
+<script src="lso-system-core-v4.js?v=20260817-interview-access-v74"></script>
 <script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
 <script src="role-access-v4.js?v=20260814-system-refresh-v73"></script>
 <script src="cloud-staff-v5.js?v=20260811-auth-input-v72"></script>
-<script src="app-member-information-v5.js?v=20260814-login-null-fix-v73r2"></script>
+<script src="app-member-information-v5.js?v=20260817-interview-access-v74"></script>
 <script src="auth-view-controller-v18.js?v=20260728-attendance-duty-v35"></script>
 <script src="auth.js?v=20260811-auth-input-v72"></script>
 <script src="maintenance-mode-v62.js?v=20260807-maintenance-gate-v62"></script>
@@ -1281,22 +1310,23 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="attendance-workflow-v58.js?v=20260805-attendance-workflow-v58"></script>
 <script src="duty-hours-member-info-v14.js?v=20260805-attendance-duty-performance-v52"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
+<script src="official-pdf-assets-v51.js?v=20260817-interview-pdf-fetch-fix-v76"></script>
+<script src="interview-manager-v5.js?v=20260817-interview-professional-form-v78"></script>
 <script src="monthly-report-template-data.js?v=20260726-portrait-print-v30"></script>
 <script src="monthly-report-print-v31.js?v=20260805-runtime-stability-v54"></script>
 <script src="contract-template-data.js?v=20260718-contract-v3"></script>
 <script src="contract-maker-membership-v4.js?v=20260805-runtime-stability-v54"></script>
-<script src="official-pdf-assets-v51.js?v=20260805-pdf-fetch-repair-v51"></script>
 
 <script src="member-photo-v73.js?v=20260814-system-refresh-v73"></script>
 <script src="platform-upgrade-v69.js?v=20260814-system-refresh-v73"></script>
 <script src="dashboard-intelligence-member-info-v3.js?v=20260805-runtime-stability-v54"></script>
-<script src="permissions-dynamic-v38.js?v=20260811-permission-attendance-v67"></script>
+<script src="permissions-dynamic-v38.js?v=20260817-interview-access-v74"></script>
 <script src="dashboard-command-center-v5.js?v=20260814-premium-ui-r3"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v2.js?v=20260814-premium-ui-r3"></script>
+<script src="system-enterprise-v2.js?v=20260817-interview-access-v74"></script>
 <script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
-<script src="role-permission-center-v38.js?v=20260814-system-refresh-v73"></script>
+<script src="role-permission-center-v38.js?v=20260817-interview-access-v74"></script>
 <script src="operations-governance-v61.js?v=20260814-system-refresh-v73"></script>
-<script src="pwa-enterprise-v38.js?v=20260814-system-refresh-v73"></script>
+<script src="pwa-enterprise-v38.js?v=20260817-interview-professional-form-v78"></script>
 </body>
 </html>

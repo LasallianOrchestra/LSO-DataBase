@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v73-premium-ui-r3';
+const CACHE_VERSION = 'lso-website-enterprise-v78-interview-professional-form-r1';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -34,6 +34,7 @@ const CORE_PATHS = [
   './monthly-report-print-v31.js',
   './contract-template-data.js',
   './contract-maker-membership-v4.js',
+  './interview-manager-v5.js',
   './official-pdf-assets-v51.js',
   './member-photo-v73.js',
   './platform-upgrade-v69.js',
