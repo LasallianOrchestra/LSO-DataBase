@@ -69,12 +69,12 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '7.5.0',
-    build: '2026.08.17-interview-official-document.1',
-    schemaTarget: '012_platform_operations_v69',
-    cache: 'lso-enterprise-v75-interview-official',
-    permissions: 'permissions-manifest-v6-interview-module',
-    databaseInstaller: 'LSO_MASTER_MIGRATION_INSTALLER.sql'
+    app: '8.2.0',
+    build: '2026.08.20-all-roles-supabase-fix.1',
+    schemaTarget: '013_role_sync_interview_v82',
+    cache: 'lso-enterprise-v82-all-roles-supabase',
+    permissions: 'permissions-manifest-v8-server-native-interview',
+    databaseInstaller: 'LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql'
   });
 
 

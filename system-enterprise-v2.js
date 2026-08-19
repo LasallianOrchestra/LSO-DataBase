@@ -239,7 +239,7 @@
   function renderMigrations(health = null) {
     const body = el('migrationHistoryBody'); if (!body) return;
     const rows = Array.isArray(health?.migrations) ? health.migrations : [];
-    body.innerHTML = rows.length ? rows.map((item) => `<tr><td><strong>${safeText(item.version)}</strong></td><td>${safeText(item.title)}<br><small>${safeText(item.key)}</small></td><td>${safeText(dateTimeLabel(item.appliedAt))}</td><td><code>${safeText(item.checksum)}</code></td></tr>`).join('') : '<tr><td colspan="4">Migration history is unavailable. Run LSO_MASTER_MIGRATION_INSTALLER.sql.</td></tr>';
+    body.innerHTML = rows.length ? rows.map((item) => `<tr><td><strong>${safeText(item.version)}</strong></td><td>${safeText(item.title)}<br><small>${safeText(item.key)}</small></td><td>${safeText(dateTimeLabel(item.appliedAt))}</td><td><code>${safeText(item.checksum)}</code></td></tr>`).join('') : `<tr><td colspan="4">Migration history is unavailable. Run ${safeText(VERSION.databaseInstaller || 'the latest LSO Supabase migration')}.</td></tr>`;
   }
   function renderHealthCounts(health = null) {
     const container = el('healthCountGrid'); if (!container) return;
@@ -525,10 +525,21 @@
     const host = el('v73RecoveryStatusCards');
     if (!host) return;
     const lastPortable = localStorage.getItem(LAST_PORTABLE_BACKUP_KEY) || '';
-    const sharedStatus = window.LSOCloud?.isOnline?.() === false || !navigator.onLine ? 'Offline' : 'Connected';
+    const syncHealth = window.LSOCloud?.getConnectionHealth?.() || window.LSOCloud?.getSyncSnapshot?.() || {};
+    const connectionState = String(syncHealth.state || syncHealth.connectionState || '');
+    const sharedStatus = !navigator.onLine || syncHealth.online === false
+      ? (connectionState === 'reconnecting' || connectionState === 'checking' ? 'Reconnecting' : 'Offline')
+      : (connectionState === 'reconnecting' || connectionState === 'checking' ? 'Reconnecting' : 'Connected');
     const recoveryStatus = window.LSOCloud?.createRecoveryPoint ? 'Available' : 'Portable backup only';
+    const syncSnapshot = window.LSOCloud?.getSyncSnapshot?.() || {};
+    const blockedPending = Array.isArray(syncSnapshot.blockedPending) ? syncSnapshot.blockedPending : [];
+    const sharedNote = sharedStatus === 'Connected'
+      ? (blockedPending.length ? `Cloud connected. ${blockedPending.length} local change${blockedPending.length === 1 ? ' is' : 's are'} waiting for role permission verification.` : 'Cloud operations are available and synchronization is ready.')
+      : sharedStatus === 'Reconnecting'
+        ? 'Connection verification is in progress; queued changes are protected.'
+        : 'Reconnect before shared recovery actions.';
     const cards = [
-      { icon: 'DB', label: 'Shared Database', value: sharedStatus, note: sharedStatus === 'Connected' ? 'Cloud operations are available.' : 'Reconnect before shared recovery actions.', tone: sharedStatus === 'Connected' ? 'success' : 'warning' },
+      { icon: 'DB', label: 'Shared Database', value: sharedStatus, note: sharedNote, tone: sharedStatus === 'Connected' ? (blockedPending.length ? 'info' : 'success') : sharedStatus === 'Reconnecting' ? 'info' : 'warning' },
       { icon: 'BK', label: 'Portable Backup', value: lastPortable ? dateTimeLabel(lastPortable) : 'Not created yet', note: lastPortable ? 'Latest complete-system download on this browser.' : 'Create a complete-system backup before major changes.', tone: lastPortable ? 'success' : 'neutral' },
       { icon: 'RP', label: 'Server Recovery', value: recoveryStatus, note: recoveryPoints.length ? `${recoveryPoints.length} recovery point${recoveryPoints.length===1?'':'s'} available.` : 'Refresh Recovery Points to verify server history.', tone: recoveryStatus === 'Available' ? 'success' : 'neutral' },
       { icon: 'V', label: 'System Version', value: `v${VERSION.app}`, note: VERSION.build, tone: 'info' }
@@ -579,6 +590,7 @@
     document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>{setRecoveryPanel(activeRecoveryPanel);refreshRecoveryPoints({quiet:true});renderRecoveryWorkspaceStatus();},50));
     ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-duty-enhancements',renderDutyEnhancements,120,{viewId:'dutyHoursView'})));
     ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-monthly-workflow',renderMonthlyWorkflow,120,{viewId:'monthlyReportView'})));
+    ['lso:cloud-status','lso:connection-health','lso:sync-heartbeat','lso:cloud-saved'].forEach((name)=>window.addEventListener(name,()=>renderRecoveryWorkspaceStatus()));
     window.addEventListener('lso:system-error',(event)=>{
       if(loggingServerError&&event.detail?.rpc==='lso_log_system_error')return;
       const detail=event.detail||{};
