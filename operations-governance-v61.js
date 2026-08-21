@@ -476,7 +476,7 @@
     if (el('maintenanceModeStatus')) el('maintenanceModeStatus').textContent = waiting ? 'Saving maintenance status to the shared database…' : (m.enabled ? `Active and shared • Updated ${dateTime(m.updatedAt)}${m.updatedBy ? ` by ${m.updatedBy}` : ''}` : 'Maintenance Mode is off. All approved accounts can use their assigned modules.');
   }
   async function saveMaintenanceSettings() {
-    if (!isAdmin() || !can('manageSettings')) return toast('Administrator settings access is required.', true);
+    if (!can('manageSettings')) return toast('You do not have permission to manage system settings.', true);
     const button = el('saveMaintenanceModeButton'); if (button) { button.disabled = true; button.dataset.originalText = button.textContent; button.textContent = 'Saving & Verifying…'; }
     try {
       const enabled = Boolean(el('maintenanceModeEnabled')?.checked); const message = String(el('maintenanceModeMessage')?.value || '').trim(); const expectedResume = String(el('maintenanceExpectedResume')?.value || '').trim();
