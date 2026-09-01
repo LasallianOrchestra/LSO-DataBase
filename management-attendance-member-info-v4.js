@@ -1555,12 +1555,7 @@
   }
 
   function handleSaveSettings() {
-    // Settings are controlled by the permission engine. Do not rely only on the
-    // account role because role permissions can be synchronized dynamically.
-    if (!can('manageSettings')) {
-      toast('You do not have permission to change system settings.', true);
-      return;
-    }
+    if (!isAdmin()) { toast('Administrator access is required to change system settings.', true); return; }
     const numberOrBlank = (id) => {
       const value = el(id).value;
       return value === '' ? '' : Math.max(1, Number(value) || 1);
@@ -1930,8 +1925,8 @@
   window.LSOOperations = {
     logActivity,
     refreshAll,
-    getEvents: () => loadArray(EVENTS_KEY).map((event) => ({ ...event })),
-    getAttendance: () => loadArray(ATTENDANCE_KEY).map((entry) => ({ ...entry })),
+    getEvents: () => events.map((event) => ({ ...event })),
+    getAttendance: () => attendance.map((entry) => ({ ...entry })),
     getSelectedEventId: () => selectedEventId,
     setSelectedEventId: (eventId) => {
       const event = events.find((item) => sameId(item.id, eventId));

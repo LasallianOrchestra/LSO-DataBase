@@ -186,7 +186,7 @@
   }
 
   async function save(input = {}) {
-    if (!canManageSettings()) throw new Error('You do not have permission to manage system settings.');
+    if (!canManageSettings()) throw new Error('Administrator settings access is required.');
     if (saveInFlight) return saveInFlight;
     saveInFlight = (async () => {
       const all = parseSettings();
