@@ -1,0 +1,69 @@
+LSO "PENDING SAVE THAT NEVER ENTERS THE SYSTEM" FIX
+=====================================================
+
+WHAT YOU SAW
+A shared-database change showed up in the PENDING / "Saving 1 change…" state, and the
+top-bar status changed, but the data never actually entered the shared database. When a
+non-Administrator (Membership / Secretary / Staff) account made an operational change next
+to System Settings, the record appeared to be saved ("PENDING" then an error), yet the
+server had not accepted it. The edit also got stuck as a phantom PENDING entry that would
+not clear.
+
+WHAT THIS IS ABOUT
+The database rule "Only the Administrator can change system settings." (PostgreSQL errcode
+42501) means a non-Administrator may only change the Monthly-Report payload that lives
+inside the single Settings record, and nothing else in Settings. When unrelated Settings
+keys drifted from the last server snapshot — e.g. because another device saved a different
+attendance threshold, alert days, or duty default — the browser's re-based write still
+differed from the server's non-monthly Settings, so the server rejected it.
+
+The previous fix (SETTINGS_PERMISSION_SYNC_FIX_GUIDE.txt) already re-based non-Administrator
+Settings writes onto the last known server snapshot. But if the client snapshot was stale
+(cross-device drift) the rejection could still happen, and the old handler then kept the
+change queued forever and marked it permission-blocked. That produced exactly the symptom:
+a change that is PENDING but is not entering the system, and a local value that had changed
+even though nothing was saved.
+
+WHAT CHANGED (cloud-staff-v8.js)
+1. Non-Administrator System Settings writes are re-based onto the latest server snapshot at
+   the storage layer too (storageSetItem). Every non-monthly key is taken from the server,
+   and only __lso_monthly_reports_v1 (or the Administrator-owned maintenance/overlay keys)
+   can change. This means an unauthorized non-monthly setting edit never even appears
+   changed locally — the value stays at the server value. This is the "data should stay not
+   changed because there is no data entering or saving" requirement.
+
+2. If the server still rejects a write with errcode 42501 (a role/permission rejection), the
+   flush loop no longer leaves it stuck pending. It now:
+     a. Re-fetches the authoritative server state and re-bases the change onto it; if the
+        rejected write was just a stale snapshot, it retries once (bounded, max 2 retries)
+        and the legitimate change saves.
+     b. If the change was a genuine no-op / phantom (after refresh it equals the server), it
+        is dropped with no error, no pending remains.
+     c. If the change really cannot enter (role genuinely lacks permission, or the refresh
+        fails), the local value is REVERTED to the server's value and the pending marker is
+        cleared. The user sees "…was reverted to the value in the shared database," not a
+        raw database error, and no phantom PENDING state remains.
+
+3. The raw "Only the Administrator can change system settings." message is never surfaced to
+   the user. The legacy fallback path (older database without lso_update_state_v69) and any
+   status/notification path now map that error to a clean, actionable message.
+
+DEPLOYMENT
+1. Upload the updated cloud-staff-v8.js (and this folder's files) to the website directory.
+   Replacing only cloud-staff-v8.js is sufficient for this fix.
+2. Reload the deployed website once. The service worker fetches .js files network-first, so
+   the updated cloud-staff-v8.js is picked up on the next load.
+3. Log in as a Membership / Secretary / Staff account:
+   - Edit and save a Monthly Report. On a normal connection it should save and show
+     "All changes saved to the shared database".
+   - If another device changed System Settings just beforehand, the save is reconciled
+     automatically and still lands; no stuck PENDING, no permission error.
+   - Try to change a system-wide setting (e.g. alert days) — it should stay at the shared
+     value and not appear changed, because a non-Administrator cannot change it.
+4. Log in as the Administrator and confirm System Settings / Monthly Report / Attendance
+   still save normally.
+
+NO DATABASE CHANGE REQUIRED
+No Supabase SQL migration or schema change is needed. The server rule is correct and is
+preserved; only the browser's handling of a rejected write is changed so a save that did
+not enter the system no longer shows as PENDING and no longer leaves a changed local value.
