@@ -66,6 +66,21 @@
   const serverFingerprints = new Map();
   const columnVersions = new Map();
   const conflicts = new Map();
+  // Columns that cannot currently be written by this account's role. These are never sent
+  // and are surfaced as "awaiting permission" in the sync snapshot. A write the database
+  // rejects with a role/permission error is handled differently (see
+  // reconcilePermissionDeniedWrite): it is re-based onto the latest server snapshot and
+  // retried a bounded number of times, then reverted if it still cannot enter, so it never
+  // leaves a phantom PENDING state. This set is therefore a role/manifest check, cleared
+  // whenever permissions are re-granted, not a blocked-save queue.
+  const permissionBlocked = new Set();
+  // Bounded retry attempt counter for columns rejected with a role/permission error. A
+  // cross-device stale snapshot can produce a false 42501 on the Settings column (the
+  // non-Administrator payload is re-based onto an older server snapshot); refreshing the
+  // state and re-trying resolves that. We stop retrying after the limit so a genuinely
+  // denied write reverts instead of staying stuck in PENDING indefinitely.
+  const permissionRetries = new Map();
+  const PERMISSION_DENIED_RETRY_LIMIT = 2;
   let lastSuccessfulSyncAt = '';
   let v69Capabilities = null;
   let v69MetaRetryAfter = 0;
@@ -570,6 +585,13 @@
     if (/future duty date/i.test(message)) {
       return 'A future duty date cannot be submitted.';
     }
+    // Never surface the raw PostgreSQL 42501 text ("Only the Administrator can change
+    // system settings.") to the user. Maps to a clean, actionable message so the
+    // notification/status path never reproduces the database message verbatim.
+    if (/only the administrator can change system settings/i.test(message) ||
+      (/42501|permission denied|access is required/i.test(message) && /settings|system settings/i.test(message))) {
+      return 'This account’s role is not permitted to change System Settings. Only an Administrator can change System Settings, so the change was not saved.';
+    }
     return message;
   }
 
@@ -710,9 +732,24 @@
   }
 
   function settingsPayloadWithMonthlyCompatibility() {
+    const monthly = currentValueForColumn(MONTHLY_COMPAT_COLUMN);
+    // The shared database only allows a non-Administrator account (Membership) to change
+    // the Monthly Report payload nested inside settings (__lso_monthly_reports_v1). If the
+    // outbound payload re-sends every local settings key, any unrelated drift — attendance
+    // period governance, alert thresholds, duty defaults, a stale cache, or a cross-device
+    // difference — makes the server raise error 42501 "Only the Administrator can change
+    // system settings." Rebase the non-monthly keys onto the last known server snapshot so
+    // a legitimate operational edit is accepted, and so a non-Administrator can never
+    // overwrite system-wide settings through an unrelated dirty key.
+    if (sessionAccount?.role !== 'Administrator' && state && typeof state === 'object') {
+      return {
+        ...stateColumn(state, 'settings'),
+        [MONTHLY_SETTINGS_KEY]: monthly
+      };
+    }
     return {
       ...currentValueForColumn('settings'),
-      [MONTHLY_SETTINGS_KEY]: currentValueForColumn(MONTHLY_COMPAT_COLUMN)
+      [MONTHLY_SETTINGS_KEY]: monthly
     };
   }
 
@@ -750,6 +787,13 @@
     const wrapped = new Error(rpcErrorMessage(response.error));
     wrapped.isTransportError = isTransportFailure(response.error);
     wrapped.status = response.error?.status || response.error?.statusCode || 0;
+    wrapped.technicalMessage = String(response.error?.message || response.error?.details || response.error?.hint || wrapped.message);
+    // A role/permission rejection (PostgreSQL errcode 42501) is a permanent authorization
+    // outcome, not a transient fault or a connection failure. Flag it so the save loop can
+    // surface one clear message and stop hammering the server, instead of retrying forever
+    // and re-presenting the raw database error to the user.
+    wrapped.permissionDenied = /42501|permission denied|access is required|Only the Administrator|role cannot update|Membership .* access|not assigned to the selected/i.test(wrapped.technicalMessage);
+    wrapped.code = wrapped.permissionDenied ? (window.LSOSystemCore?.ERROR_CODES?.PERMISSION || 'AUTH-PERMISSION-005') : undefined;
     if (!wrapped.isTransportError) markConnectionSuccess();
     throw wrapped;
   }
@@ -828,7 +872,7 @@
     // could therefore make a Membership edit disappear from the save queue. Unauthorized
     // writes are skipped and kept pending until permissions are refreshed or the user
     // deliberately changes/reloads the data.
-    const blockedColumns = new Set([...dirtyVersions.keys()].filter((column) => !canWriteColumn(column)));
+    const blockedColumns = new Set([...dirtyVersions.keys()].filter((column) => !canWriteColumn(column) || permissionBlocked.has(column)));
     // Remove stale pending markers that already match the last server state.
     for (const column of [...dirtyVersions.keys()]) {
       const fingerprint = stableSerialize(payloadForColumn(column));
@@ -847,11 +891,14 @@
     flushing = true;
     status('syncing', `Saving ${dirtyVersions.size} change${dirtyVersions.size === 1 ? '' : 's'}…`);
 
+    let attemptedColumn = '';
+    let attemptedClientColumn = '';
     try {
       for (const [column, version] of [...dirtyVersions.entries()]) {
         if (!dirtyVersions.has(column)) continue;
         if (blockedColumns.has(column)) continue;
         if (conflicts.has(column)) continue;
+        if (permissionBlocked.has(column)) continue;
         const currentBeforeSend = stableSerialize(payloadForColumn(column));
         if (serverFingerprints.get(column) === currentBeforeSend) {
           dirtyVersions.delete(column);
@@ -860,6 +907,8 @@
           continue;
         }
         const serverColumn = column === MONTHLY_COMPAT_COLUMN ? 'settings' : column;
+        attemptedColumn = serverColumn;
+        attemptedClientColumn = column;
         const serverValue = payloadForColumn(column);
         const sentFingerprint = stableSerialize(serverValue);
         let nextState;
@@ -895,7 +944,7 @@
         status('conflict', `${conflicts.size} synchronization conflict${conflicts.size === 1 ? '' : 's'} require review.`);
       } else if (dirtyVersions.size) {
         const remaining = [...dirtyVersions.keys()];
-        const blockedRemaining = remaining.filter((column) => !canWriteColumn(column));
+        const blockedRemaining = remaining.filter((column) => !canWriteColumn(column) || permissionBlocked.has(column));
         if (blockedRemaining.length === remaining.length) {
           status('error', `${remaining.length} pending change${remaining.length === 1 ? '' : 's'} waiting for role permission verification. The shared database remains online.`);
         } else {
@@ -908,13 +957,100 @@
       }
       emit('lso:cloud-saved', { pending: dirtyVersions.size });
     } catch (error) {
-      if (isTransportFailure(error)) markConnectionFailure(error, { context: 'Shared database save' });
-      else markApplicationSyncError(error, 'Changes remain queued on this device.');
-      scheduleFlush(Math.max(8000, retryDelay()));
+      if (isTransportFailure(error)) {
+        markConnectionFailure(error, { context: 'Shared database save' });
+        scheduleFlush(Math.max(8000, retryDelay()));
+      } else if (error?.permissionDenied || error?.code === 'AUTH-PERMISSION-005') {
+        // A role/permission rejection proves the server reached and refused the write — it is
+        // a permanent authorization outcome, not a transient fault, so we do not retry forever.
+        // A stale cross-device snapshot can produce a false 42501 on the Settings column (the
+        // non-Administrator payload is re-based onto an older server snapshot). Re-fetch the
+        // authoritative state, re-base, and retry a bounded number of times; if the write still
+        // cannot enter the system, revert the local value to the server's value and clear the
+        // pending marker so the data stays unchanged and no phantom PENDING state remains.
+        const outcome = await reconcilePermissionDeniedWrite(attemptedClientColumn || attemptedColumn, attemptedColumn);
+        // 'retry' (a legitimate stale snapshot is now re-based) or 'cleared' (the change was a
+        // no-op that never entered the system): do not surface the raw database error for a
+        // change that is still being reconciled, otherwise the user would see the raw
+        // "Only the Administrator..." message for a save that actually lands or was a no-op.
+        if (outcome === 'retry' || outcome === 'cleared') return;
+        // 'revert': the change could not enter the system and was reverted. Rethrow a clean,
+        // actionable error (never the raw 42501) so callers know nothing was saved.
+        const cleanError = new Error('The change was not saved and was reverted to the shared database value.');
+        cleanError.code = error?.code;
+        cleanError.permissionDenied = true;
+        throw cleanError;
+      } else {
+        markApplicationSyncError(error, 'Changes remain queued on this device.');
+        scheduleFlush(Math.max(8000, retryDelay()));
+      }
       throw error;
     } finally {
       flushing = false;
     }
+  }
+
+  function revertColumnToServer(column = '', displayColumn = '') {
+    // A write the server refused must not be left queued. Restore the local value to the
+    // server's authoritative value so the data stays unchanged and no phantom PENDING state
+    // remains after a failed / no-op save.
+    const key = column === MONTHLY_COMPAT_COLUMN
+      ? 'lso_monthly_reports_v1'
+      : Object.keys(KEY_TO_COLUMN).find((item) => KEY_TO_COLUMN[item] === column);
+    const serverValue = stateColumn(state, column);
+    const serialized = JSON.stringify(normalizeColumn(column, serverValue));
+    if (key) {
+      const currentRaw = getLocal(key);
+      if (!semanticRawEqual(currentRaw, serialized)) {
+        if (setLocal(key, serialized)) dispatchDomainChange(key, 'cloud-revert', false);
+      }
+    }
+    dirtyVersions.delete(column);
+    dirtyFingerprints.delete(column);
+    permissionBlocked.delete(column);
+    permissionRetries.delete(column);
+    persistDirtyMarkers();
+    const name = String(displayColumn || column || 'this area').replace(/_/g, ' ').replace(/\b./g, (ch) => ch.toUpperCase());
+    status('error', `${name} change was not saved: this account's role is not permitted to change this system area. The change was reverted to the value in the shared database.`);
+    emit('lso:permission-denied', { column: displayColumn || column, message: 'This account’s role is not permitted to change this system area. The change was reverted to the value in the shared database.' });
+  }
+
+  // Returns 'retry' (a re-based retry was scheduled), 'cleared' (a phantom/no-op pending was
+  // dropped), or 'revert' (the local value was restored to the server's value).
+  async function reconcilePermissionDeniedWrite(column = '', displayColumn = '') {
+    if (!column) return 'revert';
+    const retryCount = Number(permissionRetries.get(column) || 0);
+    const canRetry = retryCount < PERMISSION_DENIED_RETRY_LIMIT && canWriteColumn(column);
+    try {
+      // Re-fetch the authoritative server state so a stale snapshot is re-based. For the
+      // Settings / Monthly-Report column this turns a false 42501 from another device's
+      // newer settings into a savable write.
+      const latest = await rpc('lso_get_state', { p_token: sessionToken });
+      applyState(latest, 'cloud-poll');
+      const localFingerprint = stableSerialize(payloadForColumn(column));
+      if (serverFingerprints.get(column) === localFingerprint) {
+        // After refreshing, the change now matches the server — it was a phantom/no-op that
+        // never entered the system. Drop it rather than leave it pending.
+        dirtyVersions.delete(column);
+        dirtyFingerprints.delete(column);
+        permissionBlocked.delete(column);
+        permissionRetries.delete(column);
+        persistDirtyMarkers();
+        status('online', 'All changes saved to the shared database');
+        emit('lso:cloud-saved', { pending: dirtyVersions.size });
+        return 'cleared';
+      }
+      if (canRetry && dirtyVersions.has(column)) {
+        permissionRetries.set(column, retryCount + 1);
+        scheduleFlush(0);
+        return 'retry';
+      }
+    } catch {
+      // Re-fetch failed (e.g. briefly offline): fall through and revert to the last known
+      // server value so the change does not stay stuck pending.
+    }
+    revertColumnToServer(column, displayColumn);
+    return 'revert';
   }
 
   function storageGetItem(key) {
@@ -955,10 +1091,22 @@
         const currentSettings = safeParse(currentValue, {});
         const requestedSettings = safeParse(nextValue, {});
         if (requestedSettings && typeof requestedSettings === 'object') {
-          const protectedSettings = { ...requestedSettings };
+          // A non-Administrator may only change the Monthly Report payload nested inside
+          // Settings (__lso_monthly_reports_v1). The server rejects any other system-wide
+          // key with error 42501 "Only the Administrator can change system settings." Rebase
+          // every non-monthly key onto the last known server snapshot so an unauthorized
+          // local change never appears to have entered the system — the data stays at the
+          // server value instead of creating a phantom PENDING sync.
+          const serverSettings = state && typeof state === 'object' ? stateColumn(state, 'settings') : null;
+          const protectedSettings = serverSettings && typeof serverSettings === 'object'
+            ? { ...serverSettings }
+            : { ...requestedSettings };
           ADMIN_OWNED_SETTINGS_KEYS.forEach((protectedKey) => {
             if (currentSettings?.[protectedKey] !== undefined) protectedSettings[protectedKey] = currentSettings[protectedKey];
           });
+          // Preserve the Monthly Report payload if the caller embedded it, since that is the
+          // only setting key a non-Administrator is permitted to change through Settings.
+          if (requestedSettings[MONTHLY_SETTINGS_KEY] !== undefined) protectedSettings[MONTHLY_SETTINGS_KEY] = requestedSettings[MONTHLY_SETTINGS_KEY];
           nextValue = JSON.stringify(protectedSettings);
         }
       } catch { /* malformed operational settings will be handled by the normal save path */ }
@@ -1543,7 +1691,7 @@
     }
     return false;
   }
-  function syncSnapshot() { const pending = [...dirtyVersions.keys()]; return { online, connectionState, browserOnline: navigator.onLine !== false, consecutiveTransportFailures, lastConnectionSuccessAt, lastConnectionFailureAt, lastConnectionError, loaded, pending, blockedPending: pending.filter((column) => !canWriteColumn(column)), conflicts: [...conflicts.values()].map((item) => ({ ...item })), lastServerUpdate, lastSuccessfulSyncAt, columnVersions: Object.fromEntries(columnVersions) }; }
+  function syncSnapshot() { const pending = [...dirtyVersions.keys()]; return { online, connectionState, browserOnline: navigator.onLine !== false, consecutiveTransportFailures, lastConnectionSuccessAt, lastConnectionFailureAt, lastConnectionError, loaded, pending, blockedPending: pending.filter((column) => !canWriteColumn(column) || permissionBlocked.has(column)), conflicts: [...conflicts.values()].map((item) => ({ ...item })), lastServerUpdate, lastSuccessfulSyncAt, columnVersions: Object.fromEntries(columnVersions) }; }
 
   window.__LSO_STORAGE_CHANGE_EVENTS__ = 'v61';
 
@@ -1629,6 +1777,9 @@
 
 
   window.addEventListener('lso:permissions-changed', () => {
+    // Roles can be re-granted access at any time. Once a blocked column becomes writable
+    // again, allow it to retry instead of leaving the change indefinitely unsent.
+    [...permissionBlocked].forEach((column) => { if (canWriteColumn(column)) permissionBlocked.delete(column); });
     if (!sessionToken || !dirtyVersions.size) return;
     scheduleFlush(80);
   });

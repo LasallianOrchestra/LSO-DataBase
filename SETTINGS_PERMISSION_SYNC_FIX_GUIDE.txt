@@ -1,0 +1,61 @@
+LSO "ONLY THE ADMINISTRATOR CAN CHANGE SYSTEM SETTINGS" STATUS FIX
+=====================================================================
+
+WHAT YOU SAW
+The status widget in the top bar (next to the current date) stayed red and
+displayed:
+    Only the Administrator can change system settings. Changes remain queued on this device.
+
+The message has the exact wording of a shared-database error (PostgreSQL errcode 42501),
+not a normal user-facing notice, which made the website look broken.
+
+ROOT CAUSE
+The shared database stores the Monthly Report inside the single System Settings record
+(key __lso_monthly_reports_v1). The database restricts that write so that a non-Administrator
+(Membership) account may change ONLY that Monthly Report payload and may NOT change any
+other system-wide setting.
+
+The browser cloud layer (cloud-staff-v8.js) was sending the ENTIRE local settings object
+whenever it saved any settings-backed change. If ANY unrelated key drifted from the last
+server snapshot — attendance period governance, alert days, duty defaults, a stale cache,
+or a difference saved by another device — the database rejected the whole write and returned
+"Only the Administrator can change system settings." The browser then showed that raw
+database error in the top-bar status instead of saving the legitimate change.
+
+WHY IT HAPPENED
+A Membership, General Secretary, or Staff role with Monthly Report (or attendance/
+duty) operational permissions receives Settings write access. Editing a Monthly Report
+therefore queues a Settings save. That save carried every local settings key; the first
+time even one unrelated key differed, the database refused the entire payload.
+
+WHAT CHANGED (cloud-staff-v8.js)
+1. Non-Administrator Settings writes are now rebased onto the last known server snapshot.
+   Only the __lso_monthly_reports_v1 payload is taken from the local edit; every other
+   settings key is taken from the server. This is exactly what the database permits, so
+   a legitimate Membership Monthly Report save is accepted and no unrelated key can be
+   overwritten by a non-Administrator.
+2. If the database still rejects a write due to role permission (errcode 42501), the
+   browser now treats it as a permanent authorization outcome instead of a transient
+   fault. It re-fetches the authoritative state and re-bases/retries a bounded number of
+   times; if the write truly cannot land, the local value is reverted to the server's
+   value and the pending marker is cleared, so no phantom PENDING state remains. It shows
+   one clear message ("...was reverted to the value in the shared database") rather than
+   the raw database error. The connection is not reported as broken.
+3. A rejected write no longer stays queued indefinitely. See
+   PENDING_PHANTOM_SAVE_FIX_GUIDE.txt for the full behavior.
+
+DEPLOYMENT
+1. Upload the updated cloud-staff-v8.js (and this folder's files) to the same website
+   directory. Replacing only cloud-staff-v8.js is sufficient for this fix.
+2. Reload the deployed website once. The service worker fetches .js files network-first,
+   so the updated cloud-staff-v8.js is picked up on the next load.
+3. Log in as a Membership / Secretary / Staff account and open a Monthly Report, then
+   save it. The top-bar status should show "All changes saved to the shared database"
+   instead of the Administrator-permission error.
+4. Log in as the Administrator and confirm System Settings / Monthly Report / Attendance
+   still save normally.
+
+NO DATABASE CHANGE REQUIRED
+No Supabase SQL migration or schema change is needed. The server rule ("only the
+Administrator can change system settings") is correct and is preserved; only the browser
+was sending a payload that violated it.
