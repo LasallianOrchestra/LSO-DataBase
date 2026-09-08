@@ -13,6 +13,7 @@
 
   let activeSemester = 'First Semester';
   let selectedMemberId = '';
+  let lastSelectionEventSignature = '';
   let selectedPeriod = 'Trainee Period';
   let overallPeriod = 'Trainee Period';
   let recordMode = 'Active';
@@ -1652,6 +1653,13 @@ This will record the secure server time for the session that started on ${dateLa
     }, delay);
   }
 
+  function notifySelectionChanged() {
+    const signature = `${selectedMemberId}::${selectedPeriod}`;
+    if (signature === lastSelectionEventSignature) return;
+    lastSelectionEventSignature = signature;
+    window.dispatchEvent(new CustomEvent('lso:duty-hours-selection-changed', { detail: { memberId: selectedMemberId, period: selectedPeriod } }));
+  }
+
   function renderAll() {
     if (isStaffAccount()) {
       recordMode = 'Active';
@@ -1667,6 +1675,10 @@ This will record the secure server time for the session that started on ${dateLa
       selectedMemberId = member?.id || '';
       selectedPeriod = activeMemberPeriod(member) || 'Trainee Period';
     }
+    // Every selection path (roster pick, openRecord, archive removal, account
+    // normalization) converges here, so consumers can re-sync selection-driven
+    // UI — such as the Generate Certification button — from one signal.
+    notifySelectionChanged();
     if (el('dutySemesterLabel')) el('dutySemesterLabel').textContent = activeSemester;
     document.querySelectorAll('[data-duty-semester]').forEach((button) => button.classList.toggle('active', button.dataset.dutySemester === activeSemester));
     document.querySelectorAll('[data-duty-period]').forEach((button) => button.classList.toggle('active', button.dataset.dutyPeriod === overallPeriod));

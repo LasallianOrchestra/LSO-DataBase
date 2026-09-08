@@ -403,7 +403,11 @@
     metrics.innerHTML = [['Pending Time In',pendingIn],['Pending Time Out',pendingOut],['Approved Sessions',approved],['Rejected Sessions',rejected],['Completed Members',completed.length]].map(([label,value]) => `<div class="duty-enhancement-metric"><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
     const members = window.LSOApp?.getMembers?.() || [];
     alerts.innerHTML = completed.length ? completed.slice(0,10).map(([id,period]) => { const member=members.find((m)=>m.id===id); const calc=calculateDutyPeriod(data,id,selectedSemester,period); return `<div class="duty-completion-item"><div><strong>${safeText(member?.fullName || id)}</strong><small>${safeText(period)} • ${safeText(durationLabel(calc.credited))} credited of ${safeText(durationLabel(calc.committed))}</small></div><div class="duty-completion-bar" aria-label="${calc.percent}% complete"><span style="width:${calc.percent}%"></span></div></div>`; }).join('') : '<div class="system-error-empty"><strong>No completed requirements detected</strong><p>Apply default requirements or set commitments for the selected semester.</p></div>';
-    const cert = el('printDutyCertification'); if (cert) cert.disabled = !window.LSODutyHours?.getSelectedMemberId?.();
+    syncDutyCertificationButton();
+  }
+  function syncDutyCertificationButton() {
+    const cert = el('printDutyCertification'); if (!cert) return;
+    cert.disabled = !window.LSODutyHours?.getSelectedMemberId?.();
   }
   function applyDefaultDutyRequirements() {
     if (!can('manageDutyRequirements')) return toast('Administrator or Membership access is required.', true);
@@ -648,6 +652,7 @@
     document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click',()=>setTimeout(()=>refreshSystemHealth({quiet:true}),50));
     document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>{setRecoveryPanel(activeRecoveryPanel);refreshRecoveryPoints({quiet:true});renderRecoveryWorkspaceStatus();},50));
     ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-duty-enhancements',renderDutyEnhancements,120,{viewId:'dutyHoursView'})));
+    window.addEventListener('lso:duty-hours-selection-changed',syncDutyCertificationButton);
     ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-monthly-workflow',renderMonthlyWorkflow,120,{viewId:'monthlyReportView'})));
     ['lso:cloud-status','lso:connection-health','lso:sync-heartbeat','lso:cloud-saved'].forEach((name)=>window.addEventListener(name,()=>renderRecoveryWorkspaceStatus()));
     window.addEventListener('lso:system-error',(event)=>{
@@ -676,7 +681,7 @@
     if(isAdmin()){setTimeout(()=>{ensureDailyRecovery();refreshSystemHealth({quiet:true});refreshRecoveryPoints({quiet:true});},900);}
   }
 
-  window.LSOEnterprise = { VERSION, reportError, getNotifications: enterpriseNotifications, refreshHealth: refreshSystemHealth, refreshRecovery: refreshRecoveryPoints, applyAccessibility, validateBackupObject, renderDutyEnhancements, renderMonthlyWorkflow, setRecoveryPanel, renderRecoveryWorkspaceStatus, buildDutyCertificationHtml };
+  window.LSOEnterprise = { VERSION, reportError, getNotifications: enterpriseNotifications, refreshHealth: refreshSystemHealth, refreshRecovery: refreshRecoveryPoints, applyAccessibility, validateBackupObject, renderDutyEnhancements, renderMonthlyWorkflow, setRecoveryPanel, renderRecoveryWorkspaceStatus, buildDutyCertificationHtml, syncDutyCertificationButton };
   window.addEventListener('lso:permissions-changed',()=>setTimeout(()=>{renderPermissionMatrix();window.LSORolePermissionCenter?.render?.();},20));
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
 })();
