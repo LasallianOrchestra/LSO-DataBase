@@ -433,8 +433,6 @@
     ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
     return `<!doctype html><html><head><meta charset="utf-8"><title>Official Certification • Duty Hours</title><style>
       @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;color:#17211d}
-      .statement{font-size:10px;line-height:1.75;text-align:justify;margin:5mm 0;padding:4mm;border:1px solid #8aa89b;border-left:4px solid #d4a017;background:#fbfcfb}
-      .sign{display:grid;grid-template-columns:1fr 1fr}
       .cert-card{max-width:186mm;margin:0 auto}
       .cert-card-inner{border:.9mm solid #0b3d2e;outline:.35mm solid #d4a017;outline-offset:-2.1mm;padding:13mm 12mm 11mm;background:linear-gradient(180deg,#ffffff 0%,#f7fbf8 100%);text-align:center;break-inside:avoid;page-break-inside:avoid}
       .cert-eyebrow{font-size:8.5px;letter-spacing:.3em;text-transform:uppercase;color:#146c43;font-weight:700;margin:0 0 3.5mm}
@@ -471,9 +469,6 @@
           <p class="cert-footnote">Generated ${safeText(generatedLabel)} • Verified approved entries only</p>
         </div>
       </main>
-      <p class="statement">This certifies that <strong>${safeText(member.fullName)}</strong> (${safeText(memberId)}) has a verified Duty Hours record for the period stated above. Only approved entries are included in the credited total.</p>
-      <div class="summary">${stats}</div>
-      <div class="sign"><div>Member Signature</div><div>Authorized Officer</div></div>
       ${window.LSOBrand?.printRuntimeScript || ''}</body></html>`;
   }
   function printDutyCertification() {
