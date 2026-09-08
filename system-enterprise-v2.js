@@ -403,7 +403,11 @@
     metrics.innerHTML = [['Pending Time In',pendingIn],['Pending Time Out',pendingOut],['Approved Sessions',approved],['Rejected Sessions',rejected],['Completed Members',completed.length]].map(([label,value]) => `<div class="duty-enhancement-metric"><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
     const members = window.LSOApp?.getMembers?.() || [];
     alerts.innerHTML = completed.length ? completed.slice(0,10).map(([id,period]) => { const member=members.find((m)=>m.id===id); const calc=calculateDutyPeriod(data,id,selectedSemester,period); return `<div class="duty-completion-item"><div><strong>${safeText(member?.fullName || id)}</strong><small>${safeText(period)} • ${safeText(durationLabel(calc.credited))} credited of ${safeText(durationLabel(calc.committed))}</small></div><div class="duty-completion-bar" aria-label="${calc.percent}% complete"><span style="width:${calc.percent}%"></span></div></div>`; }).join('') : '<div class="system-error-empty"><strong>No completed requirements detected</strong><p>Apply default requirements or set commitments for the selected semester.</p></div>';
-    const cert = el('printDutyCertification'); if (cert) cert.disabled = !window.LSODutyHours?.getSelectedMemberId?.();
+    syncDutyCertificationButton();
+  }
+  function syncDutyCertificationButton() {
+    const cert = el('printDutyCertification'); if (!cert) return;
+    cert.disabled = !window.LSODutyHours?.getSelectedMemberId?.();
   }
   function applyDefaultDutyRequirements() {
     if (!can('manageDutyRequirements')) return toast('Administrator or Membership access is required.', true);
@@ -415,20 +419,79 @@
     }));
     window.LSODutyHours?.persistData?.(data,{ action:'Applied default Duty Hours requirements', details:`${semester} • ${changed} member records` }); window.LSODutyHours?.refresh?.(); renderDutyEnhancements(); toast(`${changed} Duty Hours requirement${changed===1?'':'s'} applied.`);
   }
+  /*
+   * Duty Hours Certification popup. The print sheet keeps the official brand
+   * template (background header/footer artwork), the brand heading block, and
+   * the brand print runtime — none of which live in this file. Only the
+   * certification content itself is generated here, presented as a formal
+   * Official Certification card on top of the official template.
+   */
+  function buildDutyCertificationHtml({ member, period, semester, calc, generatedAt = '' }) {
+    const generatedLabel = generatedAt || dateTimeLabel(new Date().toISOString());
+    const memberId = member.membershipId || member.studentNumber || 'member record';
+    const stats = [
+      ['Required', durationLabel(calc.committed)],
+      ['Credited', durationLabel(calc.credited)],
+      ['Remaining', durationLabel(calc.remaining)],
+      ['Completion', `${calc.percent}%`]
+    ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Official Certification • Duty Hours</title><style>
+      @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;color:#17211d}
+      /*
+       * Certificate typography (print research):
+       * - Serif face for the formal text: serif is the established convention
+       *   for printed certificates and Georgia's large x-height keeps small
+       *   print sizes legible.
+       * - Body line-height 1.6 (WCAG readability guidance recommends ~1.5+).
+       * - Statement measure capped near 148mm (~55-70 characters per line),
+       *   inside the 45-75 character comfort range for continuous reading.
+       * - Uppercase micro-labels get 0.08-0.16em tracking so they stay
+       *   distinguishable at 6-8px print sizes.
+       */
+      .cert-card{max-width:186mm;margin:0 auto}
+      .cert-card-inner{border:.9mm solid #0b3d2e;outline:.35mm solid #d4a017;outline-offset:-2.1mm;padding:13mm 12mm 11mm;background:linear-gradient(180deg,#ffffff 0%,#f7fbf8 100%);text-align:center;font-family:Georgia,'Times New Roman',serif;break-inside:avoid;page-break-inside:avoid}
+      .cert-eyebrow{font-size:8.5px;letter-spacing:.32em;text-transform:uppercase;color:#146c43;font-weight:700;margin:0 0 3.6mm}
+      .cert-title{font-size:22px;letter-spacing:.09em;text-transform:uppercase;color:#0b3d2e;font-weight:700;margin:0 0 2.2mm}
+      .cert-rule{width:34mm;height:.55mm;background:#d4a017;border:0;margin:2.4mm auto}
+      .cert-lead{font-size:9.5px;font-style:italic;letter-spacing:.04em;margin:4.5mm 0 2.2mm;color:#52645c}
+      .cert-name{font-size:20px;font-style:italic;font-weight:700;letter-spacing:.02em;color:#0b3d2e;margin:0 0 1.4mm;line-height:1.35;overflow-wrap:anywhere}
+      .cert-id{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#52645c;margin:0 0 5.2mm}
+      .cert-statement{font-size:10px;line-height:1.6;text-align:justify;margin:0 auto 5.5mm;padding:3.5mm 4mm;border:.35mm solid #8aa89b;border-left:1.1mm solid #d4a017;background:#fbfcfb;max-width:148mm}
+      .cert-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2.2mm;margin:0 auto 7mm;max-width:158mm}
+      .cert-stats>div{padding:2.2mm 1.5mm;border:.35mm solid #8eb9a4;border-top:1mm solid #146c43;border-radius:1.2mm;background:#f7fbf8}
+      .cert-stats span{display:block;font-size:6.2px;letter-spacing:.09em;text-transform:uppercase;color:#4b6259;font-weight:700}
+      .cert-stats strong{display:block;font-size:10.5px;color:#0b3d2e;margin-top:.9mm}
+      .cert-sign{display:flex;justify-content:space-between;gap:18mm;margin:9mm 8mm 3mm}
+      .cert-sign div{flex:1 1 0;border-top:.35mm solid #0b3d2e;padding-top:1.8mm;font-size:7.6px;letter-spacing:.08em;text-transform:uppercase;color:#0b3d2e;font-weight:700}
+      .cert-seal{width:16mm;height:16mm;margin:0 auto 3.4mm;border:.5mm solid #d4a017;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#0b3d2e;font-size:8px;letter-spacing:.18em;font-weight:700}
+      .cert-footnote{font-size:7px;letter-spacing:.02em;color:#60766e;margin:3.5mm 0 0;line-height:1.5}
+      @media print{.cert-card-inner{background:#ffffff}}
+      ${window.LSOBrand?.printCss || ''}
+      </style></head><body>
+      ${window.LSOBrand?.printHeader({ title: 'Duty Hours Certification', subtitle: `${semester} • ${period}`, meta: `Generated ${generatedLabel}`, badge: 'Verified approved entries only' }) || ''}
+      <main class="cert-card" role="article" aria-label="Official Duty Hours Certification">
+        <div class="cert-card-inner">
+          <div class="cert-seal">LSO</div>
+          <p class="cert-eyebrow">Lasallian Symphony Orchestra</p>
+          <p class="cert-title">Official Certification</p>
+          <hr class="cert-rule">
+          <p class="cert-lead">This is to certify that</p>
+          <p class="cert-name">${safeText(member.fullName)}</p>
+          <p class="cert-id">${safeText(memberId)}</p>
+          <p class="cert-statement">has a verified Duty Hours record for ${safeText(period)} of ${safeText(semester)}. Only approved entries are included in the credited total, and the figures below reflect the official record at the time this certification was generated.</p>
+          <div class="cert-stats">${stats}</div>
+          <div class="cert-sign"><div>Member Signature</div><div>Authorized Officer</div></div>
+          <p class="cert-footnote">Generated ${safeText(generatedLabel)} • Verified approved entries only</p>
+        </div>
+      </main>
+      ${window.LSOBrand?.printRuntimeScript || ''}</body></html>`;
+  }
   function printDutyCertification() {
     if (!can('certifyDutyHours')) return toast('Administrator or Membership access is required.', true);
     const member = window.LSODutyHours?.getSelectedMember?.(); if (!member) return toast('Select a Trainee or Probationary member first.', true);
     const period = window.LSODutyHours.getSelectedPeriod(); const semester = window.LSODutyHours.getActiveSemester(); const calc = calculateDutyPeriod(dutyData(), member.id, semester, period);
     const popup = window.open('', '_blank', 'width=900,height=720'); if (!popup) return toast('Allow pop-ups to generate the certification.', true);
-    popup.document.write(`<!doctype html><html><head><title>Duty Hours Certification</title><style>
-      @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#17211d;margin:0}.summary{display:grid}.statement{font-size:10px;line-height:1.75;text-align:justify;margin:5mm 0;padding:4mm;border:1px solid #8aa89b;border-left:4px solid #d4a017;background:#fbfcfb}.sign{display:grid;grid-template-columns:1fr 1fr}${window.LSOBrand?.printCss || ''}
-      </style></head><body>
-      ${window.LSOBrand.printHeader({ title: 'Duty Hours Certification', subtitle: `${semester} • ${period}`, meta: `Generated ${dateTimeLabel(new Date().toISOString())}`, badge: 'Verified approved entries only' })}
-      <p class="statement">This certifies that <strong>${safeText(member.fullName)}</strong> (${safeText(member.membershipId || member.studentNumber || 'member record')}) has a verified Duty Hours record for the period stated above. Only approved entries are included in the credited total.</p>
-      <div class="summary">${[
-        ['Required',durationLabel(calc.committed)],['Credited',durationLabel(calc.credited)],['Remaining',durationLabel(calc.remaining)],['Completion',`${calc.percent}%`]
-      ].map(([label,value])=>`<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>
-      <div class="sign"><div>Member Signature</div><div>Authorized Officer</div></div>${window.LSOBrand.printRuntimeScript}</body></html>`); popup.document.close();
+    popup.document.write(buildDutyCertificationHtml({ member, period, semester, calc })); popup.document.close();
   }
 
   // ---------------------------------------------------------------------------
@@ -589,6 +652,7 @@
     document.querySelector('[data-view="systemHealthView"]')?.addEventListener('click',()=>setTimeout(()=>refreshSystemHealth({quiet:true}),50));
     document.querySelector('[data-view="dataView"]')?.addEventListener('click',()=>setTimeout(()=>{setRecoveryPanel(activeRecoveryPanel);refreshRecoveryPoints({quiet:true});renderRecoveryWorkspaceStatus();},50));
     ['lso:duty-hours-changed','lso:cloud-state-changed','lso:members-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-duty-enhancements',renderDutyEnhancements,120,{viewId:'dutyHoursView'})));
+    window.addEventListener('lso:duty-hours-selection-changed',syncDutyCertificationButton);
     ['lso:monthly-report-changed','lso:cloud-state-changed'].forEach((name)=>window.addEventListener(name,()=>window.LSORuntimeStability?.schedule?.('system-monthly-workflow',renderMonthlyWorkflow,120,{viewId:'monthlyReportView'})));
     ['lso:cloud-status','lso:connection-health','lso:sync-heartbeat','lso:cloud-saved'].forEach((name)=>window.addEventListener(name,()=>renderRecoveryWorkspaceStatus()));
     window.addEventListener('lso:system-error',(event)=>{
@@ -617,7 +681,7 @@
     if(isAdmin()){setTimeout(()=>{ensureDailyRecovery();refreshSystemHealth({quiet:true});refreshRecoveryPoints({quiet:true});},900);}
   }
 
-  window.LSOEnterprise = { VERSION, reportError, getNotifications: enterpriseNotifications, refreshHealth: refreshSystemHealth, refreshRecovery: refreshRecoveryPoints, applyAccessibility, validateBackupObject, renderDutyEnhancements, renderMonthlyWorkflow, setRecoveryPanel, renderRecoveryWorkspaceStatus };
+  window.LSOEnterprise = { VERSION, reportError, getNotifications: enterpriseNotifications, refreshHealth: refreshSystemHealth, refreshRecovery: refreshRecoveryPoints, applyAccessibility, validateBackupObject, renderDutyEnhancements, renderMonthlyWorkflow, setRecoveryPanel, renderRecoveryWorkspaceStatus, buildDutyCertificationHtml, syncDutyCertificationButton };
   window.addEventListener('lso:permissions-changed',()=>setTimeout(()=>{renderPermissionMatrix();window.LSORolePermissionCenter?.render?.();},20));
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
 })();
