@@ -11,7 +11,7 @@
     '.nav-item', '.admin-only', '[data-account-action]', '.account-role-select', '.account-member-select',
     '#memberForm', '[data-action="edit"]', '[data-action="delete"]', '#addMemberTop', '#addMemberHero', '#addMemberMembers', '#editRecordButton',
     '#addEventButton', '#createEventOnSelectedDate', '#editEventButton', '#deleteEventButton', '#markAllPresent', '#saveAttendanceButton',
-    '#reviewAttendanceMonthButton', '#returnAttendanceMonthToDraftButton', '#finalizeAttendanceMonthButton', '#reopenAttendanceMonthButton', '#saveAttendanceSemesterEndDate', '#finalizeAttendanceSemesterButton', '#reopenAttendanceSemesterButton', '#finalizeAttendanceButton', '#unlockAttendanceButton', '.attendance-status', '.attendance-remarks', '[data-attendance-group]',
+    '#reviewAttendanceMonthButton', '#returnAttendanceMonthToDraftButton', '#finalizeAttendanceMonthButton', '#reopenAttendanceMonthButton', '#saveAttendanceSemesterEndDate', '#finalizeAttendanceSemesterButton', '#reopenAttendanceSemesterButton', '#finalizeAttendanceButton', '#unlockAttendanceButton', '#verifyAttendanceButton', '#unverifyAttendanceButton', '.attendance-status', '.attendance-remarks', '[data-attendance-group]',
     '#contractAdminWorkspace', '#contractReadOnlyNotice', '#contractMakerForm', '[data-monthly-edit]', '[data-monthly-write]',
     '#monthlyReportFinalizeButton', '#monthlyReportReopenButton', '.duty-management-only', '.duty-roster-monitor-panel',
     '.duty-roster-report-actions', '#dutyRecordModeToggle', '#dutyApprovalPanel', '#dutyHoursAdminControls', '[data-duty-delete]',
@@ -141,6 +141,8 @@
     applyWorkflowPermission(el('reopenAttendanceSemesterButton'), can('unlockAttendance'));
     applyWorkflowPermission(el('finalizeAttendanceButton'), can('finalizeAttendance'));
     applyWorkflowPermission(el('unlockAttendanceButton'), can('unlockAttendance'));
+    applyWorkflowPermission(el('verifyAttendanceButton'), saveDraft);
+    applyWorkflowPermission(el('unverifyAttendanceButton'), can('unlockAttendance'));
     qsa('.attendance-status, .attendance-remarks', root).forEach((node) => {
       const finalized = node.classList.contains('attendance-locked-control');
       enable(node, saveDraft && !finalized, finalized ? 'Finalized attendance is locked.' : 'This role cannot edit the selected attendance roster.');
@@ -263,9 +265,9 @@
     if (target.closest('#addMemberTop, #addMemberHero, #addMemberMembers, #editRecordButton, [data-action="edit"], [data-action="delete"], #memberForm')) return 'manageMembers';
     if (target.closest('#addEventButton, #createEventOnSelectedDate, #editEventButton, #eventForm')) return 'manageEvents';
     if (target.closest('#deleteEventButton')) return 'deleteEvents';
-    if (target.closest('#markAllPresent, #saveAttendanceButton, .attendance-status, .attendance-remarks')) return 'saveDraftAttendance';
+    if (target.closest('#markAllPresent, #saveAttendanceButton, .attendance-status, .attendance-remarks, #verifyAttendanceButton')) return 'saveDraftAttendance';
     if (target.closest('#reviewAttendanceMonthButton, #finalizeAttendanceMonthButton, #saveAttendanceSemesterEndDate, #finalizeAttendanceSemesterButton, #finalizeAttendanceButton')) return 'finalizeAttendance';
-    if (target.closest('#returnAttendanceMonthToDraftButton, #reopenAttendanceMonthButton, #reopenAttendanceSemesterButton, #unlockAttendanceButton, [data-attendance-archive-delete]')) return 'unlockAttendance';
+    if (target.closest('#returnAttendanceMonthToDraftButton, #reopenAttendanceMonthButton, #reopenAttendanceSemesterButton, #unlockAttendanceButton, #unverifyAttendanceButton, [data-attendance-archive-delete]')) return 'unlockAttendance';
     if (target.closest('#contractMakerForm, #previewContractButton, #downloadContractButton, #resetContractButton')) return 'generateContract';
     if (target.closest('#monthlyReportFinalizeButton')) return 'finalizeMonthlyReport';
     if (target.closest('#monthlyReportReopenButton')) return 'reopenMonthlyReport';

@@ -672,6 +672,10 @@
       toast('This attendance roster is finalized. Unlock it before making corrections.', true);
       return;
     }
+    if (window.LSOAttendanceGovernance?.isVerified?.(workflowEvent, activeAttendanceGroup(), activeAttendanceRosterMode())) {
+      toast('This attendance roster is Verified and locked. Unverify it before making corrections.', true);
+      return;
+    }
     const rows = qsa('[data-attendance-member]', el('attendanceRosterBody'));
     const now = new Date().toISOString();
     let changed = false;
