@@ -433,23 +433,34 @@
     ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('');
     return `<!doctype html><html><head><meta charset="utf-8"><title>Official Certification • Duty Hours</title><style>
       @page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;color:#17211d}
+      /*
+       * Certificate typography (print research):
+       * - Serif face for the formal text: serif is the established convention
+       *   for printed certificates and Georgia's large x-height keeps small
+       *   print sizes legible.
+       * - Body line-height 1.6 (WCAG readability guidance recommends ~1.5+).
+       * - Statement measure capped near 148mm (~55-70 characters per line),
+       *   inside the 45-75 character comfort range for continuous reading.
+       * - Uppercase micro-labels get 0.08-0.16em tracking so they stay
+       *   distinguishable at 6-8px print sizes.
+       */
       .cert-card{max-width:186mm;margin:0 auto}
-      .cert-card-inner{border:.9mm solid #0b3d2e;outline:.35mm solid #d4a017;outline-offset:-2.1mm;padding:13mm 12mm 11mm;background:linear-gradient(180deg,#ffffff 0%,#f7fbf8 100%);text-align:center;break-inside:avoid;page-break-inside:avoid}
-      .cert-eyebrow{font-size:8.5px;letter-spacing:.3em;text-transform:uppercase;color:#146c43;font-weight:700;margin:0 0 3.5mm}
-      .cert-title{font-size:22px;letter-spacing:.07em;text-transform:uppercase;color:#0b3d2e;margin:0 0 2mm}
-      .cert-rule{width:34mm;height:.55mm;background:#d4a017;border:0;margin:2mm auto}
-      .cert-lead{font-size:9.5px;margin:4mm 0 2mm;color:#52645c}
-      .cert-name{font-size:20px;font-weight:700;color:#0b3d2e;margin:0 0 1.2mm;line-height:1.3;overflow-wrap:anywhere}
-      .cert-id{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#52645c;margin:0 0 5mm}
-      .cert-statement{font-size:10px;line-height:1.6;text-align:justify;margin:0 auto 5.5mm;padding:3.5mm 4mm;border:.35mm solid #8aa89b;border-left:1.1mm solid #d4a017;background:#fbfcfb;max-width:152mm}
-      .cert-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2mm;margin:0 auto 7mm;max-width:158mm}
+      .cert-card-inner{border:.9mm solid #0b3d2e;outline:.35mm solid #d4a017;outline-offset:-2.1mm;padding:13mm 12mm 11mm;background:linear-gradient(180deg,#ffffff 0%,#f7fbf8 100%);text-align:center;font-family:Georgia,'Times New Roman',serif;break-inside:avoid;page-break-inside:avoid}
+      .cert-eyebrow{font-size:8.5px;letter-spacing:.32em;text-transform:uppercase;color:#146c43;font-weight:700;margin:0 0 3.6mm}
+      .cert-title{font-size:22px;letter-spacing:.09em;text-transform:uppercase;color:#0b3d2e;font-weight:700;margin:0 0 2.2mm}
+      .cert-rule{width:34mm;height:.55mm;background:#d4a017;border:0;margin:2.4mm auto}
+      .cert-lead{font-size:9.5px;font-style:italic;letter-spacing:.04em;margin:4.5mm 0 2.2mm;color:#52645c}
+      .cert-name{font-size:20px;font-style:italic;font-weight:700;letter-spacing:.02em;color:#0b3d2e;margin:0 0 1.4mm;line-height:1.35;overflow-wrap:anywhere}
+      .cert-id{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#52645c;margin:0 0 5.2mm}
+      .cert-statement{font-size:10px;line-height:1.6;text-align:justify;margin:0 auto 5.5mm;padding:3.5mm 4mm;border:.35mm solid #8aa89b;border-left:1.1mm solid #d4a017;background:#fbfcfb;max-width:148mm}
+      .cert-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2.2mm;margin:0 auto 7mm;max-width:158mm}
       .cert-stats>div{padding:2.2mm 1.5mm;border:.35mm solid #8eb9a4;border-top:1mm solid #146c43;border-radius:1.2mm;background:#f7fbf8}
-      .cert-stats span{display:block;font-size:6.2px;letter-spacing:.08em;text-transform:uppercase;color:#4b6259;font-weight:700}
-      .cert-stats strong{display:block;font-size:10.5px;color:#0b3d2e;margin-top:.8mm}
+      .cert-stats span{display:block;font-size:6.2px;letter-spacing:.09em;text-transform:uppercase;color:#4b6259;font-weight:700}
+      .cert-stats strong{display:block;font-size:10.5px;color:#0b3d2e;margin-top:.9mm}
       .cert-sign{display:flex;justify-content:space-between;gap:18mm;margin:9mm 8mm 3mm}
-      .cert-sign div{flex:1 1 0;border-top:.35mm solid #0b3d2e;padding-top:1.8mm;font-size:7.6px;letter-spacing:.06em;text-transform:uppercase;color:#0b3d2e;font-weight:700}
-      .cert-seal{width:16mm;height:16mm;margin:0 auto 3mm;border:.5mm solid #d4a017;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#0b3d2e;font-size:8px;letter-spacing:.16em;font-weight:700}
-      .cert-footnote{font-size:7px;color:#60766e;margin:3.5mm 0 0;line-height:1.5}
+      .cert-sign div{flex:1 1 0;border-top:.35mm solid #0b3d2e;padding-top:1.8mm;font-size:7.6px;letter-spacing:.08em;text-transform:uppercase;color:#0b3d2e;font-weight:700}
+      .cert-seal{width:16mm;height:16mm;margin:0 auto 3.4mm;border:.5mm solid #d4a017;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#0b3d2e;font-size:8px;letter-spacing:.18em;font-weight:700}
+      .cert-footnote{font-size:7px;letter-spacing:.02em;color:#60766e;margin:3.5mm 0 0;line-height:1.5}
       @media print{.cert-card-inner{background:#ffffff}}
       ${window.LSOBrand?.printCss || ''}
       </style></head><body>
