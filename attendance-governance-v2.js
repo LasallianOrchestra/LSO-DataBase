@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v10-attendance-lifecycle-workflow';
+  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v11-attendance-verified-lock';
 
   const EVENTS_KEY = 'lso_events_v2';
   const ATTENDANCE_KEY = 'lso_attendance_v2';
@@ -334,6 +334,13 @@
       finalizedBy: raw?.finalizedBy || '',
       unlockedAt: raw?.unlockedAt || '',
       unlockedBy: raw?.unlockedBy || '',
+      // Per-activity Verified lock. Orthogonal to state: it locks a single
+      // activity roster without changing it, and Finalized supersedes it.
+      verified: raw?.verified === true,
+      verifiedAt: raw?.verifiedAt || '',
+      verifiedBy: raw?.verifiedBy || '',
+      unverifiedAt: raw?.unverifiedAt || '',
+      unverifiedBy: raw?.unverifiedBy || '',
       revision: Math.max(0, Number(raw?.revision) || 0),
       history
     };
@@ -360,6 +367,11 @@
       if (hasManagedMonthState(eventMonth, event.semester || activeSemester(), group, mode) && ['Draft', 'In Review', 'Reopened'].includes(monthly.state)) return 'Draft';
     }
     return getWorkflow(event, group, mode).state;
+  }
+
+  function isVerified(event, group = activeGroup(), mode = activeMode()) {
+    if (!event) return false;
+    return getWorkflow(event, group, mode).verified === true;
   }
 
   function getEvents() {
@@ -702,7 +714,7 @@
 
   function appendDraftSaveAudit(beforeRecords) {
     const event = selectedEvent();
-    if (!event || workflowState(event) === 'Finalized' || monthState(String(event.date || '').slice(0, 7), event.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') return;
+    if (!event || workflowState(event) === 'Finalized' || isVerified(event) || monthState(String(event.date || '').slice(0, 7), event.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') return;
     const afterRecords = scopedAttendanceRecords();
     if (attendanceRecordSignature(beforeRecords || []) === attendanceRecordSignature(afterRecords)) return;
 
@@ -795,6 +807,11 @@
     const counts = statusCounts(finalRecords);
     const workflow = getWorkflow(event);
     workflow.state = 'Finalized';
+    // Finalized supersedes the per-activity Verified lock: the stronger
+    // terminal lock replaces it so a later unlock reopens an editable Draft.
+    workflow.verified = false;
+    workflow.verifiedAt = '';
+    workflow.verifiedBy = '';
     workflow.finalizedAt = now;
     workflow.finalizedBy = actor.account;
     workflow.revision += 1;
@@ -834,6 +851,11 @@
     const actor = auditActor();
     const workflow = getWorkflow(event);
     workflow.state = 'Draft';
+    // An unlocked roster must be editable. Clear any lingering Verified lock
+    // so "Unlock for Editing" never reopens into a still-locked roster.
+    workflow.verified = false;
+    workflow.verifiedAt = '';
+    workflow.verifiedBy = '';
     workflow.unlockedAt = now;
     workflow.unlockedBy = actor.account;
     workflow.history.unshift(auditEntry('Unlocked for editing', 'Finalized attendance was reopened for an administrator correction.', reason.trim()));
@@ -841,6 +863,75 @@
     persistWorkflow(event, workflow);
     window.LSOOperations?.logActivity?.('Unlocked finalized attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()} • ${reason.trim()}`);
     window.LSOApp?.showToast?.('Attendance unlocked. Save corrections, then finalize it again.');
+    setTimeout(render, 60);
+  }
+
+  function verifyAttendance() {
+    if (!canSaveDraftAttendance()) {
+      window.LSOApp?.showToast?.('Your role cannot verify attendance.', true);
+      return;
+    }
+    const event = selectedEvent();
+    if (!event) return;
+    if (event.date && event.date > today()) {
+      window.LSOApp?.showToast?.('A future event cannot be verified.', true);
+      return;
+    }
+    if (workflowState(event) === 'Finalized') {
+      window.LSOApp?.showToast?.('This attendance roster is already finalized.', true);
+      return;
+    }
+    const eventMonth = String(event.date || '').slice(0, 7);
+    if (eventMonth && monthState(eventMonth, event.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') {
+      window.LSOApp?.showToast?.('This month is in Review. Return it for corrections before verifying.', true);
+      return;
+    }
+    const workflow = getWorkflow(event);
+    if (workflow.verified) {
+      window.LSOApp?.showToast?.('This attendance roster is already Verified.');
+      return;
+    }
+    // Verify locks this SINGLE activity only. Stored statuses/remarks are
+    // deliberately untouched (no auto-mark): they keep counting toward the
+    // monthly and semester computation while edits are blocked.
+    const now = new Date().toISOString();
+    const actor = auditActor();
+    workflow.verified = true;
+    workflow.verifiedAt = now;
+    workflow.verifiedBy = actor.account;
+    workflow.history.unshift(auditEntry('Attendance verified', 'Activity attendance was Verified and locked. Stored marks still count toward monthly and semester computation.'));
+    workflow.history = workflow.history.slice(0, 100);
+    persistWorkflow(event, workflow);
+    window.LSOOperations?.logActivity?.('Verified attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()}`);
+    window.LSOApp?.showToast?.('Attendance Verified and locked.');
+    setTimeout(render, 60);
+  }
+
+  function unverifyAttendance() {
+    if (!canUnlockAttendance()) {
+      window.LSOApp?.showToast?.('Only the Administrator can unverify attendance.', true);
+      return;
+    }
+    const event = selectedEvent();
+    if (!event) return;
+    if (workflowState(event) === 'Finalized') {
+      window.LSOApp?.showToast?.('This attendance roster is finalized. Unlock it before making corrections.', true);
+      return;
+    }
+    const workflow = getWorkflow(event);
+    if (!workflow.verified) return;
+    const now = new Date().toISOString();
+    const actor = auditActor();
+    workflow.verified = false;
+    workflow.verifiedAt = '';
+    workflow.verifiedBy = '';
+    workflow.unverifiedAt = now;
+    workflow.unverifiedBy = actor.account;
+    workflow.history.unshift(auditEntry('Unverified for editing', 'Verified attendance was reopened for corrections.'));
+    workflow.history = workflow.history.slice(0, 100);
+    persistWorkflow(event, workflow);
+    window.LSOOperations?.logActivity?.('Unverified attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()}`);
+    window.LSOApp?.showToast?.('Attendance unverified. Save corrections, then verify it again.');
     setTimeout(render, 60);
   }
 
@@ -1563,13 +1654,14 @@
     const monthlyLocked = monthStateLocksEditing(monthlyState.state);
     const effectiveWorkflowState = workflowState(event, activeGroup(), activeMode());
     const finalized = effectiveWorkflowState === 'Finalized';
+    const verified = workflow.verified === true && !finalized;
     const badge = el('attendanceWorkflowStatusBadge');
     if (badge) {
-      badge.textContent = monthlyLocked ? monthlyState.state : workflow.state;
-      badge.className = `badge ${monthlyState.state === 'Finalized' || finalized ? 'badge-green' : monthlyState.state === 'In Review' ? 'badge-blue' : monthlyState.state === 'Reopened' ? 'badge-red' : 'badge-gold'}`;
+      badge.textContent = monthlyLocked ? monthlyState.state : verified ? 'Verified' : workflow.state;
+      badge.className = `badge ${monthlyState.state === 'Finalized' || finalized ? 'badge-green' : monthlyState.state === 'In Review' ? 'badge-blue' : verified ? 'badge-purple' : monthlyState.state === 'Reopened' ? 'badge-red' : 'badge-gold'}`;
     }
     if (el('attendanceWorkflowStatusTitle')) {
-      el('attendanceWorkflowStatusTitle').textContent = monthlyState.state === 'In Review' ? 'This month is in Review and editing is paused' : monthlyState.state === 'Finalized' ? 'This entire attendance month is finalized and archived' : finalized ? 'This activity is finalized and locked' : 'Activity attendance is editable';
+      el('attendanceWorkflowStatusTitle').textContent = monthlyState.state === 'In Review' ? 'This month is in Review and editing is paused' : monthlyState.state === 'Finalized' ? 'This entire attendance month is finalized and archived' : finalized ? 'This activity is finalized and locked' : verified ? 'This activity is Verified and locked' : 'Activity attendance is editable';
     }
     if (el('attendanceWorkflowStatusMeta')) {
       el('attendanceWorkflowStatusMeta').textContent = monthlyState.state === 'In Review'
@@ -1578,6 +1670,10 @@
         ? `Monthly rating finalized for ${eventMonth}. Reopen the whole month to create a corrected revision.`
         : finalized
           ? `Finalized by ${workflow.finalizedBy || 'Administrator'} on ${dateLabel(workflow.finalizedAt, true)} • Revision ${workflow.revision}`
+          : verified
+          ? `Verified by ${workflow.verifiedBy || 'Administrator'} on ${dateLabel(workflow.verifiedAt, true)} • Marks still count toward monthly totals.`
+          : workflow.unverifiedAt
+          ? `Unverified by ${workflow.unverifiedBy || 'Administrator'} on ${dateLabel(workflow.unverifiedAt, true)} • Save corrections and verify again.`
           : workflow.unlockedAt
           ? `Unlocked by ${workflow.unlockedBy || 'Administrator'} on ${dateLabel(workflow.unlockedAt, true)} • Save corrections and finalize again.`
           : 'Save this activity roster, then complete the monthly Review and Finalize workflow.';
@@ -1588,16 +1684,21 @@
     if (finalizeButton) finalizeButton.classList.toggle('hidden', finalized || monthlyLocked || !canFinalizeAttendance());
     if (unlockButton) unlockButton.classList.toggle('hidden', !finalized || monthlyLocked || !canUnlockAttendance());
 
+    const verifyButton = el('verifyAttendanceButton');
+    const unverifyButton = el('unverifyAttendanceButton');
+    if (verifyButton) verifyButton.classList.toggle('hidden', verified || finalized || monthlyLocked || !canSaveDraftAttendance());
+    if (unverifyButton) unverifyButton.classList.toggle('hidden', !verified || finalized || monthlyLocked || !canUnlockAttendance());
+
     ['markAllPresent', 'saveAttendanceButton'].forEach((id) => {
       const button = el(id);
       if (!button) return;
-      button.disabled = monthlyLocked || finalized;
-      button.setAttribute('aria-disabled', monthlyLocked || finalized ? 'true' : 'false');
-      button.title = monthlyState.state === 'In Review' ? 'Return the reviewed month for corrections before editing.' : finalized ? 'Reopen the finalized month before editing.' : '';
+      button.disabled = monthlyLocked || finalized || verified;
+      button.setAttribute('aria-disabled', monthlyLocked || finalized || verified ? 'true' : 'false');
+      button.title = monthlyState.state === 'In Review' ? 'Return the reviewed month for corrections before editing.' : finalized ? 'Reopen the finalized month before editing.' : verified ? 'Verified attendance is locked. Unverify it to edit.' : '';
     });
     document.querySelectorAll('.attendance-status, .attendance-remarks').forEach((control) => {
       const loaLocked = control.closest('[data-loa-excused="true"]') !== null;
-      const workflowLocked = monthlyLocked || finalized || !canSaveDraftAttendance();
+      const workflowLocked = monthlyLocked || finalized || verified || !canSaveDraftAttendance();
       control.disabled = loaLocked || workflowLocked;
       if (control.matches('.attendance-remarks')) control.readOnly = loaLocked || workflowLocked;
       control.classList.toggle('attendance-locked-control', loaLocked || workflowLocked);
@@ -1607,7 +1708,9 @@
           ? 'The month is in Review. Return it for corrections to edit.'
           : finalized
             ? 'Finalized attendance is locked. Reopen the month for corrections.'
-            : '';
+            : verified
+              ? 'Verified attendance is locked. Unverify it to edit.'
+              : '';
     });
     // Activity creation belongs to the currently selected calendar month, not to
     // whichever activity happened to be selected previously. Keeping these scopes
@@ -1644,7 +1747,9 @@
           ? '<span>Finalized and archived</span><small>Reopen the month to make a corrected revision.</small>'
           : monthlyState.state === 'Reopened'
             ? '<span>Reopened revision</span><small>Save corrections, then review the whole month again.</small>'
-            : '<span>Draft activity</span><small>Changes are saved only when you select Save Attendance.</small>';
+            : verified
+              ? '<span>Verified activity</span><small>Locked. Marks still count toward monthly totals.</small>'
+              : '<span>Draft activity</span><small>Changes are saved only when you select Save Attendance.</small>';
     }
 
     const history = el('attendanceAuditHistory');
@@ -1819,6 +1924,9 @@
         // Once a month is under review or finalized, its event-level draft state is
         // represented by the monthly workflow and must not create duplicate alerts.
         if (monthlyState === 'In Review' || monthlyState === 'Finalized') return false;
+        // A Verified activity is locked and no longer Draft, so it must not
+        // raise a Draft alert even though it is not Finalized yet.
+        if (isVerified(event, group, mode)) return false;
         return workflowState(event, group, mode) !== 'Finalized';
       });
       if (drafts.length) {
@@ -1957,13 +2065,14 @@
     if (!eventRecord) return;
     const eventMonth = String(eventRecord.date || '').slice(0, 7);
     const monthly = monthState(eventMonth, eventRecord.semester || activeSemester(), activeGroup(), activeMode());
-    const locked = monthStateLocksEditing(monthly.state) || workflowState(eventRecord) === 'Finalized';
+    const verified = isVerified(eventRecord) && workflowState(eventRecord) !== 'Finalized';
+    const locked = monthStateLocksEditing(monthly.state) || workflowState(eventRecord) === 'Finalized' || verified;
     if (!locked) return;
     const blocked = target.closest?.('#saveAttendanceButton, #markAllPresent, .attendance-status, .attendance-remarks, #editEventButton, #deleteEventButton');
     if (!blocked) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    window.LSOApp?.showToast?.(monthly.state === 'In Review' ? 'This month is in Review. Return it for corrections before editing.' : 'This month is finalized. Reopen it before making a corrected revision.', true);
+    window.LSOApp?.showToast?.(monthly.state === 'In Review' ? 'This month is in Review. Return it for corrections before editing.' : verified ? 'This activity is Verified and locked. Unverify it before editing.' : 'This month is finalized. Reopen it before making a corrected revision.', true);
   }
 
   let renderTimer = 0;
@@ -2057,6 +2166,8 @@
   function wireEvents() {
     el('finalizeAttendanceButton')?.addEventListener('click', finalizeAttendance);
     el('unlockAttendanceButton')?.addEventListener('click', unlockAttendance);
+    el('verifyAttendanceButton')?.addEventListener('click', verifyAttendance);
+    el('unverifyAttendanceButton')?.addEventListener('click', unverifyAttendance);
     el('exportAttendanceAuditCsv')?.addEventListener('click', exportAuditHistory);
     el('exportAttendanceAnalyticsCsv')?.addEventListener('click', exportOverallAnalytics);
     el('exportIndividualAttendanceCsv')?.addEventListener('click', exportIndividualAnalytics);
@@ -2093,7 +2204,7 @@
       const button = event.target.closest?.('#saveAttendanceButton');
       if (!button) return;
       const eventRecord = selectedEvent();
-      if (!eventRecord || workflowState(eventRecord) === 'Finalized' || monthState(String(eventRecord.date || '').slice(0, 7), eventRecord.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') return;
+      if (!eventRecord || workflowState(eventRecord) === 'Finalized' || isVerified(eventRecord) || monthState(String(eventRecord.date || '').slice(0, 7), eventRecord.semester || activeSemester(), activeGroup(), activeMode()).state === 'In Review') return;
       beforeSaveSnapshot = clone(scopedAttendanceRecords());
       clearTimeout(saveAuditTimer);
       saveAuditTimer = setTimeout(() => {
@@ -2328,6 +2439,9 @@
     render,
     finalizeAttendance,
     unlockAttendance,
+    isVerified,
+    verifyAttendance,
+    unverifyAttendance,
     reviewMonth,
     returnMonthToCorrections,
     finalizeMonth,

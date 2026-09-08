@@ -352,10 +352,12 @@
     const eventIds = new Set(monthlyEvents.map((event) => event.id));
     const records = groupRecordsForEvents(monthlyEvents);
     const finalized = monthlyEvents.filter((event) => eventWorkflowState(event) === 'Finalized').length;
-    const draft = Math.max(0, monthlyEvents.length - finalized);
+    const verified = monthlyEvents.filter((event) => eventWorkflowState(event) !== 'Finalized' && window.LSOAttendanceGovernance?.isVerified?.(event, activeAttendanceGroup(), activeAttendanceRosterMode())).length;
+    const draft = Math.max(0, monthlyEvents.length - finalized - verified);
     container.innerHTML = `<div class="month-workspace-copy"><span>Selected month workspace</span><strong>${safeText(calendarMonthLabel())}</strong><small>Only this month’s activities appear in the activity list and attendance workspace. Other months remain stored separately.</small></div>
       <div class="month-workspace-metric"><span>Activities</span><strong>${monthlyEvents.length}</strong><small>Selected semester</small></div>
       <div class="month-workspace-metric"><span>Finalized</span><strong>${finalized}</strong><small>Locked rosters</small></div>
+      <div class="month-workspace-metric"><span>Verified</span><strong>${verified}</strong><small>Locked, still counted</small></div>
       <div class="month-workspace-metric"><span>Draft</span><strong>${draft}</strong><small>Still editable</small></div>
       <div class="month-workspace-metric"><span>Attendance Marks</span><strong>${records.filter((record) => eventIds.has(record.eventId) && record.status).length}</strong><small>${safeText(attendanceGroupShortLabel())}</small></div>`;
   }
