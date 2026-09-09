@@ -3,7 +3,7 @@
 <html class="lso-auth-locked" lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <meta content="#0B3D2E" name="theme-color"/>
 <meta content="light dark" name="color-scheme"/>
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
@@ -56,7 +56,6 @@
 <link href="apple-touch-icon.png?v=20260721-pwa-v1" rel="apple-touch-icon"/>
 <link href="manifest.webmanifest?v=20260814-system-refresh-v73" rel="manifest"/>
 <link href="lso-ui-bundle-v73.css?v=20260817-interview-access-v74" rel="stylesheet"/>
-<link href="device-compat-v83.css?v=20260909-tablet-grid-areas-v83" rel="stylesheet"/>
 <style id="lso-login-color-critical-v6">
 .auth-card .auth-heading p:not(.eyebrow){color:#42584E!important;opacity:1!important;-webkit-text-fill-color:#42584E!important}.auth-card .auth-heading h2{color:#0B3D2E!important}.auth-card .field>span{color:#2F453B!important}.auth-card input::placeholder{color:#66736D!important;opacity:1!important}.auth-tab{color:#4F6259!important}.auth-tab.active{color:#0B3D2E!important}.auth-submit{color:#fff!important}
 </style>
@@ -509,7 +508,8 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <label class="field"><span>Venue *</span><input id="interviewVenue" autocomplete="off" placeholder="Venue" required></label>
 <label class="field"><span>Time *</span><input id="interviewTime" autocomplete="off" placeholder="Interview Time" required></label>
 </div>
-<div aria-live="polite" class="forview-actions"><button class="button button-secondary" id="generateInterviewPdf" type="button">Generate Preview</button><button class="button button-primary" id="downloadInterviewPdf" type="button">Download Official PDF</button></div>
+<div aria-live="polite" class="form-message hidden" id="interviewFormMessage"></div>
+<div class="inline-actions interview-actions"><button class="button button-secondary" id="generateInterviewPdf" type="button">Generate Preview</button><button class="button button-primary" id="downloadInterviewPdf" type="button">Download Official PDF</button></div>
 </article>
 <article class="panel interview-preview-panel">
 <div class="panel-header"><div><p class="eyebrow">Document Preview</p><h3>Official Template Preview</h3><p class="panel-subtitle">Generate the document first, review the applicant information, then download the official PDF.</p></div><span class="interview-preview-status" id="interviewPreviewStatus">Waiting for details</span></div>
@@ -775,7 +775,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <div class="hidden" id="attendanceWorkspace">
 <div class="panel-header stack-mobile"><div><p class="eyebrow" id="attendanceEventType">Rehearsal</p><h3 id="attendanceEventTitle"></h3><p class="panel-subtitle" id="attendanceEventMeta"></p><span class="attendance-roster-group-badge">Roster: <strong id="attendanceRosterGroupLabel">Official Members</strong></span></div><div class="inline-actions"><button class="button button-secondary" id="printEventAttendance" type="button">Print Selected Group Roster</button><button class="button button-secondary" id="editEventButton">Edit</button><button class="button button-danger" id="deleteEventButton">Delete</button></div></div>
 <div class="attendance-governance-panel hidden" id="attendanceGovernancePanel">
-<div class="attendance-workflow-status"><span class="badge badge-gold" id="attendanceWorkflowStatusBadge">Draft</span><div><strong id="attendanceWorkflowStatusTitle">Activity attendance is editable</strong><small id="attendanceWorkflowStatusMeta">Save the activity roster, then validate and finalize the whole month from the monthly workflow.</small></div></en validate and finalize the whole month from the monthly workflow.</small></div></div>
+<div class="attendance-workflow-status"><span class="badge badge-gold" id="attendanceWorkflowStatusBadge">Draft</span><div><strong id="attendanceWorkflowStatusTitle">Activity attendance is editable</strong><small id="attendanceWorkflowStatusMeta">Save the activity roster, then validate and finalize the whole month from the monthly workflow.</small></div></div>
 <div class="attendance-workflow-actions"><button class="button button-primary" id="finalizeAttendanceButton" type="button">Finalize &amp; Lock Attendance</button><button class="button button-secondary hidden" id="unlockAttendanceButton" type="button">Unlock for Editing</button><button class="button button-secondary" id="verifyAttendanceButton" type="button">Verify &amp; Lock Activity</button><button class="button button-secondary hidden" id="unverifyAttendanceButton" type="button">Unverify for Editing</button><button class="button button-secondary" id="exportAttendanceAuditCsv" type="button">Export Audit CSV</button></div>
 <details class="attendance-audit-details"><summary>View attendance audit history</summary><div class="attendance-audit-empty" id="attendanceAuditEmpty">No attendance audit activity has been recorded for this roster yet.</div><div class="attendance-audit-history" id="attendanceAuditHistory"></div></details>
 </div>
@@ -1131,7 +1131,8 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <span>01</span>
 <div><h3>Personal Information</h3><p>Basic identity and member details</p></div>
 </div>
-<div class="mehoto preview" class="member-photo-preview" id="memberPhotoPreview"><span id="memberPhotoInitials">LSO</span></div>
+<div class="member-photo-editor span-3" id="memberPhotoEditor">
+<div aria-label="Member profile photo preview" class="member-photo-preview" id="memberPhotoPreview"><span id="memberPhotoInitials">LSO</span></div>
 <div class="member-photo-controls">
 <div><strong>Profile Photo</strong><small>Upload a clear face photo. The system stores an optimized square thumbnail for fast cross-device display.</small></div>
 <div class="inline-actions">
@@ -1278,7 +1279,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <section aria-hidden="true" aria-labelledby="maintenanceOverlayTitle" aria-modal="true" class="maintenance-mode-overlay hidden" hidden="" id="maintenanceModeOverlay" role="alertdialog">
 <div class="maintenance-mode-card" tabindex="-1"><div aria-hidden="true" class="mark">M</div><p class="eyebrow">LSO System Maintenance</p><h1 id="maintenanceOverlayTitle">The management system is temporarily unavailable</h1><p id="maintenanceOverlayMessage">An Administrator is currently performing maintenance.</p><div class="resume" id="maintenanceOverlayResume">Please try again after maintenance is completed.</div><div class="inline-actions maintenance-overlay-actions"><button class="button button-secondary" id="maintenanceModeRefreshButton" type="button">Check Status</button><button class="button button-secondary hidden" id="maintenanceModeExitPreviewButton" type="button">Exit Preview</button><button class="button button-primary" id="maintenanceModeLogoutButton" type="button">Log Out</button></div></div>
 </section>
-<section aria-labelledby="v69SyncTitle" aria-modal="false" class="v69-sync-popover hidden" id="v69SyncPopover" role="dialog"><div class="v69-popover-header"><div><p class="eyebrow">Shared Database</p><h3 id="v69SyncTitle">Synchronization Status</h3></div><button aria-label="Close synchronization status" class="icon-button" id="v69CloseSync" type="button">×</button></div><div class="v69-sync-grid"><div><span>ConneoseSync" type="button">×</button></div><div class="v69-sync-grid"><div><span>Connection</span><strong id="v69SyncConnection">Checking…</strong></div><div><span>Pending</span><strong id="v69SyncPending">0 changes</strong></div><div><span>Last synchronized</span><strong id="v69SyncLast">Not yet</strong></div><div><span>Conflicts</span><strong id="v69SyncConflicts">None</strong></div></div><div class="v69-conflict-list" id="v69ConflictList"></div><div class="inline-actions"><button class="button button-secondary" id="v69SyncNow" type="button">Sync Now</button></div></section><div aria-labelledby="notificationSettingsTitle" aria-modal="true" class="modal-backdrop hidden notification-settings-modal" id="notificationSettingsModal" role="dialog">
+<section aria-labelledby="v69SyncTitle" aria-modal="false" class="v69-sync-popover hidden" id="v69SyncPopover" role="dialog"><div class="v69-popover-header"><div><p class="eyebrow">Shared Database</p><h3 id="v69SyncTitle">Synchronization Status</h3></div><button aria-label="Close synchronization status" class="icon-button" id="v69CloseSync" type="button">×</button></div><div class="v69-sync-grid"><div><span>Connection</span><strong id="v69SyncConnection">Checking…</strong></div><div><span>Pending</span><strong id="v69SyncPending">0 changes</strong></div><div><span>Last synchronized</span><strong id="v69SyncLast">Not yet</strong></div><div><span>Conflicts</span><strong id="v69SyncConflicts">None</strong></div></div><div class="v69-conflict-list" id="v69ConflictList"></div><div class="inline-actions"><button class="button button-secondary" id="v69SyncNow" type="button">Sync Now</button></div></section><div aria-labelledby="notificationSettingsTitle" aria-modal="true" class="modal-backdrop hidden notification-settings-modal" id="notificationSettingsModal" role="dialog">
 <div class="modal-card notification-settings-card">
 <div class="modal-header"><div><p class="eyebrow">Personal Notifications</p><h2 id="notificationSettingsTitle">Notification Settings</h2><p>Choose which non-critical notifications appear for this account. Critical system notices remain enabled.</p></div><button aria-label="Close notification settings" class="icon-button" id="closeNotificationSettings" type="button">×</button></div>
 <div class="v69-pref-grid"><div><p class="eyebrow">My Account</p><div class="v69-pref-list" id="v69AccountNotificationPrefs"></div></div><div class="admin-only"><p class="eyebrow">Role Default</p><label class="field"><span>Role</span><select id="v69NotificationRole"><option>Membership</option><option>General Secretary</option><option>Staff Account</option><option>Trainee/Probationary</option></select></label><div class="v69-pref-list" id="v69RoleNotificationPrefs"></div></div></div>
@@ -1323,8 +1324,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="dashboard-command-center-v5.js?v=20260814-premium-ui-r3"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
 <script src="system-enterprise-v2.js?v=20260817-interview-access-v74"></script>
-<script src="device-compat-v83.js?v=20260909-tablet-grid-areas-v83"></script>
-<script src="mobile-shell-controller-v37.js?v=20260909-tablet-grid-areas-v37"></script>
+<script src="mobile-shell-controller-v37.js?v=20260729-mobile-shell-v37"></script>
 <script src="role-permission-center-v39.js?v=20260820-all-roles-supabase-v82"></script>
 <script src="operations-governance-v61.js?v=20260814-system-refresh-v73"></script>
 <script src="pwa-enterprise-v41.js?v=20260820-all-roles-supabase-v82"></script>
