@@ -22,6 +22,25 @@
     root.style.setProperty('--lso-mobile-vh', `${height}px`);
   }
 
+  let scrollLockCount = 0;
+
+  function addScrollLock() {
+    scrollLockCount++;
+    if (scrollLockCount === 1) {
+      body.classList.add('scroll-locked', 'modal-open', 'no-scroll');
+      body.style.setProperty('overflow', 'hidden', 'important');
+    }
+  }
+
+  function removeScrollLock() {
+    if (scrollLockCount > 0) scrollLockCount--;
+    if (scrollLockCount === 0) {
+      body.classList.remove('scroll-locked', 'modal-open', 'no-scroll');
+      body.style.removeProperty('overflow');
+      body.style.removeProperty('overflow-y');
+    }
+  }
+
   function blockingOverlayIsOpen() {
     const sidebarOpen = body.classList.contains('sidebar-open') && document.getElementById('sidebar')?.classList.contains('open');
     if (sidebarOpen) return true;
@@ -44,6 +63,15 @@
     }
 
     if (blockingOverlayIsOpen()) return;
+
+    // Ref-counted: only clear when no blocking overlays remain and count is stale
+    if (scrollLockCount > 0) {
+      scrollLockCount = 0;
+      body.classList.remove('scroll-locked', 'modal-open', 'no-scroll');
+      body.style.removeProperty('overflow');
+      body.style.removeProperty('overflow-y');
+      return;
+    }
 
     const inlineOverflow = body.style.getPropertyValue('overflow').trim().toLowerCase();
     const inlineOverflowY = body.style.getPropertyValue('overflow-y').trim().toLowerCase();
@@ -114,7 +142,9 @@
   window.LSOMobileScroll = Object.freeze({
     repair: repairScrollState,
     clearStaleLock: clearStaleScrollLock,
-    updateViewportHeight
+    updateViewportHeight,
+    addScrollLock,
+    removeScrollLock
   });
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire, { once: true });

@@ -322,6 +322,10 @@
     el('pageTitle').textContent = titleMap[viewId] || 'LSO Member Database';
     el('sidebar').classList.remove('open');
     if (viewId === 'lookupView') renderLookupResults();
+    window.dispatchEvent(new CustomEvent('lso:view-changed', { detail: { viewId } }));
+    const activeView = document.querySelector('.view.active');
+    if (activeView) activeView.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }
 
   function metricCard(label, value, helper) {
@@ -624,12 +628,14 @@
     updateAutomaticStagePreview();
     el('memberModal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+    if (window.LSOMobileScroll?.addScrollLock) window.LSOMobileScroll.addScrollLock();
     setTimeout(() => el('fullName').focus(), 50);
   }
 
   function closeMemberModal() {
     el('memberModal').classList.add('hidden');
     document.body.style.overflow = '';
+    if (window.LSOMobileScroll?.removeScrollLock) window.LSOMobileScroll.removeScrollLock();
   }
 
   function collectFormData() {
