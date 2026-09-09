@@ -14,6 +14,22 @@
 
   const isMobile = () => MOBILE.matches || COARSE.matches;
 
+  /* The drawer sidebar and its overlay are `position: fixed`, so on a touch
+     tablet they leave the grid flow entirely and .main-content can be
+     auto-placed into the sidebar track. Hold it in the main column explicitly. */
+  function pinMainToMainColumn() {
+    const shell = document.getElementById('appShell');
+    const main = shell?.querySelector(':scope > .main-content');
+    if (!shell || !main) return;
+    if (window.getComputedStyle(shell).display === 'grid') {
+      main.style.gridColumn = '2';
+      main.style.gridRow = '1';
+    } else {
+      main.style.removeProperty('grid-column');
+      main.style.removeProperty('grid-row');
+    }
+  }
+
   function updateViewportUnit() {
     const viewport = window.visualViewport;
     const height = Math.max(320, Math.round(viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0));
@@ -64,6 +80,7 @@
       syncQueued = false;
       updateViewportUnit();
       syncDrawerState(options);
+      pinMainToMainColumn();
     });
   }
 
@@ -75,6 +92,7 @@
   function wire() {
     updateViewportUnit();
     syncDrawerState();
+    pinMainToMainColumn();
 
     document.getElementById('mobileMenuButton')?.addEventListener('click', () => queueSync({ focusClose: true }));
     closeButton?.addEventListener('click', closeDrawer);
@@ -94,6 +112,7 @@
 
     window.addEventListener('resize', () => {
       updateViewportUnit();
+      pinMainToMainColumn();
       if (!isMobile()) closeDrawer();
     }, { passive: true });
     window.addEventListener('orientationchange', () => window.setTimeout(() => queueSync(), 180), { passive: true });
@@ -112,6 +131,7 @@
         unlockDocumentFromDrawer();
       }
       updateViewportUnit();
+      pinMainToMainColumn();
     });
   }
 
