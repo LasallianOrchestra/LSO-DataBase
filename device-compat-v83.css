@@ -1,0 +1,307 @@
+/* LSO Device Compatibility v83
+   Loaded last. Phones, tablets, laptops, and iOS Safari/PWA. */
+
+:root {
+  --lso-vvh: 100dvh;
+  --lso-safe-top: env(safe-area-inset-top, 0px);
+  --lso-safe-right: env(safe-area-inset-right, 0px);
+  --lso-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --lso-safe-left: env(safe-area-inset-left, 0px);
+  --lso-touch: 44px;
+}
+
+@supports (height: 100svh) {
+  :root { --lso-vvh: 100svh; }
+}
+
+html {
+  width: 100%;
+  max-width: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: rgba(11, 61, 46, 0.12);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+video,
+canvas,
+svg,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+iframe.contract-preview-frame,
+iframe.interview-preview-frame,
+iframe.monthly-report-preview-frame {
+  width: 100%;
+  min-height: min(70dvh, 720px);
+  height: auto;
+}
+
+button,
+a,
+[role="button"],
+summary,
+.nav-item,
+.button,
+.icon-button {
+  touch-action: manipulation;
+}
+
+/* iOS never zooms focused fields when font-size >= 16px */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    min-height: var(--lso-touch);
+  }
+
+  input[type="date"],
+  input[type="time"],
+  input[type="month"],
+  input[type="datetime-local"] {
+    min-height: 48px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .button,
+  .icon-button,
+  .nav-item,
+  .auth-tab,
+  .segment-button,
+  .monthly-report-tab,
+  .health-nav-button,
+  .attendance-workspace-tab,
+  .password-toggle,
+  .sidebar-close,
+  .mobile-menu,
+  .notification-button,
+  .accessibility-launcher {
+    min-height: var(--lso-touch);
+    min-width: var(--lso-touch);
+  }
+}
+
+/* Hover “stuck” state on iOS / Android */
+@media (hover: none) {
+  .button:hover,
+  .nav-item:hover,
+  .quick-action-card:hover,
+  .panel:hover,
+  .metric-card:hover {
+    transform: none !important;
+  }
+}
+
+.app-shell,
+.main-content,
+.view,
+.panel,
+.form-grid,
+.filter-grid,
+.table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.table-wrap,
+.monthly-table-wrap,
+.permission-matrix-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Laptop / large tablet */
+@media (min-width: 921px) and (max-width: 1366px) {
+  .app-shell {
+    grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  }
+
+  .view {
+    padding-inline: clamp(14px, 1.6vw, 28px);
+  }
+
+  .topbar-status {
+    max-width: min(280px, 28vw);
+  }
+}
+
+/* Tablet portrait and phones: drawer shell */
+@media (max-width: 920px) {
+  html, body {
+    overflow-x: hidden !important;
+  }
+
+  body[data-authenticated="true"] #appShell:not([hidden]) {
+    display: block !important;
+    width: 100% !important;
+    min-height: var(--lso-vvh);
+  }
+
+  .main-content {
+    width: 100%;
+    padding-left: var(--lso-safe-left);
+    padding-right: var(--lso-safe-right);
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    padding-top: max(10px, var(--lso-safe-top));
+  }
+
+  .mobile-menu {
+    display: inline-grid !important;
+    place-items: center;
+  }
+
+  .sidebar {
+    padding-left: max(16px, var(--lso-safe-left)) !important;
+    padding-right: max(16px, var(--lso-safe-right)) !important;
+  }
+
+  .dashboard-operations-grid,
+  .dashboard-grid,
+  .attendance-overview-grid,
+  .attendance-period-grid,
+  .attendance-management-layout,
+  .management-layout,
+  .monthly-report-setup-grid,
+  .monthly-section-grid,
+  .health-layout-grid,
+  .contract-workspace,
+  .interview-grid,
+  .duty-workspace-grid,
+  .duty-roster-grid,
+  .recovery-center-grid,
+  .data-transfer-grid,
+  .recovery-action-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .inline-actions,
+  .monthly-report-action-buttons,
+  .attendance-command-header > .inline-actions,
+  .panel-header.stack-mobile {
+    flex-wrap: wrap;
+  }
+
+  .monthly-report-tabs,
+  .system-health-navigation,
+  .attendance-workspace-tabs,
+  .segmented-control,
+  .data-recovery-navigation {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    max-width: 100%;
+  }
+
+  .modal-backdrop {
+    padding: max(8px, var(--lso-safe-top)) max(8px, var(--lso-safe-right)) max(8px, var(--lso-safe-bottom)) max(8px, var(--lso-safe-left));
+    align-items: flex-start;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(var(--lso-vvh) - 16px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .form-grid.three-columns,
+  .form-grid.two-columns,
+  .filter-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .span-2,
+  .span-3 {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .topbar-actions .button {
+    white-space: nowrap;
+  }
+
+  .metric-grid,
+  .quick-action-grid,
+  .attendance-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auth-screen {
+    min-height: var(--lso-vvh);
+  }
+}
+
+@media (max-width: 430px) {
+  .metric-grid,
+  .quick-action-grid,
+  .attendance-kpi-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inline-actions > .button,
+  .monthly-report-action-buttons > .button {
+    width: 100%;
+  }
+}
+
+/* iPhone landscape / short screens */
+@media (max-height: 500px) and (orientation: landscape) {
+  .topbar {
+    position: static;
+  }
+
+  .modal-card,
+  .accessibility-drawer,
+  .notification-popover {
+    max-height: calc(var(--lso-vvh) - 8px) !important;
+  }
+
+  .auth-brand-panel {
+    display: none !important;
+  }
+}
+
+/* Keyboard inset from JS (--lso-keyboard) */
+body.lso-keyboard-open .modal-card,
+body.lso-keyboard-open .auth-card {
+  margin-bottom: var(--lso-keyboard, 0px);
+}
+
+@media print {
+  .sidebar,
+  .sidebar-overlay,
+  .topbar,
+  .mobile-menu,
+  .pwa-install-button {
+    display: none !important;
+  }
+}
