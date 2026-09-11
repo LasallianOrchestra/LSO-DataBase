@@ -934,7 +934,12 @@
     workflow.verifiedBy = actor.account;
     workflow.history.unshift(auditEntry('Attendance verified', 'Activity attendance was Verified and locked. Stored marks still count toward monthly and semester computation.'));
     workflow.history = workflow.history.slice(0, 100);
-    persistWorkflow(event, workflow);
+    const persisted = persistWorkflow(event, workflow);
+    if (!persisted) {
+      window.LSOApp?.showToast?.('The activity could not be Verified: this account is not permitted to change activity records.', true);
+      setTimeout(render, 60);
+      return;
+    }
     window.LSOOperations?.logActivity?.('Verified attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()}`);
     window.LSOApp?.showToast?.('Attendance Verified and locked.');
     setTimeout(render, 60);
@@ -962,7 +967,12 @@
     workflow.unverifiedBy = actor.account;
     workflow.history.unshift(auditEntry('Unverified for editing', 'Verified attendance was reopened for corrections.'));
     workflow.history = workflow.history.slice(0, 100);
-    persistWorkflow(event, workflow);
+    const persisted = persistWorkflow(event, workflow);
+    if (!persisted) {
+      window.LSOApp?.showToast?.('The activity could not be Unverified: this account is not permitted to change activity records.', true);
+      setTimeout(render, 60);
+      return;
+    }
     window.LSOOperations?.logActivity?.('Unverified attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()}`);
     window.LSOApp?.showToast?.('Attendance unverified. Save corrections, then verify it again.');
     setTimeout(render, 60);
