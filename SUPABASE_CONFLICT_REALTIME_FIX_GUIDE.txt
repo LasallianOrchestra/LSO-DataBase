@@ -1,0 +1,89 @@
+LSO SUPABASE — LSO_CONFLICT + REAL-TIME SYNC REPAIR (V2)
+=========================================================
+
+WHAT YOU SAW
+------------
+- Supabase logs still full of errors, now showing:
+
+    LSO_CONFLICT:activity_log:587
+
+  followed by the long PostgREST query text starting with:
+
+    WITH pgrst_source AS (SELECT pgrst_call.pgrst_scalar FROM ...
+
+- The Membership role's changes were NOT appearing for other roles in real time.
+
+WHY IT HAPPENS (ROOT CAUSE)
+---------------------------
+Your Supabase database already contains an OLDER lso_update_state_v69 whose
+4th argument is INTEGER. You can see it in the pasted error — PostgREST built
+the call with  "p_expected_version" integer. That older function rejects a
+write with LSO_CONFLICT:<column>:<version> whenever the version the browser
+sends does not exactly match the version the server has reached.
+
+activity_log is the shared audit trail. EVERY device appends to it on EVERY
+save, so its version counter climbs constantly (587 and counting). Any device
+whose local copy is even one save behind gets its write REJECTED:
+
+    LSO_CONFLICT:activity_log:587
+
+That rejection:
+  1. prevents the Membership role's edits from ever reaching the server, which
+     is why other roles never see them update in real time;
+  2. fills the logs with the LSO_CONFLICT error and the "WITH pgrst_source ..."
+     PostgREST statement text.
+
+The previous repair (LSO_MISSING_V69_RPC_REPAIR.sql) added a NEW bigint
+overload, but PostgREST kept calling the OLD integer overload, so nothing
+changed.
+
+THE FIX
+-------
+Run this query in Supabase > SQL Editor > New query:
+
+    LSO_V69_CONFLICT_REALTIME_FIX.sql
+
+It:
+  1. Drops EVERY overload of lso_update_state_v69 (integer, bigint, any other)
+     so PostgREST has exactly one function to call.
+  2. Reinstalls a single lso_update_state_v69 that is LAST-WRITE-WINS. It runs
+     all the normal permission / attendance / duty validations, but NEVER
+     rejects a save because of a version number. It only keeps a per-column
+     version counter for diagnostics.
+  3. Re-asserts lso_get_state_meta_v69, lso_sync_health_v82, and the other V69
+     RPCs, so the file is a complete standalone repair.
+  4. Does NOT delete or change any member, event, attendance, duty, report,
+     account, or session data. Safe to run more than once.
+
+DEPLOYMENT
+----------
+1. Supabase > SQL Editor > New query.
+2. Paste and run LSO_V69_CONFLICT_REALTIME_FIX.sql.
+3. The last result should show every value true, especially:
+       "singleV69Writer": true
+       "conflictCheckRemoved": true
+4. Wait ~1 minute for the PostgREST schema cache to reload (the script also
+   sends `notify pgrst, 'reload schema'`).
+5. On each device, press Ctrl+F5 once so the browser picks up the refreshed
+   schema, then log in again.
+6. Test: edit something as Membership, save, and confirm the Administrator /
+   other roles see it within a few seconds. Then reopen Supabase > Logs and
+   confirm the LSO_CONFLICT:activity_log errors are gone.
+
+NOTES ON "REAL TIME"
+--------------------
+The website synchronizes by polling the shared database every few seconds
+(and immediately when the tab regains focus). Before this fix, Membership's
+writes were being REJECTED, so nothing propagated — that was the "not real
+time" behavior. Once writes land again, changes propagate on the next poll,
+which is a few seconds on an active tab.
+
+IF ERRORS REMAIN
+----------------
+Open Supabase > Logs and read the exact message. Expected leftovers and their
+meaning:
+  * 42501 / "Only the Administrator..."   -> a role tried a write it is not
+    allowed to perform. This is intended authorization, not a fault.
+  * "Failed to fetch" / network errors    -> a device lost its connection.
+  * PGRST202 "Could not find the function ..." -> an old cached service worker
+    is still calling an old function name; press Ctrl+F5 on that device.

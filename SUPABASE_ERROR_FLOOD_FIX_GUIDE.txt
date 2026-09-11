@@ -1,0 +1,89 @@
+LSO SUPABASE "LOTS OF ERRORS" — DIAGNOSIS + FIX
+================================================
+
+WHAT YOU SAW
+------------
+Supabase Dashboard > Logs shows a continuous stream of errors even though the
+website mostly keeps working. The most common line is PostgREST error PGRST202:
+
+    Could not find the function public.lso_update_state_v69(...) in the schema cache
+    Could not find the function public.lso_get_state_meta_v69(...) in the schema cache
+
+WHY IT HAPPENS (ROOT CAUSE)
+---------------------------
+The deployed website (cloud-staff-v8.js, loaded by index.html) calls these
+database functions:
+
+  1. lso_update_state_v69            every time anyone saves anything
+  2. lso_get_state_meta_v69          on every page load and every background poll
+  3. lso_get_collection_page_v69     server-side paging for large lists
+  4. lso_v69_capabilities            feature/version check
+  5. lso_get_notification_preferences_v69
+  6. lso_save_notification_preferences_v69
+  7. lso_save_role_notification_preferences_v69
+  8. lso_sync_health_v82             health check (only shipped inside the
+                                     separate V82 patch file)
+
+None of the "..._v69" functions were ever included in ANY .sql file in this
+package. When the browser calls a function that is missing, PostgREST returns
+PGRST202 and Supabase records an error. The app silently falls back to the older
+functions, so it keeps working, but the logs keep filling with errors — one
+error per save, per poll, per device.
+
+THE FIX
+-------
+Run the new query in this package:
+
+    LSO_MISSING_V69_RPC_REPAIR.sql
+
+in Supabase > SQL Editor > New query. It:
+
+  * Creates the 7 missing V69 functions with the exact names/arguments the
+    website already calls, so those calls succeed and stop logging PGRST202.
+  * Adds a backwards-compatible "column version" layer the V69 client was
+    already expecting (only enforces conflicts when versions are actually
+    tracked, so nobody is interrupted).
+  * Re-asserts lso_sync_health_v82 so health checks stop failing when the V82
+    patch was never run.
+  * Adds a small dedicated table for notification preferences (kept out of the
+    protected System Settings column on purpose).
+  * Does NOT delete or change any member, event, attendance, duty, report,
+    account, or session data. It is safe to run more than once.
+
+DEPLOYMENT
+----------
+1. Open Supabase > SQL Editor > New query.
+2. Paste and run LSO_MISSING_V69_RPC_REPAIR.sql.
+3. The last result should show:
+       lso_v69_repair_verification = {"missingRpcFixed": true, "columnVersionsColumn": true}
+4. Wait ~1 minute for the PostgREST schema cache to refresh (the script also
+   sends `notify pgrst, 'reload schema'` to speed this up).
+5. Use the website normally for a few minutes, then reopen Supabase > Logs.
+   The PGRST202 "Could not find the function" errors stop appearing.
+6. No website file changes are required for this fix.
+
+IMPORTANT — IF YOU NOW SEE "LSO_CONFLICT:activity_log:..."
+--------------------------------------------------------
+If, after running LSO_MISSING_V69_RPC_REPAIR.sql, the logs instead show
+"LSO_CONFLICT:activity_log:587" (and real-time sync between roles stopped),
+your database already had an older lso_update_state_v69 with an INTEGER
+argument that rejects writes on version mismatch. Run the superseding repair:
+
+    LSO_V69_CONFLICT_REALTIME_FIX.sql
+
+and follow SUPABASE_CONFLICT_REALTIME_FIX_GUIDE.txt. It drops every overload
+and installs a single last-write-wins writer that no longer raises conflicts.
+
+STILL SEEING ERRORS?
+--------------------
+If errors continue after running the repair, open Supabase > Logs and read the
+exact error message. Common leftover errors and what they mean:
+
+  * PGRST202 "Could not find the function ..."          -> a client (or an old
+    cached service worker) is still calling an old function name. Reload the
+    site with Ctrl+F5 to pick up the latest service worker.
+  * 42501 "permission denied" / "Only the Administrator..." -> a role tried a
+    write it is not allowed to perform. This is intended authorization, not a
+    fault.
+  * "Failed to fetch" / network errors                 -> a device lost its
+    connection; not a database fault.

@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v11-attendance-verified-lock';
+  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v12-attendance-verify-live-sync';
 
   const EVENTS_KEY = 'lso_events_v2';
   const ATTENDANCE_KEY = 'lso_attendance_v2';
@@ -374,11 +374,44 @@
     return getWorkflow(event, group, mode).verified === true;
   }
 
+  // The shared database (localStorage via LSOStorage) is the source of truth.
+  // LSOOperations keeps its own in-memory copy that is only refreshed on its own
+  // debounced cloud refresh, which can lag the cloud layer's storage writes by
+  // one render pass. Reading the synchronized store directly (with a lightweight
+  // cache keyed on the raw JSON) keeps the Verify/Unverify buttons and the lock
+  // indicators in agreement across roles and devices in real time, without
+  // requiring a manual browser refresh.
+  let eventsCacheRaw = null;
+  let eventsCacheValue = [];
   function getEvents() {
+    try {
+      const raw = window.LSOStorage?.getItem?.(EVENTS_KEY);
+      if (typeof raw === 'string') {
+        if (raw !== eventsCacheRaw) {
+          eventsCacheRaw = raw;
+          const parsed = JSON.parse(raw);
+          eventsCacheValue = Array.isArray(parsed) ? parsed : [];
+        }
+        return eventsCacheValue;
+      }
+    } catch { /* storage unavailable or malformed — fall back below */ }
     return window.LSOOperations?.getEvents?.() || [];
   }
 
+  let attendanceCacheRaw = null;
+  let attendanceCacheValue = [];
   function getAttendance() {
+    try {
+      const raw = window.LSOStorage?.getItem?.(ATTENDANCE_KEY);
+      if (typeof raw === 'string') {
+        if (raw !== attendanceCacheRaw) {
+          attendanceCacheRaw = raw;
+          const parsed = JSON.parse(raw);
+          attendanceCacheValue = Array.isArray(parsed) ? parsed : [];
+        }
+        return attendanceCacheValue;
+      }
+    } catch { /* storage unavailable or malformed — fall back below */ }
     return window.LSOOperations?.getAttendance?.() || [];
   }
 
