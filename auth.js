@@ -4,6 +4,15 @@
   const SESSION_KEY = 'lso_shared_session_v1';
   const SESSION_BUILD_KEY = 'lso_shared_session_build_v1';
   const SESSION_BUILD = 'v72-auth-input-stability';
+  // V74 responsive fix (F0), consolidated by V75 (F9): the shell layout
+  // contract is owned by lso-shell-layout-v75.js (window.LSOShellLayout).
+  // It MUST mirror the CSS `@media (max-width: 920px), (pointer: coarse)`
+  // block that turns the sidebar into an off-canvas drawer. The local
+  // fallback only applies if that script somehow fails to load.
+  const SHELL_LAYOUT_QUERY = window.LSOShellLayout?.QUERY || '(max-width: 920px), (pointer: coarse)';
+  const isMobileShellLayout = () => window.LSOShellLayout
+    ? window.LSOShellLayout.isMobileShell()
+    : !!window.matchMedia?.(SHELL_LAYOUT_QUERY)?.matches;
   const LOGIN_SECURITY_KEY = 'lso_login_security_v1';
   const ACTIVITY_KEY = 'lso_last_activity_v1';
   const MAX_FAILED_ATTEMPTS = 5;
@@ -81,7 +90,12 @@
       shell.removeAttribute('hidden');
       shell.removeAttribute('inert');
       shell.setAttribute('aria-hidden', 'false');
-      const mobileLayout = window.matchMedia?.('(max-width: 920px)')?.matches;
+      // V74 responsive fix (F0): the phone shell CSS is keyed to
+      // "(max-width: 920px), (pointer: coarse)". The JS must use the SAME contract,
+      // otherwise coarse-pointer tablets/touch laptops wider than 920px get the
+      // desktop grid while the sidebar is an off-canvas (position:fixed) drawer,
+      // which collapses <main> into the vacated sidebar grid track (~268px column).
+      const mobileLayout = isMobileShellLayout();
       shell.style.setProperty('display', mobileLayout ? 'block' : 'grid', 'important');
       shell.style.setProperty('visibility', 'visible', 'important');
       shell.style.setProperty('pointer-events', 'auto', 'important');
@@ -98,6 +112,15 @@
     }
     document.documentElement.classList.remove('lso-auth-locked');
     return true;
+  }
+
+  // V74 responsive fix (F0): keep the inline shell display in sync when the device
+  // crosses the layout boundary later (rotation, window resize, detachable keyboard).
+  function syncShellLayoutMode() {
+    const shell = el('appShell');
+    if (!shell || document.body?.dataset.authenticated !== 'true') return;
+    const mobileLayout = isMobileShellLayout();
+    shell.style.setProperty('display', mobileLayout ? 'block' : 'grid', 'important');
   }
 
   let viewportResetTimer = null;
@@ -1002,6 +1025,14 @@
       showLoginScreen({ preserveMessage: true });
       setMessage('loginMessage', error.message || 'The Supabase project could not be reached.');
     }
+  }
+
+  // V74 responsive fix (F0): re-apply the shell layout when the media contract flips.
+  const shellLayoutMedia = window.LSOShellLayout?.media || window.matchMedia?.(SHELL_LAYOUT_QUERY);
+  if (shellLayoutMedia?.addEventListener) {
+    shellLayoutMedia.addEventListener('change', () => window.setTimeout(syncShellLayoutMode, 60));
+  } else if (shellLayoutMedia?.addListener) {
+    shellLayoutMedia.addListener(() => window.setTimeout(syncShellLayoutMode, 60));
   }
 
   initializeAuth().catch((error) => {

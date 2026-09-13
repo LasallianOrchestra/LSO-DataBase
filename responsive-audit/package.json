@@ -1,0 +1,17 @@
+{
+  "name": "lso-responsive-audit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cross-device responsiveness & behaviour regression suite for the LSO Orchestra Management System (see RESPONSIVE_DEVICE_AUDIT.md).",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --bind 0.0.0.0 --directory ..",
+    "browser": "playwright install chromium",
+    "audit": "node harness.js",
+    "verify": "node verify-fixes.js",
+    "check": "node ci-check.js",
+    "ci": "node harness.js && node verify-fixes.js && node ci-check.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

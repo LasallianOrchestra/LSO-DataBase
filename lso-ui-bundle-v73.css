@@ -531,7 +531,7 @@ tbody tr:last-child td { border-bottom: 0; }
   --shadow-hover: 0 18px 48px rgba(7, 50, 38, .11);
 }
 
-html { min-width: 320px; }
+html { min-width: 280px; }
 body {
   overflow-x: clip;
   background:
@@ -5476,7 +5476,7 @@ body.dashboard-command-center-ready #dashboardView > .dashboard-v4-legacy { disp
 }
 
 html {
-  min-width: 320px;
+  min-width: 280px;
   background: var(--background);
   -webkit-text-size-adjust: 100%;
 }
@@ -7514,7 +7514,7 @@ button { cursor: pointer; }
   .auth-brand-panel h1 { font-size: clamp(24px, 7vw, 30px) !important; }
   .auth-card { padding: 12px 13px 19px !important; border-radius: 20px !important; }
   .auth-tabs { margin-bottom: 17px !important; }
-  .auth-tab { min-height: 42px !important; font-size: 12px !important; }
+  .auth-tab { min-height: 44px !important; font-size: 12px !important; } /* V75 F4: was 42px — class-level !important beat the element-level V75 layer */
 }
 
 @media (max-width: 340px) {
@@ -9384,7 +9384,7 @@ body.duty-staff-view [data-duty-delete] { display: none !important; }
 @media (max-width: 920px), (pointer: coarse) {
   html {
     width: 100%;
-    min-width: 320px;
+    min-width: 280px;
     min-height: 100%;
     height: auto !important;
     overflow-x: hidden !important;
@@ -11016,7 +11016,7 @@ tbody tr:hover { background: #f8fbf9; }
 }
 
 html {
-  min-width: 320px;
+  min-width: 280px;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   scroll-padding-top: 92px;
@@ -14368,3 +14368,193 @@ html[data-lso-theme="night"] #dataView .data-recovery-tab.active > span { backgr
 body[data-theme="night"] .interview-form-panel,body[data-theme="night"] .interview-preview-panel{border-color:rgba(255,255,255,.08)}body[data-theme="night"] .interview-preview-shell{border-color:rgba(255,255,255,.08);background:#101b17}body[data-theme="night"] .interview-preview-placeholder{color:#aebdb7}body[data-theme="night"] .interview-preview-placeholder strong{color:#eef5f1}
 @media(max-width:980px){.interview-command-header{flex-direction:column}.interview-access-badge{min-width:0}.interview-form-panel .form-grid{grid-template-columns:1fr}.interview-form-panel .field:first-child{grid-column:auto}}
 @media(max-width:700px){.interview-command-header{padding:22px 20px;border-radius:18px}.interview-grid{grid-template-columns:1fr}.interview-preview-shell,.interview-preview-placeholder,.interview-preview-frame{min-height:560px;height:560px}.interview-actions .button{width:100%}}
+
+/* ==========================================================================
+   V74 RESPONSIVE AUDIT FIXES — 2026-09-13
+   Surgical layer appended AFTER every versioned layer so source order wins.
+   Maps 1:1 to findings F0-F8 in RESPONSIVE_DEVICE_AUDIT.md.
+   ========================================================================== */
+
+/* F0 — touch screens wider than 920px: when the sidebar is an off-canvas (fixed)
+   drawer it no longer occupies its grid track, so the shell must not keep a
+   sidebar column or <main> auto-places into the vacated track (~268px collapse). */
+@media (max-width: 920px), (pointer: coarse) {
+  #appShell,
+  .app-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .main-content {
+    width: 100% !important;
+    max-width: none !important;
+    margin-inline: 0 !important;
+  }
+}
+
+/* F1 — phones: keep the topbar's primary actions visible instead of parking them
+   off-screen inside a scrollbar-less 96-142px scroll strip. The environment badge
+   moves out of the topbar (it remains visible in the sync popover and drawer). */
+@media (max-width: 680px) {
+  .v69-environment-badge {
+    display: none;
+  }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .topbar-actions {
+    grid-column: auto;
+    width: auto;
+    max-width: none;
+    overflow: visible;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    scrollbar-width: auto;
+  }
+
+  .topbar-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .topbar h2 {
+    font-size: clamp(16px, 4.6vw, 20px);
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar-actions {
+    gap: 4px;
+  }
+
+  .topbar-actions .icon-button,
+  .topbar-actions .notification-button {
+    min-width: 40px;
+    width: 40px;
+  }
+}
+
+/* F2 — opaque sticky modal footer on phones. The opaque/blurred footer rule shipped
+   in V69 is scoped `.view.active .modal-footer`, but modals are mounted outside
+   <main>, so it never matched and `background: inherit` left the footer transparent. */
+@media (max-width: 680px) {
+  .modal-backdrop .modal-footer,
+  .compact-modal .modal-footer,
+  .dcc-modal-card footer {
+    background: #fff;
+    backdrop-filter: blur(6px);
+    border-top: 1px solid var(--line, #dce9e4);
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+
+/* F3 — support 280px-wide cover screens (the html min-width floor was lowered from
+   320px to 280px in the base layers above). */
+@media (max-width: 340px) {
+  .toast {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+
+  .toast-region {
+    left: 12px;
+    right: 12px;
+  }
+
+  .auth-card {
+    padding-inline: 12px;
+  }
+
+  .auth-tabs {
+    gap: 6px;
+  }
+}
+
+/* F4 — 44px touch targets for the controls the audit measured at 38-43px. */
+@media (hover: none), (pointer: coarse) {
+  .table-action,
+  .segment-button,
+  .monthly-report-tab,
+  .dcc-month-controls button,
+  .notification-close,
+  .password-toggle,
+  input[type="month"],
+  input[type="date"],
+  select {
+    min-height: 44px;
+  }
+
+  .table-action {
+    min-width: 44px;
+  }
+}
+
+/* F5 — stop iOS/iPadOS Safari from zooming the page when a control is focused. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    /* !important: several versioned layers set 13-14px with higher specificity;
+       16px is required to stop iOS/iPadOS Safari zoom-on-focus (F5). */
+    font-size: 16px !important;
+  }
+
+  /* The V69 mobile-input layer pins 14px !important at (1,2,0) specificity —
+     match it so the 16px floor actually wins on the Monthly Report fields. */
+  #monthlyReportView .monthly-filing-fields :is(input, select),
+  #monthlyReportView :is(input, select, textarea),
+  #dutyHoursView :is(input, select, textarea) {
+    font-size: 16px !important;
+  }
+}
+
+/* F6 — event meta line: two readable lines instead of one fully ellipsised line. */
+@media (max-width: 560px) {
+  .event-copy small {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* F8 — toasts must never intercept clicks on the content beneath them. */
+.toast-region {
+  pointer-events: none;
+}
+
+.toast-region .toast {
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   V75 responsive layer (2026-09-13) — completes fix F4 (44px tap targets).
+   V74 only patched row actions and segment buttons; this pass lifts every
+   remaining interactive control on touch devices to the full 44px minimum.
+   Measured stragglers after V74: topbar bell/Aa 40px wide, primary buttons
+   41-43px tall, panel-heading text buttons 29px, sidebar close 28px,
+   monthly-report tabs 40px, table small-buttons 34px, login inputs ~43px.
+   Checkboxes / radios / ranges / color swatches are excluded on purpose -
+   their wrapping labels are the intended hit targets.
+   ========================================================================== */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  summary,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    /* !important: several component classes (.icon-button, .logout-button,
+       .button, .notification-button) pin min-height/min-width to 40-42px at
+       class specificity, which would otherwise beat this element-level rule. */
+    min-height: 44px !important;
+  }
+
+  button,
+  [role="button"],
+  summary {
+    min-width: 44px !important;
+  }
+}

@@ -1,18 +1,21 @@
 (() => {
   'use strict';
 
-  const MOBILE = window.matchMedia('(max-width: 920px)');
+  // V75 F9: shared shell layout contract (lso-shell-layout-v75.js) with fallback.
+  const SHELL_LAYOUT = window.LSOShellLayout || null;
+  const MOBILE = SHELL_LAYOUT ? SHELL_LAYOUT.media : window.matchMedia('(max-width: 920px)');
   const COARSE = window.matchMedia('(pointer: coarse)');
   const body = document.body;
   const root = document.documentElement;
   const sidebar = document.getElementById('sidebar');
   const closeButton = document.getElementById('sidebarCloseButton');
   const overlay = document.getElementById('sidebarOverlay');
+  const menuButton = document.getElementById('mobileMenuButton');
   let lockedScrollY = 0;
   let drawerLocked = false;
   let syncQueued = false;
 
-  const isMobile = () => MOBILE.matches || COARSE.matches;
+  const isMobile = () => SHELL_LAYOUT ? SHELL_LAYOUT.isMobileShell() : (MOBILE.matches || COARSE.matches);
 
   function updateViewportUnit() {
     const viewport = window.visualViewport;
@@ -49,6 +52,10 @@
     body.classList.toggle('sidebar-open', open);
     sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
     overlay?.setAttribute('aria-hidden', open ? 'false' : 'true');
+    // V74 responsive audit fix (F7): expose drawer state to assistive technology.
+    menuButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menuButton?.setAttribute('aria-controls', 'sidebar');
+    menuButton?.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
     if (open) {
       lockDocumentForDrawer();
       if (focusClose) requestAnimationFrame(() => closeButton?.focus({ preventScroll: true }));

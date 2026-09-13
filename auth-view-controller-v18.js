@@ -84,7 +84,7 @@
     shell.removeAttribute('hidden');
     shell.removeAttribute('inert');
     shell.setAttribute('aria-hidden', 'false');
-    setImportant(shell, 'display', matchMedia('(max-width: 920px)').matches ? 'block' : 'grid');
+    setImportant(shell, 'display', (window.LSOShellLayout ? window.LSOShellLayout.isMobileShell() : matchMedia('(max-width: 920px), (pointer: coarse)').matches) ? 'block' : 'grid'); // V75 F9: shared shell contract (lso-shell-layout-v75.js)
     setImportant(shell, 'visibility', 'visible');
     setImportant(shell, 'pointer-events', 'auto');
     setImportant(shell, 'position', 'relative');
