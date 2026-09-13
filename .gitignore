@@ -19,3 +19,6 @@ coverage/
 # Temporary archives and logs
 *.zip
 *.log
+
+# Responsive audit artifacts (screenshots, JSON results)
+responsive-audit/results/

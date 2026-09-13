@@ -84,7 +84,7 @@
     shell.removeAttribute('hidden');
     shell.removeAttribute('inert');
     shell.setAttribute('aria-hidden', 'false');
-    setImportant(shell, 'display', matchMedia('(max-width: 920px)').matches ? 'block' : 'grid');
+    setImportant(shell, 'display', matchMedia('(max-width: 920px), (pointer: coarse)').matches ? 'block' : 'grid'); // V74 F0: mirror the CSS shell contract
     setImportant(shell, 'visibility', 'visible');
     setImportant(shell, 'pointer-events', 'auto');
     setImportant(shell, 'position', 'relative');

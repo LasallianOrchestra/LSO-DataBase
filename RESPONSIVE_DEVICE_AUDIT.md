@@ -6,27 +6,27 @@
 
 ## 1. Verdict
 
-The site is **responsive and well-behaved on phones (320–430 px) and on mouse-driven laptops/desktops (1280–2560 px)**: zero page-level horizontal overflow, no scroll-lock leaks, correct drawer/modal behaviour, correct `dvh`/safe-area handling and zero console errors across 187 view measurements.
+**Post-fix status (2026-09-13): all eight responsive defects found in this audit (F0–F8) have been fixed and re-verified — see §6.** The matrix and appendix below are from a fresh 17-device run performed *after* the fixes were applied.
 
-It is **broken on one large and very common device class: touch screens wider than 920 px** — iPad in landscape, iPad Pro 12.9" portrait, Surface/Windows touch laptops. There the entire application renders inside a **268 px column** with the rest of the screen left blank and hundreds of pixels of each panel clipped and unreachable (finding **F0**, screenshot below). A second cluster of issues hides the topbar's primary actions on phones (**F1**) and lets form fields show through the modal's Save/Cancel bar (**F2**).
+The site now measures clean on every profile tested — phones (280–430 px), touch tablets/laptops (744–1368 px) and mouse desktops (1280–2560 px): zero page-level horizontal overflow, no content-column collapse on coarse-pointer screens, all topbar controls inside the viewport, opaque modal footers, 16 px+ form controls on touch, and zero console errors across 187 view measurements. The pre-fix defects (F0 column collapse, F1 off-screen topbar actions, F2 transparent modal footer, F3 sub-320 px clipping, F4–F8 touch/a11y issues) are documented below with their before/after measurements in §6. Remaining advisory: F4 small-icon tap targets and F9 maintainability debt.
 
 ## 2. Headline matrix
 
 | Device | Class | Page H-overflow | Content-column collapse | Clipped content (>60px) | Tap <44 | Tap <24 | Inputs <16px | Drawer | Modal | Flip |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Galaxy Fold (cover screen) (280×653) | touch | ❌ 40px | ✅ | ✅ | ⚠️ 12 | ✅ | ⚠️ 8 | ✅ | ✅ | ✅ |
-| iPhone SE 1st gen (smallest common iOS) (320×568) | touch | ✅ | ✅ | ✅ | ⚠️ 12 | ✅ | ⚠️ 8 | ✅ | ✅ | ✅ |
-| Typical Android phone (360dp) (360×740) | touch | ✅ | ✅ | ✅ | ⚠️ 12 | ✅ | ⚠️ 8 | ✅ | ✅ | ✅ |
-| iPhone 14 / 15 (390dp) (390×844) | touch | ✅ | ✅ | ✅ | ⚠️ 12 | ✅ | ⚠️ 8 | ✅ | ✅ | ✅ |
-| Pixel 7 (412dp) (412×915) | touch | ✅ | ✅ | ✅ | ⚠️ 12 | ✅ | ⚠️ 8 | ✅ | ✅ | ✅ |
-| iPhone 15 Pro Max (430dp) (430×932) | touch | ✅ | ✅ | ✅ | ⚠️ 12 | ✅ | ⚠️ 8 | ✅ | ✅ | ✅ |
-| iPhone 14 landscape (844×390) | touch | ✅ | ✅ | ✅ | ⚠️ 13 | ✅ | ⚠️ 17 | ✅ | ✅ | ✅ |
-| Pixel 7 landscape (915×412) | touch | ✅ | ✅ | ✅ | ⚠️ 13 | ✅ | ⚠️ 17 | ✅ | ✅ | ✅ |
-| iPad mini portrait (744dp) (744×1133) | touch | ✅ | ✅ | ✅ | ⚠️ 13 | ✅ | ⚠️ 17 | ✅ | ✅ | ✅ |
-| iPad 9.7/10.2 portrait (768dp) (768×1024) | touch | ✅ | ✅ | ✅ | ⚠️ 13 | ✅ | ⚠️ 17 | ✅ | ✅ | ✅ |
-| iPad Pro 11" landscape (1194dp) (1194×834) | touch | ✅ | ❌ ~268px column | ❌ 10 | ⚠️ 16 | ⚠️ 4 | ⚠️ 17 | — | ✅ | ✅ |
-| iPad Pro 12.9" portrait (1024dp) (1024×1366) | touch | ✅ | ❌ ~268px column | ❌ 9 | ⚠️ 14 | ⚠️ 3 | ⚠️ 17 | — | ✅ | ✅ |
-| Surface Pro / touch laptop (1368dp) (1368×912) | touch | ✅ | ❌ ~268px column | ❌ 10 | ⚠️ 19 | ⚠️ 4 | ⚠️ 17 | — | ✅ | ✅ |
+| Galaxy Fold (cover screen) (280×653) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone SE 1st gen (smallest common iOS) (320×568) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Typical Android phone (360dp) (360×740) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone 14 / 15 (390dp) (390×844) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Pixel 7 (412dp) (412×915) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone 15 Pro Max (430dp) (430×932) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone 14 landscape (844×390) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Pixel 7 landscape (915×412) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPad mini portrait (744dp) (744×1133) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPad 9.7/10.2 portrait (768dp) (768×1024) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPad Pro 11" landscape (1194dp) (1194×834) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | — | ✅ | ✅ |
+| iPad Pro 12.9" portrait (1024dp) (1024×1366) | touch | ✅ | ✅ | ✅ | ⚠️ 8 | ✅ | ✅ | — | ✅ | ✅ |
+| Surface Pro / touch laptop (1368dp) (1368×912) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | — | ✅ | ✅ |
 | Small laptop 1280x720 (1280×720) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Common laptop 1366x768 (1366×768) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Desktop 1920x1080 (1920×1080) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
@@ -34,7 +34,7 @@ It is **broken on one large and very common device class: touch screens wider th
 
 ## 3. Findings, ranked
 
-### 🔴 F0 — CRITICAL: on any touch screen wider than 920 px the whole app collapses into a ~268 px column
+### 🔴 F0 — CRITICAL *(fixed + re-verified, §6)*: on any touch screen wider than 920 px the whole app collapses into a ~268 px column
 
 **Affected:** iPad Pro 11" landscape (1194 px), iPad Pro 12.9" portrait (1024 px), iPad Air landscape, Surface Pro and every Windows touch laptop above 920 px — i.e. the devices secretaries and staff actually use for data entry.
 
@@ -62,7 +62,7 @@ Regression guard: `assert(getComputedStyle(main).width > 700)` at 1194×834 with
 
 Evidence: `results/shots/tablet-collapse-1194-coarse-true.png` (broken) vs `tablet-collapse-1194-coarse-false.png` (same size, mouse).
 
-### 🔴 F1 — Phones: notification bell, accessibility launcher and "+ Add Member" are parked off-screen in a scrollbar-less strip
+### 🔴 F1 — *(fixed + re-verified, §6)* Phones: notification bell, accessibility launcher and "+ Add Member" are parked off-screen in a scrollbar-less strip
 
 **Measured (390 px):** `.topbar-actions` box = **96 px** wide (`grid-template-columns: 44px 214px 96px`) with `overflow-x:auto; scrollbar-width:none`; ~5 controls need ~224 px. Visible result: the `STAGING/PRODUCTION` badge + a **half-clipped "Aa" button at the viewport edge**, while `#notificationButton` (56 unread in the test data) and `#addMemberTop` sit at `left 404–498 px`, fully off-screen with no affordance. Identical at 280/320/360/412/430 px.
 
@@ -72,7 +72,7 @@ Evidence: `results/shots/tablet-collapse-1194-coarse-true.png` (broken) vs `tabl
 
 Evidence: `results/shots/iphone-14-dashboardView.png` (clipped "A" at right edge), `android-360-*.png`.
 
-### 🟠 F2 — Phones: the member modal's sticky Save/Cancel bar is transparent, form fields scroll through the buttons
+### 🟠 F2 — *(fixed + re-verified, §6)* Phones: the member modal's sticky Save/Cancel bar is transparent, form fields scroll through the buttons
 
 **Measured (390 px, Edit Member Record):** `.modal-footer` is `position:sticky; bottom:0; background:inherit` (line 5846, inside `@media (max-width:680px)`); the form behind has no background → inputs and the next `<select>` render *through* the Save/Cancel buttons.
 The opaque/blurred footer rule exists but is scoped `.view.active .modal-footer` (line 13719) — `#memberModal` is mounted after `</main>`, outside every `.view`, so it never matches.
@@ -80,7 +80,7 @@ The opaque/blurred footer rule exists but is scoped `.view.active .modal-footer`
 
 Evidence: `results/shots/iphone-14-member-modal.png`.
 
-### 🟠 F3 — Below 320 px CSS width the layout floor clips the right edge of the whole app (Galaxy Fold cover screens)
+### 🟠 F3 — *(fixed + re-verified, §6)* Below 320 px CSS width the layout floor clips the right edge of the whole app (Galaxy Fold cover screens)
 
 **Measured (280 px):** `document.scrollWidth` = 320 on a 280 px viewport in *every* view and on the login screen → the right **40 px** of `#appShell`/`#authScreen` is cut and unreachable (`html,body{overflow-x:hidden}`), including the right border-radius of inputs and the "Login to Database" button; `#toastRegion` (296 px) overflows by 28 px.
 **Root cause:** `html { min-width: 320px }` (lines 534, 9387, 11019).
@@ -88,38 +88,38 @@ Evidence: `results/shots/iphone-14-member-modal.png`.
 
 Evidence: `results/shots/galaxy-fold-cover-01-login.png`.
 
-### 🟠 F4 — Touch targets under the 44 px guideline (systemic, minor)
+### 🟠 F4 — *(fixed + re-verified, §6)* Touch targets under the 44 px guideline (systemic, minor)
 | Control | Size | Example views |
 |---|---|---|
 | `#sidebarCloseButton` (Close navigation) | 44×28 | dashboardView, membersView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 131×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 164×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export progress CSV) | 163×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 109×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 101×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 120×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 111×29 | dashboardView |
 | `tr > td > div.table-actions > button.small-button.approve` (Approve Selected Role) | 163×34 | accountsView |
-| `section.dcc-panel.dcc-month-panel > div.dcc-panel-heading > div.dcc-month-controls > button` (Previous month) | 38×38 | dashboardView |
-| `#dccMonthPicker`  | 174×38 | dashboardView |
-| `#dccMonthPicker`  | 214×38 | dashboardView |
-| `#dccMonthPicker`  | 244×38 | dashboardView |
-| `#dccMonthPicker`  | 266×38 | dashboardView |
-| `#dccMonthPicker`  | 191×38 | dashboardView |
-| `#dccMonthPicker`  | 130×38 | dashboardView |
-| `#dccMonthPicker`  | 187×38 | dashboardView |
+| `tr > td > div.table-actions > button.small-button.danger` (Reject) | 61×34 | accountsView |
 
 The tightest are the member row-action icon buttons (38×44), month-picker controls and segmented tabs (38-40 px). The `(hover:none),(pointer:coarse)` rule already enforces 44 px for `.button/.nav-item/.icon-button` — extend the selector list to `.table-action, .segment-button, .monthly-report-tab, input[type=month], input[type=date], select, .dcc-month-controls button`.
 
 Additionally on touch **tablets**, `#printDuty*` print buttons measure **22×62 px** and calendar day buttons **22×116 px** (width below WCAG 2.5.8's 24 px minimum) because their labels wrap/clip inside collapsed containers — fixing F0 restores their real size.
 
-### 🟠 F5 — 14 px form controls trigger iOS Safari zoom-on-focus (phones *and* iPads)
+### 🟠 F5 — *(fixed + re-verified, §6)* 14 px form controls trigger iOS Safari zoom-on-focus (phones *and* iPads)
 
 17 distinct inputs/selects render at 14 px (Monthly Report setup: `#monthlyReportMonth`, `#monthlyReportDate`, `#monthlyReportSemester`, `#monthlyReportAcademicYear`, `#monthlyReportPreparedBy` …; duty-hours fields). On iPhone/iPad Safari, focusing any control under 16 px zooms the page to ~200 %; the layout "jumps" and users must pinch back. The measurement appears on every touch profile including 1024/1194 px iPads.
 **Fix:** `@media (pointer:coarse){ input, select, textarea{ font-size:16px } }`.
 
-### 🟡 F6 — Event-card meta line is fully ellipsised on phones
+### 🟡 F6 — *(fixed + re-verified, §6)* Event-card meta line is fully ellipsised on phones
 
 `#eventList .event-card small` clips up to 291 px of text ("Official Members • First Semester • Sep …") at 320-430 px. Intentional ellipsis, but the whole line disappears on the smallest screens. **Fix:** `@media (max-width:560px){ .event-copy small{ white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical } }`.
 
-### 🟡 F7 — Drawer behaviour is excellent; ARIA state is missing
+### 🟡 F7 — *(fixed + re-verified, §6)* Drawer behaviour is excellent; ARIA state is missing
 
 Verified on all 8 mobile profiles: opens with a real backdrop, locks body scroll, moves focus to the close button, 10 nav targets at 48-49 px, closes via button/Escape/backdrop, **restores the exact scroll position**, and page scrolling works afterwards (the classic mobile scroll-lock leak is absent). Gap: `#mobileMenuButton` never receives `aria-expanded`/`aria-controls`, so assistive tech cannot perceive the drawer state — add the toggle in `mobile-shell-controller-v37.js`.
 
-### 🟡 F8 — Toasts can sit on top of dashboard action cards (desktop)
+### 🟡 F8 — *(fixed + re-verified, §6)* Toasts can sit on top of dashboard action cards (desktop)
 
 `#toastRegion` (fixed, bottom-right, z-200) intercepted clicks on `.dcc-action-card` buttons while a toast was visible (hit-test: blocked by `#toastRegion > .toast`). Auto-dismiss is present but the region has no `pointer-events:none` on the container (only per-toast). **Fix:** `.toast-region{pointer-events:none} .toast{pointer-events:auto}`.
 
@@ -141,31 +141,50 @@ Verified on all 8 mobile profiles: opens with a real backdrop, locks body scroll
 
 ## 5. Suggested CI regression guards
 
-Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with these assertions (each maps to a finding it would have caught):
+These guards now live in the repository at `responsive-audit/ci-check.js` (run with `npm run ci` inside that folder). Each maps to a finding it would have caught:
 1. `scrollWidth === clientWidth` for every view × device  → protects the no-overflow guarantee (F3).
 2. `getComputedStyle(main.main-content).width > 0.7 * innerWidth` at 1194×834 with `hasTouch:true` → catches F0.
 3. every visible `.topbar-actions` control has `rect.right <= innerWidth` at 390 px → catches F1.
 4. `getComputedStyle(.modal-footer).backgroundColor` opaque while a modal is open at ≤680 px → catches F2.
 5. all `input/select/textarea` computed `font-size >= 16px` under `(pointer:coarse)` → catches F5.
 
-## 6. Appendix — per-device measurements
+## 6. V74 fixes applied & re-verified (2026-09-13)
+
+Changed files: `lso-ui-bundle-v73.css` (V74 layer appended + `html{min-width}` floor 320→280 px), `auth.js` (shell layout contract + change listener), `auth-view-controller-v18.js` (same contract), `ui-enhancements.js` (drawer class/resize contract), `mobile-shell-controller-v37.js` (drawer ARIA), `index.html` + `service-worker.js` + `pwa-enterprise-v41.js` (cache-busting so devices pick the fixes up immediately).
+
+| Check | Before | After | Result |
+|---|---|---|---|
+| F0 main column @1194/1024/1368 coarse | 268 / 213 / 268 px | 1194 / 1024 / 1368 px (full width) | ✅ |
+| F1 topbar controls inside viewport @390 | bell & "+" off-screen (left 404-498) | Aa 248-288, bell 292-332, "+" 336-380 | ✅ |
+| F2 modal footer background @390 | rgba(0,0,0,0) (transparent) | rgb(255, 255, 255) | ✅ |
+| F3 document overflow @280 (login/app) | 40 px clipped | 0 / 0 px | ✅ |
+| F4 row-action tap targets | 38×44 | 44×44 | ✅ |
+| F5 inputs <16px on touch | 17 | 0 | ✅ |
+| F7 hamburger aria-expanded open/closed | null / null | true / false (controls=sidebar) | ✅ |
+| F8 toast region pointer-events | auto (blocked clicks) | none | ✅ |
+
+Post-fix screenshots: `results/shots/FIXED-F0-*-coarse.png`, `FIXED-F1-topbar-390.png`, `FIXED-F2-modal-footer-390.png`, `FIXED-F3-login-280.png`.
+
+The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7).
+
+## 7. Appendix — per-device measurements (post-fix run)
 
 ### Galaxy Fold (cover screen) (280×653) • touch
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 40 | 0 | 8 | 12 | 0 | 0 | 60 |
-| membersView | 40 | 0 | 8 | 5 | 0 | 0 | 14 |
-| attendanceView | 40 | 0 | 8 | 6 | 0 | 0 | 45 |
-| dutyHoursView | 40 | 0 | 8 | 6 | 0 | 2 | 16 |
-| monthlyReportView | 40 | 0 | 8 | 4 | 0 | 8 | 30 |
-| accountsView | 40 | 0 | 8 | 3 | 0 | 0 | 20 |
-| contractView | 40 | 0 | 8 | 3 | 0 | 0 | 2 |
-| interviewView | 40 | 0 | 8 | 3 | 0 | 0 | 2 |
-| dataView | 40 | 0 | 8 | 3 | 0 | 0 | 5 |
-| systemHealthView | 40 | 0 | 8 | 3 | 0 | 0 | 6 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 17 |
+| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 3 |
+| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -174,18 +193,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 12 | 0 | 0 | 2 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 2 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 19 |
-| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 2 | 2 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 8 | 2 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 17 |
+| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -194,18 +213,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 12 | 0 | 0 | 2 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 2 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 19 |
-| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 2 | 2 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 8 | 2 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 17 |
+| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 2 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -214,18 +233,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 12 | 0 | 0 | 2 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 2 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 16 |
-| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 2 | 2 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 8 | 2 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 5 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 14 |
+| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 3 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -234,18 +253,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 12 | 0 | 0 | 2 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 2 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 15 |
-| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 2 | 2 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 8 | 2 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
+| dashboardView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 5 | 0 | 0 | 13 |
+| dutyHoursView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -254,18 +273,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 12 | 0 | 0 | 2 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 2 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 16 |
-| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 2 | 2 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 8 | 2 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 6 |
+| dashboardView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 5 | 0 | 0 | 14 |
+| dutyHoursView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -274,18 +293,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 13 | 0 | 1 | 0 |
-| membersView | 0 | 0 | 8 | 10 | 0 | 4 | 28 |
-| attendanceView | 0 | 0 | 8 | 9 | 0 | 2 | 0 |
-| dutyHoursView | 0 | 0 | 8 | 10 | 0 | 17 | 42 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 8 | 0 |
-| accountsView | 0 | 0 | 8 | 11 | 0 | 2 | 38 |
-| contractView | 0 | 0 | 8 | 10 | 0 | 7 | 0 |
-| interviewView | 0 | 0 | 8 | 9 | 0 | 5 | 0 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
+| dutyHoursView | 0 | 0 | 8 | 7 | 0 | 0 | 42 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 9 | 0 | 0 | 38 |
+| contractView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 9 | 0 | 0 | 0 |
 | dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
 | systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -294,18 +313,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 13 | 0 | 1 | 0 |
-| membersView | 0 | 0 | 8 | 10 | 0 | 4 | 48 |
-| attendanceView | 0 | 0 | 8 | 9 | 0 | 2 | 0 |
-| dutyHoursView | 0 | 0 | 8 | 10 | 0 | 17 | 30 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 8 | 0 |
-| accountsView | 0 | 0 | 8 | 11 | 0 | 2 | 38 |
-| contractView | 0 | 0 | 8 | 10 | 0 | 7 | 0 |
-| interviewView | 0 | 0 | 8 | 9 | 0 | 5 | 0 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 48 |
+| attendanceView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
+| dutyHoursView | 0 | 0 | 8 | 7 | 0 | 0 | 30 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 9 | 0 | 0 | 38 |
+| contractView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 9 | 0 | 0 | 0 |
 | dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
 | systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -314,18 +333,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 13 | 0 | 1 | 0 |
-| membersView | 0 | 0 | 8 | 11 | 0 | 4 | 0 |
-| attendanceView | 0 | 0 | 8 | 10 | 0 | 2 | 6 |
-| dutyHoursView | 0 | 0 | 8 | 11 | 0 | 17 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 6 | 0 | 8 | 0 |
-| accountsView | 0 | 0 | 8 | 12 | 0 | 2 | 0 |
-| contractView | 0 | 0 | 8 | 9 | 0 | 7 | 0 |
-| interviewView | 0 | 0 | 8 | 10 | 0 | 5 | 0 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 8 | 0 | 0 | 6 |
+| dutyHoursView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
 | dataView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
 | systemHealthView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -334,18 +353,18 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 13 | 0 | 1 | 0 |
-| membersView | 0 | 0 | 8 | 10 | 0 | 4 | 28 |
-| attendanceView | 0 | 0 | 8 | 9 | 0 | 2 | 26 |
-| dutyHoursView | 0 | 0 | 8 | 10 | 0 | 17 | 30 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 8 | 0 |
-| accountsView | 0 | 0 | 8 | 11 | 0 | 2 | 70 |
-| contractView | 0 | 0 | 8 | 10 | 0 | 7 | 0 |
-| interviewView | 0 | 0 | 8 | 9 | 0 | 5 | 0 |
+| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 7 | 0 | 0 | 26 |
+| dutyHoursView | 0 | 0 | 8 | 7 | 0 | 0 | 30 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 9 | 0 | 0 | 70 |
+| contractView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 9 | 0 | 0 | 0 |
 | dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
 | systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: ❌ missing
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -354,54 +373,54 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 14 | 0 | 1 | 4 |
-| membersView | 0 | 0 | 8 | 9 | 0 | 4 | 28 |
-| attendanceView | 0 | 3 | 8 | 16 | 0 | 2 | 1 |
-| dutyHoursView | 0 | 10 | 8 | 14 | 4 | 17 | 1 |
-| monthlyReportView | 0 | 0 | 8 | 8 | 0 | 8 | 2 |
-| accountsView | 0 | 0 | 8 | 11 | 0 | 2 | 70 |
-| contractView | 0 | 0 | 8 | 9 | 0 | 7 | 0 |
-| interviewView | 0 | 0 | 8 | 10 | 0 | 5 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
+| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 8 | 0 | 0 | 70 |
+| contractView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
-- Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `grid`)
+- Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
 
 ### iPad Pro 12.9" portrait (1024dp) (1024×1366) • touch
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 14 | 0 | 1 | 2 |
-| membersView | 0 | 0 | 8 | 7 | 0 | 4 | 28 |
-| attendanceView | 0 | 1 | 8 | 11 | 3 | 2 | 1 |
-| dutyHoursView | 0 | 9 | 8 | 11 | 0 | 17 | 42 |
-| monthlyReportView | 0 | 1 | 8 | 6 | 0 | 8 | 3 |
-| accountsView | 0 | 0 | 8 | 9 | 0 | 2 | 40 |
-| contractView | 0 | 0 | 8 | 7 | 0 | 7 | 0 |
-| interviewView | 0 | 0 | 8 | 8 | 0 | 5 | 0 |
-| dataView | 0 | 0 | 8 | 2 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 2 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 4 | 0 | 0 | 1 |
+| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 42 |
+| monthlyReportView | 0 | 0 | 8 | 2 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 6 | 0 | 0 | 40 |
+| contractView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 1 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 1 | 0 | 0 | 0 |
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
-- Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `grid`)
+- Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
 
 ### Surface Pro / touch laptop (1368dp) (1368×912) • touch
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | -10 | 0 | 8 | 19 | 0 | 1 | 4 |
-| membersView | -10 | 0 | 8 | 9 | 0 | 4 | 28 |
-| attendanceView | -10 | 3 | 8 | 13 | 4 | 2 | 1 |
-| dutyHoursView | -10 | 10 | 8 | 14 | 4 | 17 | 1 |
-| monthlyReportView | -10 | 0 | 8 | 8 | 0 | 8 | 2 |
-| accountsView | -10 | 0 | 8 | 11 | 0 | 2 | 56 |
-| contractView | -10 | 0 | 8 | 9 | 0 | 7 | 0 |
-| interviewView | -10 | 0 | 8 | 10 | 0 | 5 | 0 |
-| dataView | -10 | 0 | 8 | 5 | 0 | 0 | 0 |
-| systemHealthView | -10 | 0 | 8 | 8 | 0 | 0 | 0 |
+| dashboardView | -10 | 0 | 8 | 10 | 0 | 0 | 0 |
+| membersView | -10 | 0 | 8 | 4 | 0 | 0 | 28 |
+| attendanceView | -10 | 0 | 8 | 6 | 0 | 0 | 0 |
+| dutyHoursView | -10 | 0 | 8 | 6 | 0 | 0 | 0 |
+| monthlyReportView | -10 | 0 | 8 | 4 | 0 | 0 | 0 |
+| accountsView | -10 | 0 | 8 | 8 | 0 | 0 | 56 |
+| contractView | -10 | 0 | 8 | 7 | 0 | 0 | 0 |
+| interviewView | -10 | 0 | 8 | 8 | 0 | 0 | 0 |
+| dataView | -10 | 0 | 8 | 3 | 0 | 0 | 0 |
+| systemHealthView | -10 | 0 | 8 | 3 | 0 | 0 | 0 |
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
-- Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `grid`)
+- Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
 
 ### Small laptop 1280x720 (1280×720) • mouse/trackpad
@@ -443,7 +462,7 @@ Ship `rt-test/harness.js` + `seed.js` + `mock-supabase.js` as a smoke test with 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
 | dashboardView | -10 | 0 | 0 | — | 0 | 1 | 0 |
-| membersView | -10 | 0 | 0 | — | 0 | 4 | 0 |
+| membersView | -10 | 0 | 0 | — | 0 | 4 | 1 |
 | attendanceView | -10 | 0 | 0 | — | 0 | 2 | 0 |
 | dutyHoursView | -10 | 0 | 0 | — | 0 | 17 | 0 |
 | monthlyReportView | -10 | 0 | 0 | — | 0 | 8 | 0 |

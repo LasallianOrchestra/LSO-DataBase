@@ -30,7 +30,7 @@
 
   function syncSidebarState() {
     const isOpen = Boolean(el('sidebar')?.classList.contains('open'));
-    document.body.classList.toggle('sidebar-open', isOpen && window.innerWidth <= 920);
+    document.body.classList.toggle('sidebar-open', isOpen && window.matchMedia('(max-width: 920px), (pointer: coarse)').matches); // V74 F0
   }
 
   function wireResponsiveNavigation() {
@@ -49,7 +49,7 @@
       if (resizeFrame) return;
       resizeFrame = requestAnimationFrame(() => {
         resizeFrame = 0;
-        if (window.innerWidth > 920) closeSidebar();
+        if (!window.matchMedia('(max-width: 920px), (pointer: coarse)').matches) closeSidebar(); // V74 F0
         refreshTableHints();
       });
     }, { passive: true });

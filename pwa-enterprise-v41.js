@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v41.js';
-  const ACTIVE_CACHE_MARKER = 'v82-all-roles-supabase-r1';
+  const ACTIVE_CACHE_MARKER = 'responsive-fixes-v74';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;
