@@ -14558,3 +14558,42 @@ body[data-theme="night"] .interview-form-panel,body[data-theme="night"] .intervi
     min-width: 44px !important;
   }
 }
+
+/* ==========================================================================
+   V76 responsive layer (2026-09-13) — fixes audit finding F10.
+
+   Since V74 the DRAWER has followed the shell contract
+   `@media (max-width: 920px), (pointer: coarse)` (.sidebar is position:fixed
+   and parked at translate3d(-105%, 0, 0), .sidebar-close is rendered), and
+   since V75 every layout script has followed the same contract through
+   window.LSOShellLayout (lso-shell-layout-v75.js). The TOGGLE never did: both
+   rules that reveal #mobileMenuButton live in width-only
+   `@media (max-width: 920px)` blocks — the base shell layer
+   (`display: grid !important`) and the V44 accessibility layer
+   (`display: inline-grid !important` + 44px touch target) — while the global
+   rule `.mobile-menu { display: none !important; }` applies everywhere else.
+
+   Consequence on a coarse-pointer screen wider than 920px — iPad Pro 11"
+   landscape (1194px), iPad Pro 12.9" portrait (1024px), Surface Pro (1368px):
+   the shell renders in drawer mode with the sidebar parked off-canvas and no
+   control to bring it back, so the whole navigation is unreachable. The audit
+   never caught it because its drawer test was gated on the same width-only
+   query (see RESPONSIVE_DEVICE_AUDIT.md §3 F10 — those three profiles are
+   recorded as "Drawer: —").
+
+   This layer mirrors the contract for the toggle, so the CSS drawer, the CSS
+   toggle and the JS contract can no longer disagree. Values match the V44
+   layer exactly (inline-grid + --v44-touch-target) so phones render
+   identically; the custom property is declared on the global :root, and a 44px
+   fallback is given so the rule degrades correctly if that ever changes.
+   Mouse devices are untouched: `(pointer: coarse)` does not match them, so the
+   desktop shell keeps its docked sidebar and no hamburger (guard G10).
+   ========================================================================== */
+@media (max-width: 920px), (pointer: coarse) {
+  .mobile-menu {
+    display: inline-grid !important;
+    place-items: center;
+    min-width: var(--v44-touch-target, 44px);
+    min-height: var(--v44-touch-target, 44px);
+  }
+}

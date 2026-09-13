@@ -1,0 +1,120 @@
+LASALLIAN SYMPHONY ORCHESTRA
+DRAWER TOGGLE FIX V76 (AUDIT FINDING F10) — VALIDATION RESULTS
+
+Date: 2026-09-13
+Scope: navigation drawer toggle on coarse-pointer screens wider than 920px
+
+SUMMARY
+  Static CSS cascade assertions:  60 total | 57 passed, 3 failed BEFORE the fix
+                                  60 total | 60 passed, 0 failed AFTER the fix
+  New CI guards G9/G10 self-test: pre-fix fixture -> exit 1 (24 violations)
+                                  post-fix fixture -> exit 0 (all guards green)
+  JavaScript syntax checks:       3 of 3 passed
+  Stylesheet parse check:         passed (postcss parses the patched bundle cleanly)
+  Real-browser 17-device matrix:  NOT RUN — no Chromium available in this environment
+                                  (see the caveat at the bottom; this is not a pass)
+
+
+A. STATIC CASCADE RESOLUTION OF THE SHIPPED STYLESHEET
+   Method: parse lso-ui-bundle-v73.css, evaluate every enclosing @media for each
+   of the 17 audit device profiles, then resolve specificity, !important and
+   source order to find the winning declaration. Conclusive for display/position;
+   says nothing about painted geometry (that needs a browser).
+
+   [FAIL->PASS] ipad-pro-11-land  1194px touch  .mobile-menu display
+                before: none          after: inline-grid
+   [FAIL->PASS] ipad-pro-129      1024px touch  .mobile-menu display
+                before: none          after: inline-grid
+   [FAIL->PASS] surface-pro       1368px touch  .mobile-menu display
+                before: none          after: inline-grid
+
+   [PASS] unchanged, coarse profiles 920px and below (10 profiles: 280, 320, 360,
+          390, 412, 430, 844, 915, 744, 768)
+                .mobile-menu display: inline-grid  (before and after)
+                .sidebar position:    fixed        (before and after)
+                .sidebar-close:       grid         (before and after)
+                .sidebar-overlay:     block        (before and after)
+
+   [PASS] guard G10 — mouse profiles untouched by the V76 layer (4 profiles:
+          1280, 1366, 1920, 2560)
+                .mobile-menu display: none    (before and after)
+                .sidebar position:    sticky  (before and after)
+                .sidebar-close:       none    (before and after)
+                .sidebar-overlay:     none    (before and after)
+
+   [PASS] the drawer itself was already correct on wide touch before the fix
+          (.sidebar position: fixed under the full contract since V74) — this is
+          what made the missing toggle fatal rather than merely cosmetic: the
+          panel was parked off-canvas with no way to recall it.
+
+
+B. NEW CI GUARDS G9/G10 (responsive-audit/ci-check.js)
+   Method: run the real ci-check.js against synthetic results.json and
+   fix-verification.json fixtures whose record shapes are taken from harness.js.
+   The pre-fix fixture reproduces F10 (toggle display:none, no hit-testable
+   centre, drawer never opens, 0 of 10 nav items reachable, and no drawer record
+   at all for the three wide touch profiles because the old harness gate skipped
+   them). The post-fix fixture reproduces the fixed state.
+
+   [PASS] pre-fix fixture  -> exit code 1, "RESPONSIVE AUDIT FAILED (24)"
+          G9 drawer exercised on touch profile       x3 (1194/1024/1368 skipped)
+          G9 drawer toggle visible on wide touch     x3 (display: none)
+          G9 drawer toggle >=44px on wide touch      x3
+          G9 drawer toggle inside viewport           x3
+          G9 drawer toggle tappable (centre hit-test)x3 (obscured:none)
+          G9 drawer opens on wide touch              x3 (open=false, left=-330)
+          G9 every nav item tappable when open       x3 (0/10)
+          G9 drawer toggle aria-expanded when open   x3 (false)
+   [PASS] post-fix fixture -> exit code 0,
+          "RESPONSIVE AUDIT PASSED — 17 device profiles, 51 view measurements,
+           all guards green."
+   [PASS] the guards are therefore able to fail: they are not vacuous
+
+
+C. HARNESS RE-GATING (responsive-audit/harness.js)
+   [PASS] openDrawerIfNeeded()        now calls shellIsMobile(page)
+   [PASS] drawer behaviour test       now calls shellIsMobile(page)
+   [PASS] forced-unlock fallback      now reads window.LSOShellLayout
+   [PASS] shellIsMobile() consults window.LSOShellLayout.isMobileShell() and
+          falls back to matchMedia('(max-width: 920px), (pointer: coarse)')
+   [PASS] no width-only '(max-width: 920px)' gate remains in harness.js
+          (the two remaining occurrences are the documented fallback string
+           and a comment)
+
+
+D. SYNTAX AND INTEGRITY
+   [PASS] node --check responsive-audit/harness.js
+   [PASS] node --check responsive-audit/verify-fixes.js
+   [PASS] node --check responsive-audit/ci-check.js
+   [PASS] postcss parses the patched lso-ui-bundle-v73.css (14599 lines)
+   [PASS] V76 layer appended after the V75 layer, so it wins by source order
+   [PASS] --v44-touch-target is declared on the global :root (not inside a
+          width-only block); a 44px fallback is supplied regardless
+   [PASS] cache markers consistent: index.html stylesheet + pwa script tag,
+          pwa-enterprise-v41.js ACTIVE_CACHE_MARKER, and
+          service-worker-enterprise-v41.js CACHE_VERSION all carry
+          'drawer-toggle-fix-v76'; the marker is a substring of the cache
+          version so the PWA purge filter keeps the new cache
+   [PASS] scripts whose content did not change keep their v75 marker
+          (lso-shell-layout-v75.js, auth-view-controller-v18.js, auth.js,
+           ui-enhancements.js, mobile-shell-controller-v37.js)
+
+
+E. CAVEAT — WHAT WAS NOT TESTED
+   [NOT RUN] the 17-device browser matrix (npm run audit)
+   [NOT RUN] the F10 in-browser probe at 1194/1024/1368 (npm run verify)
+   [NOT RUN] real tap hit-tests, drawer open/close animation, scroll-lock
+             behaviour, orientation flips and console-error counts
+   Reason: this environment has no Chromium and cannot install one. The
+   Playwright download CDN (cdn.playwright.dev) resets the TLS connection and
+   the Debian package mirrors are unreachable; only the npm registry responds,
+   and no browser binary is present on the machine.
+   Required before treating F10 as re-verified:
+       cd responsive-audit
+       npm install
+       npx playwright-core install chromium
+       npm run serve     # terminal 1
+       npm run ci        # terminal 2 — must report G1-G10 green
+   Sections 2 and 7 of RESPONSIVE_DEVICE_AUDIT.md still contain the pre-V76
+   measurements for the three affected profiles and should be regenerated by
+   that run.
