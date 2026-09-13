@@ -164,6 +164,109 @@ async function login(page) {
     await ctx2.close();
   }
 
+  /* F10 (V76) — on coarse-pointer screens wider than 920px the drawer toggle must
+     exist, be tappable and actually bring the navigation on screen. These are the
+     three profiles the audit recorded as "Drawer: —" because its drawer test was
+     gated on a width-only query. */
+  {
+    out.F10_wide_touch = [];
+    for (const w of [1194, 1024, 1368]) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: 834 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block', timezoneId: 'Asia/Manila' });
+      const page = await ctx.newPage();
+      await page.route('**://cdn.jsdelivr.net/**', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: buildShim(seed) }));
+      await login(page);
+      const before = await page.evaluate(() => {
+        const btn = document.querySelector('.mobile-menu');
+        const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+        const cs = btn ? getComputedStyle(btn) : null;
+        const r = btn ? btn.getBoundingClientRect() : null;
+        return {
+          shellIsMobile: window.LSOShellLayout ? window.LSOShellLayout.isMobileShell() : null,
+          toggleDisplay: cs ? cs.display : 'missing',
+          toggleBox: r ? { w: Math.round(r.width), h: Math.round(r.height), left: Math.round(r.left), top: Math.round(r.top) } : null,
+          toggleInsideViewport: r ? (r.left >= 0 && r.right <= innerWidth + 1 && r.top >= 0 && r.bottom <= innerHeight + 1) : false,
+          sidebarPosition: sb ? getComputedStyle(sb).position : null,
+          sidebarParkedLeft: sb ? Math.round(sb.getBoundingClientRect().left) : null
+        };
+      });
+      // open the drawer the way a user would: hit-test the toggle centre first
+      const opened = await page.evaluate(() => {
+        const btn = document.querySelector('.mobile-menu');
+        if (!btn) return { hitTest: 'missing', clicked: false };
+        const r = btn.getBoundingClientRect();
+        const top = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+        const hitOk = !!top && (top === btn || btn.contains(top));
+        if (hitOk) btn.click();
+        return {
+          hitTest: hitOk ? 'hit' : 'obscured:' + (top ? (top.id || String(top.className).slice(0, 30) || top.tagName) : 'none'),
+          clicked: hitOk
+        };
+      });
+      await page.waitForTimeout(700);
+      const after = await page.evaluate(() => {
+        const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+        const r = sb ? sb.getBoundingClientRect() : null;
+        const items = Array.from(document.querySelectorAll('.sidebar .nav-item:not(.role-hidden)'));
+        // a nav item counts as reachable only if a real tap at its centre lands on it
+        const reachable = items.filter((el) => {
+          const rr = el.getBoundingClientRect();
+          if (rr.width < 1 || rr.height < 1) return false;
+          if (rr.left < 0 || rr.right > innerWidth + 1) return false;
+          const t = document.elementFromPoint(Math.round(rr.left + rr.width / 2), Math.round(rr.top + rr.height / 2));
+          return !!t && (t === el || el.contains(t));
+        }).length;
+        const menu = document.querySelector('.mobile-menu');
+        return {
+          sidebarOpenClass: sb ? sb.classList.contains('open') : null,
+          sidebarLeft: r ? Math.round(r.left) : null,
+          sidebarOnScreen: r ? (r.left >= -1 && r.left < innerWidth && r.width > 0) : false,
+          navItemCount: items.length,
+          navItemsHitTestable: reachable,
+          ariaExpanded: menu && menu.getAttribute ? menu.getAttribute('aria-expanded') : null,
+          bodyOverflow: getComputedStyle(document.body).overflow
+        };
+      });
+      await page.screenshot({ path: path.join(OUT, 'shots', `FIXED-F10-drawer-open-${w}.png`) }).catch(() => {});
+      // ...and it must close again without leaking the scroll lock
+      await page.evaluate(() => { const b = document.querySelector('.sidebar-close'); if (b) b.click(); });
+      await page.waitForTimeout(650);
+      const closed = await page.evaluate(() => {
+        const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+        const r = sb ? sb.getBoundingClientRect() : null;
+        return {
+          sidebarOpenClass: sb ? sb.classList.contains('open') : null,
+          sidebarLeft: r ? Math.round(r.left) : null,
+          bodyOverflow: getComputedStyle(document.body).overflow,
+          bodyPosition: getComputedStyle(document.body).position,
+          bodyInlineLock: document.body.getAttribute('style') || ''
+        };
+      });
+      out.F10_wide_touch.push({ width: w, before, opened, after, closed });
+      await ctx.close();
+    }
+
+    /* G10 control — the mouse shell must be untouched by the V76 layer:
+       docked sidebar, no hamburger, grid shell. */
+    const ctx2 = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const page2 = await ctx2.newPage();
+    await page2.route('**://cdn.jsdelivr.net/**', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: buildShim(seed) }));
+    await login(page2);
+    out.F10_desktop = await page2.evaluate(() => {
+      const btn = document.querySelector('.mobile-menu');
+      const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+      const shell = document.getElementById('appShell');
+      const r = sb ? sb.getBoundingClientRect() : null;
+      return {
+        shellIsMobile: window.LSOShellLayout ? window.LSOShellLayout.isMobileShell() : null,
+        toggleDisplay: btn ? getComputedStyle(btn).display : 'missing',
+        sidebarPosition: sb ? getComputedStyle(sb).position : null,
+        sidebarDocked: r ? (r.left >= -1 && r.width > 200 && r.width < 400) : false,
+        shellDisplay: shell ? getComputedStyle(shell).display : null
+      };
+    });
+    await ctx2.close();
+  }
+
   require('fs').writeFileSync(require('path').join(OUT, 'fix-verification.json'), JSON.stringify(out, null, 1));
   console.log(JSON.stringify(out, null, 1));
   await browser.close();

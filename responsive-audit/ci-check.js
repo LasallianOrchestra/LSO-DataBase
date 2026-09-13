@@ -10,6 +10,17 @@
      6. drawer exposes aria-expanded/aria-controls                    (F7, needs fix-verification.json)
      7. every tap target >=44px on touch devices                      (F4/V75)
      8. single shared shell-layout contract present and correct       (F9/V75, needs fix-verification.json)
+     9. navigation drawer reachable on EVERY coarse-pointer profile,
+        including those wider than 920px                              (F10/V76)
+    10. the mouse shell is untouched by the drawer contract — no
+        hamburger, sidebar stays docked                               (F10/V76 regression control)
+
+   G9/G10 exist because of F10: the drawer toggle's `display` rule lived only in
+   width-only `@media (max-width: 920px)` blocks while the drawer itself followed
+   `(max-width: 920px), (pointer: coarse)`, so iPad Pro 11" landscape / iPad Pro
+   12.9" / Surface Pro rendered an off-canvas sidebar with no way to open it.
+   The old harness gated its drawer test on the same width-only query and skipped
+   those three profiles, which is why the defect was never measured.
 */
 const fs = require('fs');
 const path = require('path');
@@ -43,6 +54,27 @@ for (const rec of R.devices) {
   }
   if ((rec.login || {}).pageOverflowX > 0) failures.push(`G1 horizontal overflow — ${d.id}/login: ${rec.login.pageOverflowX}px`);
   if (d.touch && (((rec.login || {}).tapTargetsSmall) || []).length) failures.push(`G7 tap target <44px on touch — ${d.id}/login: ${((rec.login||{}).tapTargetsSmall||[]).slice(0,3).map(t=>`${t.sel}(${t.w}x${t.h})`).join(', ')}`);
+
+  /* G9/G10 — the drawer contract. The harness asks the page (LSOShellLayout)
+     whether it rendered the mobile shell, so this now covers wide touch too. */
+  const drawer = (rec.behaviour || {}).drawer;
+  if (d.touch) {
+    check(!!drawer, 'G9 drawer exercised on touch profile', `${d.id}: no drawer record — harness gate drifted from the shell contract?`);
+    if (drawer) {
+      const btn = drawer.mobileMenuButton;
+      check(!!btn && btn.found && btn.display !== 'none', 'G9 drawer toggle visible', `${d.id}: ${btn ? btn.display : 'not found'}`);
+      check(!!btn && btn.w >= 44 && btn.h >= 44, 'G9 drawer toggle >=44px', `${d.id}: ${btn ? `${btn.w}x${btn.h}` : 'not found'}`);
+      check(!!btn && btn.left >= 0 && btn.top >= 0, 'G9 drawer toggle inside viewport', `${d.id}: left=${btn && btn.left} top=${btn && btn.top}`);
+      check(!!(drawer.openState && drawer.openState.sidebarOpenClass === true), 'G9 drawer opens from the toggle', `${d.id}: open=${drawer.openState && drawer.openState.sidebarOpenClass}`);
+      const sr = drawer.openState && drawer.openState.sidebarRect;
+      check(!!sr && sr.left >= -1 && sr.width > 0, 'G9 drawer panel on screen when open', `${d.id}: ${JSON.stringify(sr)}`);
+      check(!!(drawer.openState && drawer.openState.ariaExpanded === 'true'), 'G9 drawer toggle aria-expanded when open', `${d.id}: ${drawer.openState && drawer.openState.ariaExpanded}`);
+      check(Array.isArray(drawer.navTargets) && drawer.navTargets.length > 0 && drawer.navTargets.every(t => t.visible), 'G9 drawer nav targets visible', `${d.id}: ${(drawer.navTargets || []).length} targets`);
+      check(!!(drawer.closedState && drawer.closedState.sidebarOpenClass === false), 'G9 drawer closes again', `${d.id}: open=${drawer.closedState && drawer.closedState.sidebarOpenClass}`);
+    }
+  } else {
+    check(!drawer, 'G10 mouse profile must not render the drawer shell', `${d.id}: drawer record present`);
+  }
 }
 
 if (fix) {
@@ -57,8 +89,33 @@ if (fix) {
   if (fix.F4_full) check(Object.values(fix.F4_full.perView).every(n => n === 0), 'G7 every tap target >=44px on touch (V75)', JSON.stringify((fix.F4_full.offenders || []).slice(0, 6)));
   if (fix.F4_login_tabs) check(fix.F4_login_tabs.every(t => !t.missing && t.w >= 44 && t.h >= 44), 'G7 login tabs >=44px on touch (V75)', JSON.stringify(fix.F4_login_tabs));
   if (fix.F9_touch) check(fix.F9_touch.present === true && fix.F9_touch.isMobileShell === true && fix.F9_desktop === false, 'G8 shared shell-layout contract (LSOShellLayout)', JSON.stringify({ touch: fix.F9_touch, desktop: fix.F9_desktop }));
+
+  /* G9 — F10 at the three coarse-pointer widths above 920px (V76) */
+  if (fix.F10_wide_touch) {
+    for (const r of fix.F10_wide_touch) {
+      const tag = `F10@${r.width}px`;
+      check(r.before.shellIsMobile === true, 'G9 wide touch profile is in the drawer shell', `${tag}: isMobileShell=${r.before.shellIsMobile}`);
+      check(r.before.toggleDisplay !== 'none' && r.before.toggleDisplay !== 'missing', 'G9 drawer toggle visible on wide touch', `${tag}: ${r.before.toggleDisplay}`);
+      check(!!r.before.toggleBox && r.before.toggleBox.w >= 44 && r.before.toggleBox.h >= 44, 'G9 drawer toggle >=44px on wide touch', `${tag}: ${JSON.stringify(r.before.toggleBox)}`);
+      check(r.before.toggleInsideViewport === true, 'G9 drawer toggle inside viewport on wide touch', `${tag}: ${JSON.stringify(r.before.toggleBox)}`);
+      check(r.opened.hitTest === 'hit' && r.opened.clicked === true, 'G9 drawer toggle tappable (centre hit-test)', `${tag}: ${r.opened.hitTest}`);
+      check(r.after.sidebarOpenClass === true && r.after.sidebarOnScreen === true, 'G9 drawer opens on wide touch', `${tag}: open=${r.after.sidebarOpenClass} left=${r.after.sidebarLeft}`);
+      check(r.after.navItemCount > 0 && r.after.navItemsHitTestable === r.after.navItemCount, 'G9 every nav item tappable when open on wide touch', `${tag}: ${r.after.navItemsHitTestable}/${r.after.navItemCount}`);
+      check(r.after.ariaExpanded === 'true', 'G9 drawer toggle aria-expanded on wide touch', `${tag}: ${r.after.ariaExpanded}`);
+      check(r.closed.sidebarOpenClass === false, 'G9 drawer closes on wide touch', `${tag}: open=${r.closed.sidebarOpenClass}`);
+      check(r.closed.bodyPosition !== 'fixed', 'G9 no scroll-lock leak after closing on wide touch', `${tag}: body position=${r.closed.bodyPosition}`);
+    }
+  }
+
+  /* G10 — regression control: the V76 layer is coarse-pointer scoped, so the
+     mouse shell must keep its docked sidebar and no hamburger. */
+  if (fix.F10_desktop) {
+    const dt = fix.F10_desktop;
+    check(dt.shellIsMobile === false && dt.toggleDisplay === 'none', 'G10 desktop renders no hamburger', JSON.stringify({ isMobileShell: dt.shellIsMobile, toggle: dt.toggleDisplay }));
+    check(dt.sidebarPosition === 'sticky' && dt.sidebarDocked === true && dt.shellDisplay === 'grid', 'G10 desktop sidebar stays docked', JSON.stringify(dt));
+  }
 } else {
-  console.log('note: fix-verification.json absent — guards G4/G6 skipped (run `node verify-fixes.js`).');
+  console.log('note: fix-verification.json absent — guards G4/G6/G8 and the F10 half of G9/G10 skipped (run `node verify-fixes.js`).');
 }
 
 if (failures.length) {

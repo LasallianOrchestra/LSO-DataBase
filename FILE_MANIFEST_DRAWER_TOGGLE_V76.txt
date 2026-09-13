@@ -1,0 +1,53 @@
+LSO DRAWER TOGGLE FIX V76 (AUDIT FINDING F10)
+
+UPDATED FILES — SHIPPED (must be uploaded to the GitHub Pages publishing root)
+- lso-ui-bundle-v73.css
+    the fix: appended V76 layer mirrors the shell contract
+    @media (max-width: 920px), (pointer: coarse) for .mobile-menu
+- index.html
+    stylesheet cache-bust -> ?v=20260913-drawer-toggle-fix-v76
+    pwa-enterprise-v41.js cache-bust -> ?v=20260913-drawer-toggle-fix-v76
+- pwa-enterprise-v41.js
+    ACTIVE_CACHE_MARKER -> 'drawer-toggle-fix-v76'
+- service-worker-enterprise-v41.js
+    CACHE_VERSION -> 'lso-website-v20260913-drawer-toggle-fix-v76'
+    (this is the worker index.html actually registers)
+- service-worker.js
+    CACHE_VERSION -> 'lso-website-v20260913-drawer-toggle-fix-v76'
+    (legacy worker, registered only by pwa.js; kept on the same marker)
+
+UPDATED FILES — TEST HARNESS (responsive-audit/, not served to users)
+- responsive-audit/harness.js
+    drawer gates re-wired from a local width-only matchMedia to the page's
+    shared contract via the new shellIsMobile(page) helper (3 call sites)
+- responsive-audit/verify-fixes.js
+    new F10 probe at 1194 / 1024 / 1368 coarse: toggle display, box size,
+    viewport containment, centre hit-test, drawer open state, per-nav-item
+    hit-test, aria-expanded, close + scroll-lock leak; plus a 1920px desktop
+    control probe for G10
+- responsive-audit/ci-check.js
+    new guards G9 (drawer reachable on every coarse-pointer profile, wide
+    included) and G10 (mouse profiles must never render the drawer shell);
+    header documentation updated
+
+DOCUMENTATION
+- RESPONSIVE_DEVICE_AUDIT.md
+    new F10 finding (with the contract-drift table), headline matrix updated
+    for the three affected profiles plus a note on what the dash meant,
+    guard list extended to G6-G10, new section 6.1 recording the V76 change
+    set and its exact verification status
+- DRAWER_TOGGLE_WIDE_TOUCH_FIX_V76_GUIDE.txt
+- TEST_RESULTS_DRAWER_TOGGLE_V76.txt
+- FILE_MANIFEST_DRAWER_TOGGLE_V76.txt
+
+NOT CHANGED (deliberately)
+- styles.css and the other unreferenced versioned stylesheets: index.html loads
+  only lso-ui-bundle-v73.css, and V74/V75 did not touch these either. styles.css
+  is referenced solely by the legacy layout-test.html and roster-preview.html.
+- lso-shell-layout-v75.js: the JS contract was already correct; the defect was
+  that the CSS toggle never consulted it.
+- No SQL file: no database change is required.
+
+NO NEW RUNTIME FILES
+V76 adds no new shipped asset — the fix is one appended block in the existing
+stylesheet, so there is nothing new to add to the service worker precache list.

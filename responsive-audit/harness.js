@@ -262,8 +262,21 @@ async function setView(page, viewId) {
   }, viewId);
 }
 
+/* V76 (audit fix F10): the harness must ask the PAGE which shell it rendered,
+   through the same shared contract the app uses (lso-shell-layout-v75.js).
+   Gating on a local `matchMedia('(max-width: 920px)')` is what let F10 through:
+   the drawer test was silently skipped on the three coarse-pointer profiles
+   wider than 920px (iPad Pro 11" landscape, iPad Pro 12.9", Surface Pro), which
+   is exactly where the toggle was missing. Falls back to the contract query if
+   the page has not loaded LSOShellLayout. */
+async function shellIsMobile(page) {
+  return page.evaluate(() => window.LSOShellLayout
+    ? window.LSOShellLayout.isMobileShell()
+    : window.matchMedia('(max-width: 920px), (pointer: coarse)').matches);
+}
+
 async function openDrawerIfNeeded(page, device) {
-  const isMobileShell = await page.evaluate(() => window.matchMedia('(max-width: 920px)').matches);
+  const isMobileShell = await shellIsMobile(page);
   if (!isMobileShell) return false;
   const opened = await page.evaluate(() => {
     const btn = document.querySelector('.mobile-menu') || document.querySelector('#mobileMenuButton') || document.querySelector('[data-action="toggle-sidebar"]');
@@ -350,7 +363,12 @@ async function measureView(page, device, viewId, extra) {
           if (shell) {
             shell.classList.remove('hidden', 'auth-locked');
             shell.hidden = false;
-            const mobile = window.matchMedia('(max-width: 920px)').matches;
+            // V76 F10: mirror the shared shell contract (LSOShellLayout) rather
+            // than a width-only query, so a forced unlock on a wide touch screen
+            // still gets the block/drawer shell.
+            const mobile = window.LSOShellLayout
+              ? window.LSOShellLayout.isMobileShell()
+              : window.matchMedia('(max-width: 920px), (pointer: coarse)').matches;
             shell.style.setProperty('display', mobile ? 'block' : 'grid', 'important');
             shell.style.setProperty('min-height', '100dvh', 'important');
             shell.style.setProperty('overflow', 'visible', 'important');
@@ -397,7 +415,9 @@ async function measureView(page, device, viewId, extra) {
       }
 
       /* --- behaviour: mobile navigation drawer --- */
-      const isMobileShell = await page.evaluate(() => window.matchMedia('(max-width: 920px)').matches);
+      // V76 F10: gated on the page's shared shell contract, not a local width
+      // query, so wide coarse-pointer profiles are exercised too.
+      const isMobileShell = await shellIsMobile(page);
       if (isMobileShell) {
         await setView(page, 'dashboardView');
         await page.waitForTimeout(400);

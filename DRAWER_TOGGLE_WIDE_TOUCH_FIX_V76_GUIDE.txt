@@ -1,0 +1,63 @@
+LSO DRAWER TOGGLE FIX V76 — WIDE TOUCH SCREENS (F10)
+
+WHAT WAS FIXED
+1. On touch screens wider than 920px — iPad Pro 11" landscape (1194px), iPad Pro 12.9" portrait (1024px), and Surface Pro / touch laptops (1368px) — the hamburger menu button is now visible.
+2. On those same devices the side navigation is reachable again. Before this fix the shell correctly switched to drawer mode and parked the sidebar off-canvas, but no control was rendered to bring it back, so Members, Attendance, Duty Hours, Monthly Report, Accounts, Contracts, Interviews and Settings could not be opened at all.
+3. The drawer's close button, backdrop, scroll lock, Escape handling and ARIA state now work on wide touch screens too (they were already correct in the V74 drawer layer; only the toggle was missing).
+4. Phones and small tablets are unchanged — the new rule reuses the exact values the existing accessibility layer already applied at 920px and below (inline-grid, 44px minimum touch target).
+5. Desktop and laptop users with a mouse are unchanged — no hamburger appears and the sidebar stays docked. The new rule is scoped to coarse pointers only.
+6. The audit harness no longer skips the drawer test on wide touch screens. It asks the page which shell it rendered (window.LSOShellLayout) instead of re-declaring its own width-only media query, which is what let this defect pass unnoticed.
+7. Two new CI guards were added: G9 (the drawer must be reachable end-to-end on every touch profile) and G10 (a mouse profile must never render the drawer shell).
+
+WHY IT HAPPENED
+The drawer, the drawer's close button and all layout JavaScript follow the shell contract
+    @media (max-width: 920px), (pointer: coarse)
+but the two rules that reveal the hamburger button live in width-only
+    @media (max-width: 920px)
+blocks, while a global rule hides it everywhere else with display:none !important. Any screen that is touch-driven but wider than 920px therefore got the drawer without the toggle. This is the same contract-drift class as the earlier F0 column-collapse defect, on the CSS side this time.
+
+CHANGED FILES
+- lso-ui-bundle-v73.css                     (V76 layer appended — the actual fix)
+- responsive-audit/harness.js               (3 drawer gates re-wired to LSOShellLayout)
+- responsive-audit/verify-fixes.js          (new F10 probe at 1194/1024/1368 + desktop control)
+- responsive-audit/ci-check.js              (new guards G9 and G10)
+- index.html                                (cache-busting for the stylesheet and pwa script)
+- pwa-enterprise-v41.js                     (ACTIVE_CACHE_MARKER -> drawer-toggle-fix-v76)
+- service-worker-enterprise-v41.js          (CACHE_VERSION -> lso-website-v20260913-drawer-toggle-fix-v76)
+- service-worker.js                         (legacy worker kept on the same marker)
+- RESPONSIVE_DEVICE_AUDIT.md                (F10 finding, guard list, verification status)
+
+DEPLOYMENT
+1. Upload every changed file above to the GitHub Pages publishing root, keeping the responsive-audit folder structure.
+2. Replace index.html.
+3. Confirm the stylesheet link in index.html reads:
+   lso-ui-bundle-v73.css?v=20260913-drawer-toggle-fix-v76
+4. Wait for the GitHub Pages deployment to complete.
+5. On an iPad in landscape or a Surface Pro, open the site and confirm the hamburger appears at the left of the top bar, that tapping it slides the navigation in, and that tapping a menu item navigates and closes the drawer.
+6. If a device still shows the old layout, close and reopen the browser or installed app once. The registered service worker serves CSS network-first and the cache marker changed, so the stale caches are purged automatically.
+
+IMPORTANT — SERVICE WORKER NOTE
+index.html loads pwa-enterprise-v41.js, which registers service-worker-enterprise-v41.js.
+The older service-worker.js file is NOT registered by index.html (only pwa.js references it, and index.html does not load pwa.js). Earlier releases bumped the cache version in service-worker.js only, which did not affect the worker devices actually run. This release bumps the worker that is really registered.
+
+NO DATABASE INSTALLATION
+No Supabase SQL update is required. This release changes only the stylesheet, the audit harness and the PWA cache keys.
+
+VERIFICATION STATUS — PLEASE READ
+The CSS fix was verified by statically resolving the shipped cascade for all 17 device
+profiles (parse the stylesheet, evaluate every enclosing @media per profile, resolve
+specificity, !important and source order). Before the fix the three wide touch profiles
+resolved the hamburger to display:none; after it they resolve to inline-grid, and the four
+mouse profiles are unchanged. The new G9/G10 guards were exercised against pre-fix and
+post-fix fixtures: pre-fix fails with 24 violations, post-fix passes.
+
+The full browser matrix was NOT re-run, because the machine that produced this fix has no
+Chromium and cannot install one (both the Playwright download CDN and the Debian package
+mirrors are unreachable there). Before treating F10 as re-verified in a real browser, run:
+    cd responsive-audit
+    npm install
+    npx playwright-core install chromium
+    npm run serve        (in one terminal)
+    npm run ci           (in another)
+G9 and G10 will fail the build if the drawer is not reachable on any touch profile.
+See TEST_RESULTS_DRAWER_TOGGLE_V76.txt for the detail.

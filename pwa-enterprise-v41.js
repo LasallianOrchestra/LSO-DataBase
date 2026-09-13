@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v41.js';
-  const ACTIVE_CACHE_MARKER = 'responsive-fixes-v75';
+  const ACTIVE_CACHE_MARKER = 'drawer-toggle-fix-v76';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;

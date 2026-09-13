@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-enterprise-v82-all-roles-supabase-r1';
+const CACHE_VERSION = 'lso-website-v20260913-drawer-toggle-fix-v76';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);

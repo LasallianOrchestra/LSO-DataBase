@@ -24,13 +24,15 @@ The site now measures clean on every profile tested — phones (280–430 px), t
 | Pixel 7 landscape (915×412) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | iPad mini portrait (744dp) (744×1133) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | iPad 9.7/10.2 portrait (768dp) (768×1024) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPad Pro 11" landscape (1194dp) (1194×834) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
-| iPad Pro 12.9" portrait (1024dp) (1024×1366) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
-| Surface Pro / touch laptop (1368dp) (1368×912) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| iPad Pro 11" landscape (1194dp) (1194×834) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔴 F10 | ✅ | ✅ |
+| iPad Pro 12.9" portrait (1024dp) (1024×1366) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔴 F10 | ✅ | ✅ |
+| Surface Pro / touch laptop (1368dp) (1368×912) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔴 F10 | ✅ | ✅ |
 | Small laptop 1280x720 (1280×720) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Common laptop 1366x768 (1366×768) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Desktop 1920x1080 (1920×1080) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Ultra-wide 2560x1080 (2560×1080) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
+
+> **Drawer column.** `—` on the four mouse profiles means *not applicable* (the desktop shell keeps a docked sidebar). The three `🔴 F10` cells were also recorded as `—` in the original run, but there it meant *not measured*: the harness gated its drawer test on a width-only `(max-width: 920px)` query, so the three coarse-pointer profiles wider than 920 px were silently skipped. V76 re-gates that test on the shared shell contract and the defect it exposed is written up as **F10** below.
 
 ## 3. Findings, ranked
 
@@ -134,6 +136,25 @@ Verified on all 8 mobile profiles: opens with a real backdrop, locks body scroll
 
 **V75 resolution (JS side):** `lso-shell-layout-v75.js` now owns the shell-layout media query, the shared `MediaQueryList` and the change fan-out; `auth.js`, `auth-view-controller-v18.js`, `ui-enhancements.js` and `mobile-shell-controller-v37.js` all consult `window.LSOShellLayout` instead of re-declaring the query — the drift class that produced F0 is structurally impossible now. The CSS-side consolidation (34 breakpoints → 5 tokens, dead-layer deletion) remains a recommended background refactor.
 
+### 🔴 F10 — *(found + fixed in V76, §6.1)* Wide touch screens: the navigation drawer has no toggle, so the whole nav is unreachable
+
+**Affects:** iPad Pro 11" landscape (1194 px), iPad Pro 12.9" portrait (1024 px), Surface Pro / touch laptop (1368 px) — every coarse-pointer profile wider than 920 px.
+
+The drawer and the toggle disagreed about which contract they followed:
+
+| Piece | Query it used | Result at 1024 px coarse |
+|---|---|---|
+| `.sidebar` (V74 layer) | `(max-width: 920px), (pointer: coarse)` | `position: fixed`, parked at `translate3d(-105%, 0, 0)` — off-canvas |
+| `.sidebar-close`, `.sidebar-overlay` (V74 layer) | `(max-width: 920px), (pointer: coarse)` | rendered |
+| shell JS (V75 `LSOShellLayout`) | `(max-width: 920px), (pointer: coarse)` | `isMobileShell() === true` → `#appShell{display:block}` |
+| **`.mobile-menu`** (base layer + V44 layer) | **`(max-width: 920px)` only** | **`display: none !important` from the global rule wins** |
+
+So the shell correctly entered drawer mode, parked the sidebar off-canvas, and then rendered **no control to bring it back**. There is no gesture, no keyboard path and no visible affordance to reach Members / Attendance / Duty Hours / Monthly Report / Settings on an iPad in landscape or on a Surface Pro — the navigation is gone, not merely awkward. The `.sidebar-close` button and overlay that *were* rendered are inside the parked panel, so they cannot help either.
+
+**Why the audit missed it:** `responsive-audit/harness.js` decided whether to run the drawer test with its own `window.matchMedia('(max-width: 920px)')` — the same width-only assumption the CSS toggle had. The three affected profiles were therefore skipped rather than failed, and surfaced as `—` in the matrix. This is the F9 drift class (a component re-declaring the breakpoint instead of consulting `LSOShellLayout`) reappearing on the CSS side and in the test harness.
+
+**Fix (V76):** one appended layer in `lso-ui-bundle-v73.css` mirrors the contract for the toggle — `@media (max-width: 920px), (pointer: coarse) { .mobile-menu { display: inline-grid !important; place-items: center; min-width/min-height: var(--v44-touch-target, 44px) } }` — using the V44 layer's exact values so phones render identically. The harness now asks the page (`LSOShellLayout.isMobileShell()`) which shell it rendered, and guards **G9** (drawer reachable on *every* coarse profile: toggle visible, ≥44 px, inside the viewport, tappable at its centre, drawer opens, every nav item hit-testable, closes again, no scroll-lock leak) and **G10** (mouse shell untouched: no hamburger, sidebar stays docked, grid shell) fail the build on any regression.
+
 ## 4. Verified strengths (measured, not assumed)
 
 - **Zero page-level horizontal overflow** at 320-2560 px across all 11 views (the only exception is the documented 320 px floor, F3). The 1 420 px members directory, 1 260 px duty ledger and 980 px accounts table all sit in real `overflow-x:auto` wrappers (7-55 scroll containers detected per view) and switch to stacked card layouts below 760 px.
@@ -151,6 +172,11 @@ These guards now live in the repository at `responsive-audit/ci-check.js` (run w
 3. every visible `.topbar-actions` control has `rect.right <= innerWidth` at 390 px → catches F1.
 4. `getComputedStyle(.modal-footer).backgroundColor` opaque while a modal is open at ≤680 px → catches F2.
 5. all `input/select/textarea` computed `font-size >= 16px` under `(pointer:coarse)` → catches F5.
+6. `.mobile-menu` exposes `aria-expanded`/`aria-controls` through the open/close cycle → catches F7 (G6).
+7. every tap target ≥44 px on every touch profile, login included → catches F4 (G7).
+8. `window.LSOShellLayout` present, `isMobileShell()` true on wide touch / false on desktop → catches F9 (G8).
+9. on **every** coarse-pointer profile the drawer test runs and the drawer is reachable end-to-end (toggle visible, ≥44 px, inside the viewport, tappable at its centre, panel on screen when open, all nav items hit-testable, closes again, no scroll-lock leak) → catches **F10** (G9).
+10. mouse profiles never render the drawer shell (no hamburger, sidebar docked, grid shell) → regression control for the V76 layer (G10).
 
 ## 6. V74+V75 fixes applied & re-verified (2026-09-13)
 
@@ -173,6 +199,23 @@ Changed files: `lso-ui-bundle-v73.css` (V74 layer appended + `html{min-width}` f
 Post-fix screenshots: `results/shots/FIXED-F0-*-coarse.png`, `FIXED-F1-topbar-390.png`, `FIXED-F2-modal-footer-390.png`, `FIXED-F3-login-280.png`.
 
 The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7).
+
+### 6.1 V76 fix (F10) — applied 2026-09-13, verification status
+
+Changed files: `lso-ui-bundle-v73.css` (V76 layer appended), `responsive-audit/harness.js` (drawer gates re-wired to `LSOShellLayout`), `responsive-audit/verify-fixes.js` (F10 probe at 1194/1024/1368 + desktop control), `responsive-audit/ci-check.js` (guards G9/G10), `index.html` + `pwa-enterprise-v41.js` + `service-worker-enterprise-v41.js` + `service-worker.js` (cache keys → `20260913-drawer-toggle-fix-v76`).
+
+> **Cache-key correction.** V74/V75 bumped `service-worker.js`, but `index.html` loads `pwa-enterprise-v41.js`, which registers **`service-worker-enterprise-v41.js`** — a different worker whose `CACHE_VERSION` was still `lso-website-enterprise-v82-all-roles-supabase-r1`. V76 bumps the worker that is actually registered (and keeps the legacy one on the same marker so `pwa-enterprise-v41.js`'s purge filter stays coherent). That worker serves same-origin `.css/.js/.html` **network-first**, so the new stylesheet is picked up on the next load.
+
+| Check | Before | After | Method | Result |
+|---|---|---|---|---|
+| `.mobile-menu` computed `display` @1194/1024/1368 coarse | `none` (all three) | `inline-grid` (all three) | static cascade resolution of the shipped stylesheet | ✅ |
+| `.mobile-menu` computed `display` @280…768 coarse | `inline-grid` | `inline-grid` (unchanged) | static cascade resolution | ✅ |
+| `.sidebar` `position` on coarse profiles | `fixed` (off-canvas) | `fixed` (unchanged — the drawer itself was already correct) | static cascade resolution | ✅ |
+| mouse profiles (1280/1366/1920/2560) | toggle `none`, sidebar `sticky` | toggle `none`, sidebar `sticky` (unchanged) | static cascade resolution | ✅ G10 |
+| harness drawer gate | local `matchMedia('(max-width: 920px)')` in 3 places | `LSOShellLayout.isMobileShell()` in all 3 | code inspection + `node --check` | ✅ |
+| guards G9/G10 catch the defect | — | pre-fix fixture → **24 G9 violations, exit 1**; post-fix fixture → all guards green, exit 0 | `ci-check.js` run against synthetic `results.json` / `fix-verification.json` fixtures | ✅ |
+
+**Not re-measured in a browser.** The environment where V76 was written has no Chromium and cannot install one (the Playwright download CDN and the Debian package mirrors are both unreachable; only the npm registry responds), so `npm run ci` — the 17-device matrix, the F10 probe and the real tap hit-tests — **has not been re-run**. The CSS claims above come from resolving the shipped cascade statically (parse the stylesheet, evaluate every enclosing `@media` per device profile, resolve specificity/`!important`/source order), which is conclusive for `display`/`position` but says nothing about painted geometry. §2 and §7 therefore still show the pre-V76 measurements for the three affected profiles. Re-run `cd responsive-audit && npm run ci` wherever a browser is available before treating F10 as re-verified; G9/G10 will fail the build if the fix regresses.
 
 ## 7. Appendix — per-device measurements (post-fix run)
 
