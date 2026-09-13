@@ -4,10 +4,15 @@
   const SESSION_KEY = 'lso_shared_session_v1';
   const SESSION_BUILD_KEY = 'lso_shared_session_build_v1';
   const SESSION_BUILD = 'v72-auth-input-stability';
-  // V74 responsive fix (F0): single source of truth for the shell layout contract.
-  // It MUST mirror the CSS `@media (max-width: 920px), (pointer: coarse)` block that
-  // turns the sidebar into an off-canvas drawer.
-  const SHELL_LAYOUT_QUERY = '(max-width: 920px), (pointer: coarse)';
+  // V74 responsive fix (F0), consolidated by V75 (F9): the shell layout
+  // contract is owned by lso-shell-layout-v75.js (window.LSOShellLayout).
+  // It MUST mirror the CSS `@media (max-width: 920px), (pointer: coarse)`
+  // block that turns the sidebar into an off-canvas drawer. The local
+  // fallback only applies if that script somehow fails to load.
+  const SHELL_LAYOUT_QUERY = window.LSOShellLayout?.QUERY || '(max-width: 920px), (pointer: coarse)';
+  const isMobileShellLayout = () => window.LSOShellLayout
+    ? window.LSOShellLayout.isMobileShell()
+    : !!window.matchMedia?.(SHELL_LAYOUT_QUERY)?.matches;
   const LOGIN_SECURITY_KEY = 'lso_login_security_v1';
   const ACTIVITY_KEY = 'lso_last_activity_v1';
   const MAX_FAILED_ATTEMPTS = 5;
@@ -90,7 +95,7 @@
       // otherwise coarse-pointer tablets/touch laptops wider than 920px get the
       // desktop grid while the sidebar is an off-canvas (position:fixed) drawer,
       // which collapses <main> into the vacated sidebar grid track (~268px column).
-      const mobileLayout = window.matchMedia?.(SHELL_LAYOUT_QUERY)?.matches;
+      const mobileLayout = isMobileShellLayout();
       shell.style.setProperty('display', mobileLayout ? 'block' : 'grid', 'important');
       shell.style.setProperty('visibility', 'visible', 'important');
       shell.style.setProperty('pointer-events', 'auto', 'important');
@@ -114,7 +119,7 @@
   function syncShellLayoutMode() {
     const shell = el('appShell');
     if (!shell || document.body?.dataset.authenticated !== 'true') return;
-    const mobileLayout = window.matchMedia?.(SHELL_LAYOUT_QUERY)?.matches;
+    const mobileLayout = isMobileShellLayout();
     shell.style.setProperty('display', mobileLayout ? 'block' : 'grid', 'important');
   }
 
@@ -1023,7 +1028,7 @@
   }
 
   // V74 responsive fix (F0): re-apply the shell layout when the media contract flips.
-  const shellLayoutMedia = window.matchMedia?.(SHELL_LAYOUT_QUERY);
+  const shellLayoutMedia = window.LSOShellLayout?.media || window.matchMedia?.(SHELL_LAYOUT_QUERY);
   if (shellLayoutMedia?.addEventListener) {
     shellLayoutMedia.addEventListener('change', () => window.setTimeout(syncShellLayoutMode, 60));
   } else if (shellLayoutMedia?.addListener) {

@@ -23,6 +23,11 @@
     }).format(new Date());
   }
 
+  // V75 F9: shared shell layout contract (lso-shell-layout-v75.js) with fallback.
+  const isMobileShellLayout = () => window.LSOShellLayout
+    ? window.LSOShellLayout.isMobileShell()
+    : window.matchMedia('(max-width: 920px), (pointer: coarse)').matches;
+
   function closeSidebar() {
     el('sidebar')?.classList.remove('open');
     document.body.classList.remove('sidebar-open');
@@ -30,7 +35,7 @@
 
   function syncSidebarState() {
     const isOpen = Boolean(el('sidebar')?.classList.contains('open'));
-    document.body.classList.toggle('sidebar-open', isOpen && window.matchMedia('(max-width: 920px), (pointer: coarse)').matches); // V74 F0
+    document.body.classList.toggle('sidebar-open', isOpen && isMobileShellLayout()); // V74 F0
   }
 
   function wireResponsiveNavigation() {
@@ -49,7 +54,7 @@
       if (resizeFrame) return;
       resizeFrame = requestAnimationFrame(() => {
         resizeFrame = 0;
-        if (!window.matchMedia('(max-width: 920px), (pointer: coarse)').matches) closeSidebar(); // V74 F0
+        if (!isMobileShellLayout()) closeSidebar(); // V74 F0
         refreshTableHints();
       });
     }, { passive: true });

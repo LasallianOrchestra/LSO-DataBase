@@ -1,8 +1,10 @@
 # LSO Responsive Audit — regression suite
 
 Cross-device responsiveness & behaviour tests for the LSO Orchestra Management
-System. Companion to `../RESPONSIVE_DEVICE_AUDIT.md` (findings F0–F9 and the V74
-fix layer appended to `lso-ui-bundle-v73.css`).
+System. Companion to `../RESPONSIVE_DEVICE_AUDIT.md` (findings F0–F9, the V74+V75
+fix layers appended to `lso-ui-bundle-v73.css`, and the shared shell-layout
+contract `../lso-shell-layout-v75.js` — single source of truth for the
+`(max-width: 920px), (pointer: coarse)` breakpoint that all layout JS consults).
 
 ## What it does
 
@@ -15,16 +17,20 @@ Chromium over the Chrome DevTools Protocol:
   the suite runs without touching the production database;
 * seeds a realistic dataset (`seed.js`: 34 members, 90 duty entries, 16 accounts);
 * walks all 11 views and measures: page overflow, clipped/unreachable content,
-  off-screen controls, tap-target sizes, sub-16px form controls (iOS
+  off-screen controls, tap-target sizes (checkboxes/radios/ranges excluded —
+  their labels are the intended targets), sub-16px form controls (iOS
   zoom-on-focus), hit-test blocking, sticky/fixed layering, scroll containers;
 * exercises behaviour: navigation drawer (open/close/Esc/backdrop/scroll-lock/
   scroll-restore), member modal (fit, footer opacity, close), orientation flips;
 * writes `results/results.json` + screenshots to `results/shots/`.
 
-`verify-fixes.js` re-measures each V74 fix at the exact viewport where the defect
-was found and writes `results/fix-verification.json`.
+`verify-fixes.js` re-measures each V74/V75 fix at the exact viewport where the
+defect was found (including the V75 additions: **F4-full** — zero sub-44px tap
+targets across the six core views at 390px — and **F9** — `window.LSOShellLayout`
+present and correct on wide-coarse vs desktop) and writes
+`results/fix-verification.json`.
 
-`ci-check.js` turns the measurements into pass/fail guards (G1–G6) and exits
+`ci-check.js` turns the measurements into pass/fail guards (G1–G8) and exits
 non-zero on violation — suitable for CI.
 
 ## Running locally
@@ -51,3 +57,5 @@ Useful environment overrides: `LSO_URL` (app URL), `LSO_CDP` (DevTools endpoint)
 | G4 | member-modal footer opaque while open at ≤680 px | F2 |
 | G5 | no `input/select/textarea` below 16 px computed font-size on touch | F5 |
 | G6 | hamburger exposes `aria-expanded` + `aria-controls` | F7 |
+| G7 | every tap target ≥ 44px on touch devices (all views + login) | F4/V75 |
+| G8 | `window.LSOShellLayout` present; `isMobileShell()` true @1194-coarse, false @1920-desktop | F9/V75 |

@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-v20260913-responsive-fixes-v74';
+const CACHE_VERSION = 'lso-website-v20260913-responsive-fixes-v75';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const scopeUrl = new URL('./', self.location.href);
@@ -26,6 +26,7 @@ const CORE_PATHS = [
   './auth.js',
   './management.js',
   './ui-enhancements.js',
+  './lso-shell-layout-v75.js',
   './dashboard-enhancements.js',
   './workflow-upgrades.js',
   './attendance-governance.js',

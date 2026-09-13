@@ -8,6 +8,8 @@
      4. modal footer opaque while open on phones                      (F2, needs fix-verification.json)
      5. no form control below 16px on touch devices (iOS zoom)        (F5)
      6. drawer exposes aria-expanded/aria-controls                    (F7, needs fix-verification.json)
+     7. every tap target >=44px on touch devices                      (F4/V75)
+     8. single shared shell-layout contract present and correct       (F9/V75, needs fix-verification.json)
 */
 const fs = require('fs');
 const path = require('path');
@@ -37,8 +39,10 @@ for (const rec of R.devices) {
     const parkedTopbar = [...(m.overflowers || []), ...(m.parkedOffcanvas || [])].filter(o => TOPBAR.test(o.sel));
     check(parkedTopbar.length === 0, `G3 topbar control off-screen`, `${d.id}/${viewId}: ${parkedTopbar.map(o => o.sel).join(', ')}`);
     if (d.touch) check((m.smallInputs || []).length === 0, `G5 input <16px on touch`, `${d.id}/${viewId}: ${(m.smallInputs || []).slice(0, 3).map(s => s.sel).join(', ')}`);
+    if (d.touch) check((m.tapTargetsSmall || []).length === 0, `G7 tap target <44px on touch`, `${d.id}/${viewId}: ${(m.tapTargetsSmall || []).slice(0, 3).map(t => `${t.sel}(${t.w}x${t.h})`).join(', ')}`);
   }
   if ((rec.login || {}).pageOverflowX > 0) failures.push(`G1 horizontal overflow — ${d.id}/login: ${rec.login.pageOverflowX}px`);
+  if (d.touch && (((rec.login || {}).tapTargetsSmall) || []).length) failures.push(`G7 tap target <44px on touch — ${d.id}/login: ${((rec.login||{}).tapTargetsSmall||[]).slice(0,3).map(t=>`${t.sel}(${t.w}x${t.h})`).join(', ')}`);
 }
 
 if (fix) {
@@ -50,6 +54,9 @@ if (fix) {
   if (fix.F2_footer) check(/rgb\(255, 255, 255\)|rgba\(255, 255, 255/.test(fix.F2_footer.background || ''), 'G4 modal footer transparent', fix.F2_footer.background);
   if (fix.F5_inputs !== undefined) check(fix.F5_inputs === 0, 'G5 inputs below 16px on touch', String(fix.F5_inputs));
   if (fix.F7_aria) check(fix.F7_aria.open === 'true' && fix.F7_aria.closed === 'false' && fix.F7_aria.controls === 'sidebar', 'G6 drawer ARIA state', JSON.stringify(fix.F7_aria));
+  if (fix.F4_full) check(Object.values(fix.F4_full.perView).every(n => n === 0), 'G7 every tap target >=44px on touch (V75)', JSON.stringify((fix.F4_full.offenders || []).slice(0, 6)));
+  if (fix.F4_login_tabs) check(fix.F4_login_tabs.every(t => !t.missing && t.w >= 44 && t.h >= 44), 'G7 login tabs >=44px on touch (V75)', JSON.stringify(fix.F4_login_tabs));
+  if (fix.F9_touch) check(fix.F9_touch.present === true && fix.F9_touch.isMobileShell === true && fix.F9_desktop === false, 'G8 shared shell-layout contract (LSOShellLayout)', JSON.stringify({ touch: fix.F9_touch, desktop: fix.F9_desktop }));
 } else {
   console.log('note: fix-verification.json absent — guards G4/G6 skipped (run `node verify-fixes.js`).');
 }

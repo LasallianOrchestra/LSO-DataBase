@@ -129,7 +129,7 @@ function probe(options) {
   out.clippedContent = clipped.sort((a, b) => b.lost - a.lost).slice(0, 14);
 
   /* 2. tap targets */
-  const interactive = document.querySelectorAll('a[href],button,input:not([type=hidden]),select,textarea,summary,[role="button"],[tabindex]:not([tabindex="-1"])');
+  const interactive = document.querySelectorAll('a[href],button,input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,summary,[role="button"],[tabindex]:not([tabindex="-1"])');
   const seen = new Set();
   for (const el of interactive) {
     if (el.disabled || el.hidden) continue;

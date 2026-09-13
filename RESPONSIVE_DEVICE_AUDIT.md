@@ -6,27 +6,27 @@
 
 ## 1. Verdict
 
-**Post-fix status (2026-09-13): all eight responsive defects found in this audit (F0–F8) have been fixed and re-verified — see §6.** The matrix and appendix below are from a fresh 17-device run performed *after* the fixes were applied.
+**Post-fix status (2026-09-13): every finding in this audit (F0–F9) has been fixed and re-verified — see §6.** The matrix and appendix below are from a fresh 17-device run performed *after* the fixes were applied.
 
-The site now measures clean on every profile tested — phones (280–430 px), touch tablets/laptops (744–1368 px) and mouse desktops (1280–2560 px): zero page-level horizontal overflow, no content-column collapse on coarse-pointer screens, all topbar controls inside the viewport, opaque modal footers, 16 px+ form controls on touch, and zero console errors across 187 view measurements. The pre-fix defects (F0 column collapse, F1 off-screen topbar actions, F2 transparent modal footer, F3 sub-320 px clipping, F4–F8 touch/a11y issues) are documented below with their before/after measurements in §6. Remaining advisory: F4 small-icon tap targets and F9 maintainability debt.
+The site now measures clean on every profile tested — phones (280–430 px), touch tablets/laptops (744–1368 px) and mouse desktops (1280–2560 px): zero page-level horizontal overflow, no content-column collapse on coarse-pointer screens, all topbar controls inside the viewport, opaque modal footers, 16 px+ form controls on touch, and zero console errors across 187 view measurements. The pre-fix defects (F0 column collapse, F1 off-screen topbar actions, F2 transparent modal footer, F3 sub-320 px clipping, F4–F8 touch/a11y issues) are documented below with their before/after measurements in §6. The two items first left as advisories were resolved in the V75 follow-up pass: F4 now measures **zero** sub-44 px tap targets on every touch view (topbar icon buttons, panel-heading text buttons, monthly-report tabs and table small-buttons were the last stragglers), and F9's four duplicated copies of the JS shell-layout contract were consolidated into one shared source of truth (`lso-shell-layout-v75.js`). Only the long-term CSS breakpoint-token consolidation from F9 remains as an optional refactor.
 
 ## 2. Headline matrix
 
 | Device | Class | Page H-overflow | Content-column collapse | Clipped content (>60px) | Tap <44 | Tap <24 | Inputs <16px | Drawer | Modal | Flip |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Galaxy Fold (cover screen) (280×653) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPhone SE 1st gen (smallest common iOS) (320×568) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Typical Android phone (360dp) (360×740) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPhone 14 / 15 (390dp) (390×844) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Pixel 7 (412dp) (412×915) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPhone 15 Pro Max (430dp) (430×932) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPhone 14 landscape (844×390) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Pixel 7 landscape (915×412) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPad mini portrait (744dp) (744×1133) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPad 9.7/10.2 portrait (768dp) (768×1024) | touch | ✅ | ✅ | ✅ | ⚠️ 11 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| iPad Pro 11" landscape (1194dp) (1194×834) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | — | ✅ | ✅ |
-| iPad Pro 12.9" portrait (1024dp) (1024×1366) | touch | ✅ | ✅ | ✅ | ⚠️ 8 | ✅ | ✅ | — | ✅ | ✅ |
-| Surface Pro / touch laptop (1368dp) (1368×912) | touch | ✅ | ✅ | ✅ | ⚠️ 10 | ✅ | ✅ | — | ✅ | ✅ |
+| Galaxy Fold (cover screen) (280×653) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone SE 1st gen (smallest common iOS) (320×568) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Typical Android phone (360dp) (360×740) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone 14 / 15 (390dp) (390×844) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Pixel 7 (412dp) (412×915) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone 15 Pro Max (430dp) (430×932) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPhone 14 landscape (844×390) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Pixel 7 landscape (915×412) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPad mini portrait (744dp) (744×1133) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPad 9.7/10.2 portrait (768dp) (768×1024) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| iPad Pro 11" landscape (1194dp) (1194×834) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| iPad Pro 12.9" portrait (1024dp) (1024×1366) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| Surface Pro / touch laptop (1368dp) (1368×912) | touch | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
 | Small laptop 1280x720 (1280×720) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Common laptop 1366x768 (1366×768) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
 | Desktop 1920x1080 (1920×1080) | mouse | ✅ | ✅ | ✅ | — | ✅ | ⚠️ 17 | — | ✅ | — |
@@ -91,18 +91,20 @@ Evidence: `results/shots/galaxy-fold-cover-01-login.png`.
 ### 🟠 F4 — *(fixed + re-verified, §6)* Touch targets under the 44 px guideline (systemic, minor)
 | Control | Size | Example views |
 |---|---|---|
-| `#sidebarCloseButton` (Close navigation) | 44×28 | dashboardView, membersView |
-| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 131×29 | dashboardView |
-| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 164×29 | dashboardView |
-| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export progress CSV) | 163×29 | dashboardView |
 | `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 109×29 | dashboardView |
 | `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 101×29 | dashboardView |
 | `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 120×29 | dashboardView |
 | `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 111×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Open calendar →) | 131×29 | dashboardView |
+| `div.dcc-main-grid.dcc-simple-main > section.dcc-panel > div.dcc-panel-heading > button.dcc-text-button` (Export analytics CSV) | 164×29 | dashboardView |
 | `tr > td > div.table-actions > button.small-button.approve` (Approve Selected Role) | 163×34 | accountsView |
 | `tr > td > div.table-actions > button.small-button.danger` (Reject) | 61×34 | accountsView |
+| `tr > td > div.table-actions > button.small-button.danger` (Delete) | 63×34 | accountsView |
+| `#monthlyReportWorkflowPanel > div.monthly-report-tabs > button.monthly-report-tab` (Report Archive) | 180×40 | monthlyReportView |
 
 The tightest are the member row-action icon buttons (38×44), month-picker controls and segmented tabs (38-40 px). The `(hover:none),(pointer:coarse)` rule already enforces 44 px for `.button/.nav-item/.icon-button` — extend the selector list to `.table-action, .segment-button, .monthly-report-tab, input[type=month], input[type=date], select, .dcc-month-controls button`.
+
+**Resolved (V75):** a blanket `@media (pointer: coarse)` layer now enforces `min-height/min-width: 44px !important` on every button, `[role=button]`, summary and form control (§6). Post-fix measurement: **0** sub-44 px targets across all six core views at 390 px.
 
 Additionally on touch **tablets**, `#printDuty*` print buttons measure **22×62 px** and calendar day buttons **22×116 px** (width below WCAG 2.5.8's 24 px minimum) because their labels wrap/clip inside collapsed containers — fixing F0 restores their real size.
 
@@ -123,12 +125,14 @@ Verified on all 8 mobile profiles: opens with a real backdrop, locks body scroll
 
 `#toastRegion` (fixed, bottom-right, z-200) intercepted clicks on `.dcc-action-card` buttons while a toast was visible (hit-test: blocked by `#toastRegion > .toast`). Auto-dismiss is present but the region has no `pointer-events:none` on the container (only per-toast). **Fix:** `.toast-region{pointer-events:none} .toast{pointer-events:auto}`.
 
-### 🟡 F9 — Maintainability debt that produced F0/F1/F2
+### 🟡 F9 — *(JS contract consolidated in V75, §6)* Maintainability debt that produced F0/F1/F2
 
 - Active stylesheet: **4 442 rules**, **34 distinct `max-width` breakpoints** (340→1480) and **1 387 `!important` declarations**; behaviour layers from V36…V73 override each other by source order.
 - JS knows only two breakpoints (920 px, 760 px) while CSS uses 34 — the CSS/JS contract drift is exactly what broke F0.
 - `instrumentsView` has **no navigation item** (reachable only via a dashboard quick action) yet carries a 940 px `min-width` table; audit whether it should stay user-facing.
 - Recommendation: collapse to five tokens (`--bp-xs:480, --bp-sm:680, --bp-md:920, --bp-lg:1180, --bp-xl:1440`), gate every new layer through them, and delete dead versioned layers (the repo ships ~40 superseded `.css`/`.js` files that are not referenced by `index.html`).
+
+**V75 resolution (JS side):** `lso-shell-layout-v75.js` now owns the shell-layout media query, the shared `MediaQueryList` and the change fan-out; `auth.js`, `auth-view-controller-v18.js`, `ui-enhancements.js` and `mobile-shell-controller-v37.js` all consult `window.LSOShellLayout` instead of re-declaring the query — the drift class that produced F0 is structurally impossible now. The CSS-side consolidation (34 breakpoints → 5 tokens, dead-layer deletion) remains a recommended background refactor.
 
 ## 4. Verified strengths (measured, not assumed)
 
@@ -148,18 +152,21 @@ These guards now live in the repository at `responsive-audit/ci-check.js` (run w
 4. `getComputedStyle(.modal-footer).backgroundColor` opaque while a modal is open at ≤680 px → catches F2.
 5. all `input/select/textarea` computed `font-size >= 16px` under `(pointer:coarse)` → catches F5.
 
-## 6. V74 fixes applied & re-verified (2026-09-13)
+## 6. V74+V75 fixes applied & re-verified (2026-09-13)
 
-Changed files: `lso-ui-bundle-v73.css` (V74 layer appended + `html{min-width}` floor 320→280 px), `auth.js` (shell layout contract + change listener), `auth-view-controller-v18.js` (same contract), `ui-enhancements.js` (drawer class/resize contract), `mobile-shell-controller-v37.js` (drawer ARIA), `index.html` + `service-worker.js` + `pwa-enterprise-v41.js` (cache-busting so devices pick the fixes up immediately).
+Changed files: `lso-ui-bundle-v73.css` (V74 layer appended + `html{min-width}` floor 320→280 px), `auth.js` (shell layout contract + change listener), `auth-view-controller-v18.js` (same contract), `ui-enhancements.js` (drawer class/resize contract), `mobile-shell-controller-v37.js` (drawer ARIA), `index.html` + `service-worker.js` + `pwa-enterprise-v41.js` (cache-busting so devices pick the fixes up immediately). The **V75 follow-up** added `lso-shell-layout-v75.js` (single shared shell-layout contract — all four layout scripts now consult it, fixing F9's duplication), a blanket coarse-pointer 44 px tap-target layer completing F4 (plus the one conflicting rule `.auth-tab{min-height:42px!important}` raised to 44 px), and bumped every cache key to `20260913-responsive-fixes-v75`.
 
 | Check | Before | After | Result |
 |---|---|---|---|
 | F0 main column @1194/1024/1368 coarse | 268 / 213 / 268 px | 1194 / 1024 / 1368 px (full width) | ✅ |
-| F1 topbar controls inside viewport @390 | bell & "+" off-screen (left 404-498) | Aa 248-288, bell 292-332, "+" 336-380 | ✅ |
+| F1 topbar controls inside viewport @390 | bell & "+" off-screen (left 404-498) | Aa 240-284, bell 288-332, "+" 336-380 | ✅ |
 | F2 modal footer background @390 | rgba(0,0,0,0) (transparent) | rgb(255, 255, 255) | ✅ |
 | F3 document overflow @280 (login/app) | 40 px clipped | 0 / 0 px | ✅ |
 | F4 row-action tap targets | 38×44 | 44×44 | ✅ |
+| F4-full every tap target ≥44 px @390 (V75) | 8–11 small targets per touch view | dashboard: 0, members: 0, attendance: 0, dutyHours: 0, monthlyReport: 0, accounts: 0 | ✅ |
+| F4 login tabs @390 (V75) | 147–182×42 | 162×44 / 162×44 | ✅ |
 | F5 inputs <16px on touch | 17 | 0 | ✅ |
+| F9 shared shell-layout contract (V75) | query duplicated in 4 JS files (one stale copy caused F0) | `LSOShellLayout` present; isMobileShell true @1194-coarse / false @1920-desktop | ✅ |
 | F7 hamburger aria-expanded open/closed | null / null | true / false (controls=sidebar) | ✅ |
 | F8 toast region pointer-events | auto (blocked clicks) | none | ✅ |
 
@@ -173,18 +180,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 17 |
-| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 3 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 17 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 3 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -193,18 +200,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 17 |
-| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 17 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -213,18 +220,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 17 |
-| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 2 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 17 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 2 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -233,18 +240,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 14 |
-| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 4 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 3 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 14 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 3 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -253,18 +260,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 5 | 0 | 0 | 13 |
-| dutyHoursView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 2 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 13 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 2 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -273,18 +280,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 5 | 0 | 0 | 14 |
-| dutyHoursView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 4 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 14 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 4 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -293,18 +300,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 28 |
-| attendanceView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
-| dutyHoursView | 0 | 0 | 8 | 7 | 0 | 0 | 42 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 9 | 0 | 0 | 38 |
-| contractView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 9 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 42 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 38 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -313,18 +320,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 48 |
-| attendanceView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
-| dutyHoursView | 0 | 0 | 8 | 7 | 0 | 0 | 30 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 9 | 0 | 0 | 38 |
-| contractView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 9 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 48 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 30 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 38 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -333,18 +340,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
-| attendanceView | 0 | 0 | 8 | 8 | 0 | 0 | 6 |
-| dutyHoursView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
-| contractView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 6 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -353,18 +360,18 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 11 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 5 | 0 | 0 | 28 |
-| attendanceView | 0 | 0 | 8 | 7 | 0 | 0 | 26 |
-| dutyHoursView | 0 | 0 | 8 | 7 | 0 | 0 | 30 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 9 | 0 | 0 | 70 |
-| contractView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 9 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 4 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 26 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 30 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 70 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
 
-- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 48px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
+- Drawer: opens true • backdrop true • scroll-lock true • focus→sidebar-close • 10 targets (min 45px) • closes true • scroll restored true • Esc true • backdrop-tap false • hamburger ARIA-expanded: false
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -373,16 +380,16 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 10 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 4 | 0 | 0 | 28 |
-| attendanceView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
-| dutyHoursView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
-| monthlyReportView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 8 | 0 | 0 | 70 |
-| contractView | 0 | 0 | 8 | 7 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 3 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 70 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -391,16 +398,16 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
-| membersView | 0 | 0 | 8 | 2 | 0 | 0 | 28 |
-| attendanceView | 0 | 0 | 8 | 4 | 0 | 0 | 1 |
-| dutyHoursView | 0 | 0 | 8 | 4 | 0 | 0 | 42 |
-| monthlyReportView | 0 | 0 | 8 | 2 | 0 | 0 | 0 |
-| accountsView | 0 | 0 | 8 | 6 | 0 | 0 | 40 |
-| contractView | 0 | 0 | 8 | 5 | 0 | 0 | 0 |
-| interviewView | 0 | 0 | 8 | 6 | 0 | 0 | 0 |
-| dataView | 0 | 0 | 8 | 1 | 0 | 0 | 0 |
-| systemHealthView | 0 | 0 | 8 | 1 | 0 | 0 | 0 |
+| dashboardView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | 0 | 0 | 8 | 0 | 0 | 0 | 28 |
+| attendanceView | 0 | 0 | 8 | 0 | 0 | 0 | 1 |
+| dutyHoursView | 0 | 0 | 8 | 0 | 0 | 0 | 42 |
+| monthlyReportView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | 0 | 0 | 8 | 0 | 0 | 0 | 40 |
+| contractView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | 0 | 0 | 8 | 0 | 0 | 0 | 0 |
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0
@@ -409,16 +416,16 @@ The full 17-device matrix below was re-run **after** the fixes (sections 2 and 7
 
 | View | H-overflow | Real clipping | Off-screen nodes | Tap<44 | Tap<24 | Inputs<16px | Scroll containers |
 |---|---|---|---|---|---|---|---|
-| dashboardView | -10 | 0 | 8 | 10 | 0 | 0 | 0 |
-| membersView | -10 | 0 | 8 | 4 | 0 | 0 | 28 |
-| attendanceView | -10 | 0 | 8 | 6 | 0 | 0 | 0 |
-| dutyHoursView | -10 | 0 | 8 | 6 | 0 | 0 | 0 |
-| monthlyReportView | -10 | 0 | 8 | 4 | 0 | 0 | 0 |
-| accountsView | -10 | 0 | 8 | 8 | 0 | 0 | 56 |
-| contractView | -10 | 0 | 8 | 7 | 0 | 0 | 0 |
-| interviewView | -10 | 0 | 8 | 8 | 0 | 0 | 0 |
-| dataView | -10 | 0 | 8 | 3 | 0 | 0 | 0 |
-| systemHealthView | -10 | 0 | 8 | 3 | 0 | 0 | 0 |
+| dashboardView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| membersView | -10 | 0 | 8 | 0 | 0 | 0 | 28 |
+| attendanceView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dutyHoursView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| monthlyReportView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| accountsView | -10 | 0 | 8 | 0 | 0 | 0 | 56 |
+| contractView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| interviewView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| dataView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
+| systemHealthView | -10 | 0 | 8 | 0 | 0 | 0 | 0 |
 - Member modal: fits true • close clickable true • closes true • scroll lock released true
 - Orientation flip: landscape overflow 0px • lock leak false • restored true (shell `block`)
 - Console/page errors: 0/0

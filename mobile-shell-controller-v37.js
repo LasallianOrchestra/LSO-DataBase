@@ -1,7 +1,9 @@
 (() => {
   'use strict';
 
-  const MOBILE = window.matchMedia('(max-width: 920px)');
+  // V75 F9: shared shell layout contract (lso-shell-layout-v75.js) with fallback.
+  const SHELL_LAYOUT = window.LSOShellLayout || null;
+  const MOBILE = SHELL_LAYOUT ? SHELL_LAYOUT.media : window.matchMedia('(max-width: 920px)');
   const COARSE = window.matchMedia('(pointer: coarse)');
   const body = document.body;
   const root = document.documentElement;
@@ -13,7 +15,7 @@
   let drawerLocked = false;
   let syncQueued = false;
 
-  const isMobile = () => MOBILE.matches || COARSE.matches;
+  const isMobile = () => SHELL_LAYOUT ? SHELL_LAYOUT.isMobileShell() : (MOBILE.matches || COARSE.matches);
 
   function updateViewportUnit() {
     const viewport = window.visualViewport;

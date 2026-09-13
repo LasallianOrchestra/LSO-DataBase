@@ -108,6 +108,62 @@ async function login(page) {
     await ctx.close();
   }
 
+  /* F4-full (V75) — every remaining tap target on a 390px touch phone must be >= 44px */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, serviceWorkers: 'block', timezoneId: 'Asia/Manila' });
+    const page = await ctx.newPage();
+    await page.route('**://cdn.jsdelivr.net/**', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: buildShim(seed) }));
+    await page.goto((process.env.LSO_URL || 'http://localhost:8080/index.html'), { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#loginTab', { state: 'attached', timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(600);
+    out.F4_login_tabs = await page.evaluate(() => ['loginTab', 'registerTab'].map(id => { const el = document.getElementById(id); if (!el) return { id, missing: true }; const r = el.getBoundingClientRect(); return { id, w: Math.round(r.width), h: Math.round(r.height) }; }));
+    await login(page);
+    const small = {};
+    for (const v of ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView', 'monthlyReportView', 'accountsView']) {
+      await page.evaluate(id => window.LSOApp.setView(id), v);
+      await page.waitForTimeout(700);
+      small[v] = await page.evaluate(() => {
+        const sel = 'a[href],button,input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea,summary,[role="button"],[tabindex]:not([tabindex="-1"])';
+        const bad = [];
+        for (const el of document.querySelectorAll(sel)) {
+          if (el.disabled || el.hidden) continue;
+          const view = el.closest('.view');
+          if (view && !view.classList.contains('active')) continue;
+          if (!el.getClientRects().length) continue;
+          const cs = getComputedStyle(el);
+          if (cs.pointerEvents === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.15) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width < 1 || r.height < 1) continue;
+          if (r.width < 44 || r.height < 44) bad.push({ sel: el.id ? '#' + el.id : (el.className.toString().slice(0, 40) || el.tagName), w: Math.round(r.width), h: Math.round(r.height) });
+        }
+        return bad;
+      });
+    }
+    out.F4_full = { perView: Object.fromEntries(Object.entries(small).map(([k, v]) => [k, v.length])), offenders: Object.values(small).flat().slice(0, 25) };
+    await ctx.close();
+  }
+
+  /* F9 (V75) — single shared shell-layout contract */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block', timezoneId: 'Asia/Manila' });
+    const page = await ctx.newPage();
+    await page.route('**://cdn.jsdelivr.net/**', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: buildShim(seed) }));
+    await page.goto((process.env.LSO_URL || 'http://localhost:8080/index.html'), { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
+    out.F9_touch = await page.evaluate(() => {
+      const L = window.LSOShellLayout;
+      return { present: !!L, query: L ? L.QUERY : null, isMobileShell: L ? L.isMobileShell() : null, hasOnChange: !!(L && typeof L.onChange === 'function') };
+    });
+    await ctx.close();
+    const ctx2 = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const page2 = await ctx2.newPage();
+    await page2.route('**://cdn.jsdelivr.net/**', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: buildShim(seed) }));
+    await page2.goto((process.env.LSO_URL || 'http://localhost:8080/index.html'), { waitUntil: 'domcontentloaded' });
+    await page2.waitForTimeout(1500);
+    out.F9_desktop = await page2.evaluate(() => window.LSOShellLayout ? window.LSOShellLayout.isMobileShell() : null);
+    await ctx2.close();
+  }
+
   require('fs').writeFileSync(require('path').join(OUT, 'fix-verification.json'), JSON.stringify(out, null, 1));
   console.log(JSON.stringify(out, null, 1));
   await browser.close();

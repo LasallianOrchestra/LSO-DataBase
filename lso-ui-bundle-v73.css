@@ -7514,7 +7514,7 @@ button { cursor: pointer; }
   .auth-brand-panel h1 { font-size: clamp(24px, 7vw, 30px) !important; }
   .auth-card { padding: 12px 13px 19px !important; border-radius: 20px !important; }
   .auth-tabs { margin-bottom: 17px !important; }
-  .auth-tab { min-height: 42px !important; font-size: 12px !important; }
+  .auth-tab { min-height: 44px !important; font-size: 12px !important; } /* V75 F4: was 42px — class-level !important beat the element-level V75 layer */
 }
 
 @media (max-width: 340px) {
@@ -14527,4 +14527,34 @@ body[data-theme="night"] .interview-form-panel,body[data-theme="night"] .intervi
 
 .toast-region .toast {
   pointer-events: auto;
+}
+
+/* ==========================================================================
+   V75 responsive layer (2026-09-13) — completes fix F4 (44px tap targets).
+   V74 only patched row actions and segment buttons; this pass lifts every
+   remaining interactive control on touch devices to the full 44px minimum.
+   Measured stragglers after V74: topbar bell/Aa 40px wide, primary buttons
+   41-43px tall, panel-heading text buttons 29px, sidebar close 28px,
+   monthly-report tabs 40px, table small-buttons 34px, login inputs ~43px.
+   Checkboxes / radios / ranges / color swatches are excluded on purpose -
+   their wrapping labels are the intended hit targets.
+   ========================================================================== */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  summary,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    /* !important: several component classes (.icon-button, .logout-button,
+       .button, .notification-button) pin min-height/min-width to 40-42px at
+       class specificity, which would otherwise beat this element-level rule. */
+    min-height: 44px !important;
+  }
+
+  button,
+  [role="button"],
+  summary {
+    min-width: 44px !important;
+  }
 }
