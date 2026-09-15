@@ -1,0 +1,98 @@
+/* Members Directory Print v1 - Short Bond Professional Layout
+   Adds professional print button styling for Members Directory
+   Official LSO colors, accessible, responsive
+*/
+
+#membersView .members-directory-print-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#printMembersDirectory {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid #0b3d2e;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(135deg, #0b3d2e 0%, #146c43 100%);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 18px rgba(11, 61, 46, 0.18);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  white-space: nowrap;
+}
+
+#printMembersDirectory:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #0d4a37 0%, #17825a 100%);
+  box-shadow: 0 12px 24px rgba(11, 61, 46, 0.24);
+}
+
+#printMembersDirectory:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(11, 61, 46, 0.18);
+}
+
+#printMembersDirectory:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+#printMembersDirectory .print-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+#printMembersDirectory .print-stage-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  color: #d6f2e7;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 760px) {
+  #membersView .panel-header .inline-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  #membersView .panel-header .inline-actions #printMembersDirectory {
+    grid-column: 1 / -1;
+    order: -1;
+    width: 100%;
+  }
+  #clearFilters, #addMemberMembers {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  #printMembersDirectory {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+}
+
+/* Print document styles are generated inside JS popup - this file only affects main UI */
