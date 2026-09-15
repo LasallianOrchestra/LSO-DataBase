@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>LSO Members Directory Print Preview • Short Bond • Official Header/Footer</title>
+<title>LSO Members Directory Print Preview • Portrait Portrait • Individual Selection</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  @page { size: 8.5in 11in; margin: 0; }
+  /* Portrait portrait: 8.5in x 13in, header 1.05in, footer 0.80in,
+     safe content margins: 1.30in top / 0.60in sides / 1.05in bottom */
+  @page { size: 8.5in 13in; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; background:#e9efec; color:#17211d; font-family: Inter, Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { width: 100%; min-width: 280px; }
-  
-  /* Screen preview wrapper */
+
+  /* Screen preview chrome */
   .screen-toolbar {
     position: sticky; top:0; z-index:200;
     display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;
@@ -22,107 +24,114 @@
   .btn { display:inline-flex; align-items:center; gap:6px; min-height:40px; padding:9px 14px; border-radius:10px; border:1px solid transparent; font-weight:800; font-size:12px; cursor:pointer; }
   .btn-primary { background:#fff; color:#0b3d2e; border-color:#fff; }
   .btn-secondary { background:rgba(255,255,255,0.12); color:#fff; border-color:rgba(255,255,255,0.22); }
+  .btn-gold { background:#e5c35d; color:#0b3d2e; border-color:#e5c35d; }
   .btn:hover { transform: translateY(-1px); }
-  
-  .preview-stage {
-    padding: 18px; display:grid; place-items:start center; min-height: 100vh;
+  .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+
+  .preview-tabs { display:flex; gap:6px; padding:10px 14px; background:#fff; border-bottom:1px solid #dce9e4; flex-wrap:wrap; }
+  .preview-tab { min-height:36px; padding:8px 12px; border-radius:9px; border:1px solid #dce9e4; background:#f7fbf9; font-weight:800; font-size:11px; cursor:pointer; }
+  .preview-tab.active { background:#0b3d2e; color:#fff; border-color:#0b3d2e; }
+
+  .selection-bar {
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    padding:10px 14px; background:#f4faf7; border-bottom:1px solid #dce9e4;
   }
-  
-  /* The actual print document - short bond */
+  .selection-bar .sel-count { display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:800; color:#0b3d2e; }
+  .selection-bar .sel-count strong { padding:3px 10px; border-radius:999px; background:#0b3d2e; color:#fff; }
+  .selection-bar .sel-tools { display:flex; gap:8px; flex-wrap:wrap; }
+  .sel-btn { min-height:34px; padding:6px 12px; border-radius:9px; border:1px solid #0b3d2e; background:#fff; color:#0b3d2e; font-weight:800; font-size:11px; cursor:pointer; }
+  .sel-btn.primary { background:#0b3d2e; color:#fff; }
+  .sel-btn:hover { transform:translateY(-1px); }
+
+  .preview-stage { padding: 18px; display:grid; place-items:start center; min-height: 100vh; }
+
+  /* The actual print document - portrait portrait */
   .lso-print-document {
     width: 8.5in; background:#fff; box-shadow: 0 18px 60px rgba(11,61,46,0.22);
     position:relative; overflow:hidden;
   }
-  
-  /* Fixed header/footer repeating on each printed page */
-  .lso-print-header { position: relative; top:0; left:0; right:0; height: 0.92in; background:#fff; border-bottom: 1.2px solid #0b3d2e; overflow:hidden; }
+
+  .lso-print-header { position: relative; height: 1.05in; background:#fff; border-bottom: 1.2px solid #0b3d2e; overflow:hidden; }
   .lso-print-header img { width:100%; height:100%; object-fit: fill; display:block; }
-  .lso-print-footer { position: relative; bottom:0; left:0; right:0; height: 0.62in; background:#fff; border-top: 0.8px solid #c7a547; overflow:hidden; margin-top: 6mm; }
+  .lso-print-footer { position: relative; height: 0.80in; background:#fff; border-top: 0.8px solid #c7a547; overflow:hidden; margin-top: 6mm; }
   .lso-print-footer img { width:100%; height:100%; object-fit: fill; display:block; }
-  
-  .lso-print-content { padding: 6mm 0.52in 4mm 0.52in; }
-  
+  .lso-print-content { padding: 6mm 0.60in 4mm 0.60in; }
+
   /* Document heading */
-  .mp-doc-head { text-align:center; padding: 6mm 5mm 5mm; margin: 0 0 5mm; border: 1px solid #d7e7df; border-top: 3.5px solid #0b3d2e; border-bottom: 2px solid #c7a547; border-radius: 3mm; background: linear-gradient(180deg, #f7fbf9 0%, #ffffff 100%); }
-  .mp-doc-head h1 { margin:0; font-size: 14.5px; color:#0b3d2e; letter-spacing: -0.01em; line-height:1.2; }
-  .mp-doc-head .mp-subtitle { margin: 2mm 0 0; font-size: 9.5px; color:#135441; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }
-  .mp-doc-head .mp-meta { margin: 2.5mm 0 0; display:flex; flex-wrap:wrap; justify-content:center; gap: 3mm; font-size:7.2px; color:#5a7169; }
+  .mp-doc-head { text-align:center; padding: 6mm 5mm 5mm; margin: 0 0 5mm; border: 1px solid #0b3d2e; border-top: 3.5px solid #0b3d2e; border-bottom: 2px solid #c7a547; border-radius: 3mm; background: linear-gradient(180deg, #f7fbf9 0%, #ffffff 100%); }
+  .mp-doc-head h1 { margin:0; font-size: 15px; color:#0b3d2e; letter-spacing: -0.01em; line-height:1.2; }
+  .mp-doc-head .mp-subtitle { margin: 2mm 0 0; font-size: 10px; color:#135441; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }
+  .mp-doc-head .mp-meta { margin: 2.5mm 0 0; display:flex; flex-wrap:wrap; justify-content:center; gap: 3mm; font-size:7.4px; color:#5a7169; }
   .mp-doc-head .mp-meta span { display:inline-flex; gap:1.2mm; }
   .mp-doc-head .mp-meta strong { color:#0b3d2e; }
-  .mp-doc-head .mp-filters { margin-top: 3mm; padding: 2.5mm 3mm; border-radius: 2mm; background:#f2fcf7; border:1px dashed #cfe3da; font-size:6.8px; color:#4c635a; text-align:left; line-height:1.5; }
+  .mp-doc-head .mp-filters { margin-top: 3mm; padding: 2.5mm 3mm; border-radius: 2mm; background:#f2fcf7; border:1px solid #9db8ad; font-size:7px; color:#4c635a; text-align:left; line-height:1.5; }
   .mp-doc-head .mp-filters b { color:#0b3d2e; }
-  .mp-doc-head .mp-note { margin-top:3mm; font-size:6.5px; color:#6c8079; line-height:1.45; }
-  
-  /* Summary table */
-  .mp-summary { margin: 0 0 6mm; border:1px solid #d7e7df; border-radius: 3mm; overflow:hidden; background:#fff; }
+  .mp-doc-head .mp-note { margin-top:3mm; font-size:6.6px; color:#6c8079; line-height:1.45; }
+
+  /* Professional bordered summary table */
+  .mp-summary { margin: 0 0 6mm; border:1px solid #0b3d2e; border-radius: 2mm; overflow:hidden; background:#fff; }
   .mp-summary-head { display:flex; justify-content:space-between; align-items:center; gap:3mm; padding: 3mm 4mm; background: linear-gradient(90deg, #0b3d2e 0%, #167055 100%); color:#fff; }
-  .mp-summary-head h3 { margin:0; font-size:10px; letter-spacing:0.02em; }
-  .mp-summary-head span { font-size:7px; background: rgba(255,255,255,0.18); padding: 1mm 2.5mm; border-radius:999px; }
-  .mp-table-wrap { overflow:hidden; }
-  .mp-table { width:100%; border-collapse: collapse; font-size: 7px; }
-  .mp-table th { background:#f4faf7; color:#3f5a52; font-size:6.5px; text-transform:uppercase; letter-spacing:0.06em; padding: 2mm 2mm; text-align:left; border-bottom:1px solid #d7e7df; white-space:nowrap; }
-  .mp-table td { padding: 2mm 2mm; border-bottom:1px solid #e8f0ec; vertical-align:top; line-height:1.35; }
-  .mp-table td strong { color:#0b3d2e; font-size:7.2px; }
-  .mp-table td small { display:block; color:#6c8079; font-size:6px; margin-top:0.5mm; }
-  .mp-table tr:nth-child(even) td { background:#fcfefd; }
-  
-  /* Member cards */
+  .mp-summary-head h3 { margin:0; font-size:10.5px; letter-spacing:0.02em; }
+  .mp-summary-head span { font-size:7px; background: rgba(255,255,255,0.18); padding: 1mm 2.5mm; border-radius:999px; white-space:nowrap; }
+  .mp-table { width:100%; border-collapse: collapse; font-size: 7.2px; }
+  .mp-table th, .mp-table td { border: 0.5pt solid #9db8ad; }
+  .mp-table thead th { background:#0b3d2e; color:#fff; font-size:6.6px; text-transform:uppercase; letter-spacing:0.05em; padding: 2.2mm 2mm; text-align:left; white-space:nowrap; }
+  .mp-table tbody td { padding: 2mm 2mm; vertical-align:top; line-height:1.35; }
+  .mp-table tbody td strong { color:#0b3d2e; font-size:7.4px; }
+  .mp-table tbody td small { display:block; color:#6c8079; font-size:6.1px; margin-top:0.5mm; }
+  .mp-table tbody tr:nth-child(even) td { background:#f4faf7; }
+  .mp-table tbody tr.row-unselected td { opacity:.45; }
+  .mp-table td.c-index, .mp-table th.c-index { text-align:center; font-weight:800; }
+  .mp-table tbody td.c-index { color:#0b3d2e; }
+  .mp-table .sel-col { width:8mm; text-align:center; }
+  .mp-table .sel-col input { width:4mm; height:4mm; accent-color:#0b3d2e; cursor:pointer; vertical-align:middle; }
+
+  /* Member record cards with professional bordered detail tables */
   .mp-cards { display:grid; gap: 5mm; }
-  .mp-card { border:1px solid #cbdcd5; border-radius: 3mm; overflow:hidden; background:#fff; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 1mm 3mm rgba(11,61,46,0.06); }
+  .mp-card { border:1px solid #0b3d2e; border-radius: 2.5mm; overflow:hidden; background:#fff; break-inside: avoid; page-break-inside: avoid; }
   .mp-card-header { display:flex; justify-content:space-between; align-items:flex-start; gap:3mm; padding: 3.5mm 4mm; background: linear-gradient(135deg, #0b3d2e 0%, #135441 55%, #167055 100%); color:#fff; }
   .mp-card-identity { display:flex; gap:3mm; align-items:flex-start; min-width:0; flex:1; }
-  .mp-avatar { width:12mm; height:12mm; border-radius: 2.5mm; background:#fff; color:#0b3d2e; display:grid; place-items:center; font-weight:900; font-size:4.5mm; flex:0 0 12mm; border: 0.6mm solid #c7a547; overflow:hidden; box-shadow: 0 0.5mm 2mm rgba(0,0,0,0.12); }
-  .mp-avatar.has-photo { background:#fff; padding:0; }
-  .mp-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+  .mp-avatar { width:12mm; height:12mm; border-radius: 2.5mm; background:#fff; color:#0b3d2e; display:grid; place-items:center; font-weight:900; font-size:4.5mm; flex:0 0 12mm; border: 0.6mm solid #c7a547; overflow:hidden; }
   .mp-card-title { min-width:0; flex:1; }
-  .mp-card-title h2 { margin:0; font-size:10.5px; line-height:1.25; color:#fff; overflow-wrap: anywhere; }
-  .mp-card-title p { margin: 0.8mm 0 0; font-size:6.8px; color:#c9f5dc; line-height:1.35; overflow-wrap:anywhere; }
+  .mp-card-title h2 { margin:0; font-size:11px; line-height:1.25; color:#fff; overflow-wrap: anywhere; }
+  .mp-card-title p { margin: 0.8mm 0 0; font-size:7px; color:#c9f5dc; line-height:1.35; overflow-wrap:anywhere; }
   .mp-badges { display:flex; flex-wrap:wrap; gap:1.2mm; margin-top:1.8mm; }
-  .mp-badge { display:inline-flex; align-items:center; padding:0.7mm 2mm; border-radius:999px; font-size:5.8px; font-weight:800; letter-spacing:0.02em; line-height:1; border:0.25mm solid transparent; }
+  .mp-badge { display:inline-flex; align-items:center; padding:0.7mm 2mm; border-radius:999px; font-size:6px; font-weight:800; letter-spacing:0.02em; line-height:1; border:0.25mm solid transparent; }
   .badge-green { background:#dff7e9; color:#0d6c49; border-color:#8eb9a4; }
   .badge-gold { background:#fff4cc; color:#7a5a00; border-color:#d4a017; }
   .badge-blue { background:#e3eefc; color:#1e4a8a; border-color:#8aa8d6; }
   .badge-gray { background:#edf1ef; color:#4b5c56; border-color:#b9c7c1; }
-  .mp-card .mp-badge.badge-gray { background:#edf1ef; color:#4b5c56; border-color:#b9c7c1; }
   .mp-card-index { flex:0 0 auto; font-size:9px; font-weight:900; color:#e5c35d; background: rgba(0,0,0,0.18); border:1px solid rgba(229,195,93,0.35); padding:1.5mm 2.5mm; border-radius:999px; letter-spacing:0.04em; }
-  
-  .mp-card-body { padding: 3.5mm 4mm; }
-  .mp-section { margin: 0 0 3.5mm; }
-  .mp-section:last-child { margin-bottom:0; }
-  .mp-section-head { display:flex; align-items:center; gap:2mm; margin:0 0 2mm; padding-bottom:1.2mm; border-bottom:0.6mm solid #e5c35d; }
-  .mp-section-head span { width:5mm; height:5mm; border-radius:50%; background:#0b3d2e; color:#fff; display:grid; place-items:center; font-size:3.8px; font-weight:900; flex:0 0 5mm; }
-  .mp-section-head h4 { margin:0; font-size:7.8px; color:#0b3d2e; text-transform:uppercase; letter-spacing:0.05em; font-weight:800; }
-  .mp-field-grid { display:grid; grid-template-columns: 1fr 1fr; gap:1.8mm; }
-  .mp-field { border:0.25mm solid #d8e6df; border-radius:1.2mm; padding:1.8mm 2.2mm; background:#f9fbf9; min-height:8.5mm; display:grid; align-content:start; }
-  .mp-field.full { grid-column:1 / -1; }
-  .mp-field span { display:block; font-size:5px; text-transform:uppercase; letter-spacing:0.07em; color:#5a7169; font-weight:800; margin-bottom:0.8mm; line-height:1.2; }
-  .mp-field strong { display:block; font-size:7px; color:#17211d; line-height:1.35; font-weight:600; overflow-wrap: anywhere; word-break: break-word; }
-  .mp-field.full strong { white-space: pre-wrap; }
-  
+
+  .mp-card-body { padding: 3.5mm 4mm; display:grid; gap:3mm; }
+  .mp-detail-table { width:100%; border-collapse: collapse; font-size:7.1px; break-inside: avoid; page-break-inside: avoid; }
+  .mp-detail-table th, .mp-detail-table td { border: 0.5pt solid #9db8ad; padding: 1.9mm 2.4mm; text-align:left; vertical-align:top; line-height:1.4; }
+  .mp-detail-table thead th { background:#0b3d2e; color:#fff; font-size:7.6px; text-transform:uppercase; letter-spacing:0.05em; font-weight:800; }
+  .mp-detail-table thead th .mp-sec-no { display:inline-grid; place-items:center; width:5mm; height:5mm; margin-right:2mm; border-radius:50%; background:#c7a547; color:#0b3d2e; font-size:3.8px; font-weight:900; vertical-align:middle; }
+  .mp-detail-table tbody th { width: 38%; background:#f1f7f4; color:#33544a; font-size:6.4px; text-transform:uppercase; letter-spacing:0.05em; font-weight:800; }
+  .mp-detail-table tbody td { color:#17211d; font-weight:600; overflow-wrap:anywhere; word-break:break-word; }
+  .mp-detail-table tbody tr:nth-child(even) td { background:#fcfefd; }
+
   /* Signatory */
-  .mp-signatory { display:grid; grid-template-columns: 1fr 1fr; gap:12mm; margin-top:8mm; padding-top:5mm; border-top:0.4mm solid #d7e7df; }
+  .mp-signatory { display:grid; grid-template-columns: 1fr 1fr; gap:12mm; margin-top:8mm; padding-top:5mm; border-top:0.4mm solid #0b3d2e; }
   .mp-signatory > div { text-align:center; }
   .mp-signatory .mp-sign-line { border-top:0.4mm solid #263b33; padding-top:2mm; margin-top:10mm; }
   .mp-signatory strong { display:block; font-size:8px; color:#0b3d2e; }
   .mp-signatory span { display:block; font-size:6px; color:#5a7169; text-transform:uppercase; letter-spacing:0.05em; margin-top:1mm; }
-  
-  .mp-print-meta { margin-top:5mm; text-align:center; font-size:6px; color:#8aa89b; line-height:1.5; }
-  .mp-print-meta b { color:#0b3d2e; }
 
-  /* Tabs for preview */
-  .preview-tabs { display:flex; gap:6px; padding:10px 14px; background:#fff; border-bottom:1px solid #dce9e4; }
-  .preview-tab { min-height:36px; padding:8px 12px; border-radius:9px; border:1px solid #dce9e4; background:#f7fbf9; font-weight:800; font-size:11px; cursor:pointer; }
-  .preview-tab.active { background:#0b3d2e; color:#fff; border-color:#0b3d2e; }
+  .mp-print-meta { margin-top:5mm; text-align:center; font-size:6.2px; color:#8aa89b; line-height:1.5; }
+  .mp-print-meta b { color:#0b3d2e; }
 
   @media print {
     html, body { background:#fff; }
-    .screen-toolbar, .preview-tabs { display:none !important; }
+    .screen-toolbar, .preview-tabs, .selection-bar { display:none !important; }
     .preview-stage { padding:0; background:#fff; display:block; }
     .lso-print-document { width:8.5in; box-shadow:none; }
-    .lso-print-header { position: fixed; top:0; left:0; right:0; }
-    .lso-print-footer { position: fixed; bottom:0; left:0; right:0; margin-top:0; }
-    .lso-print-content { margin: 1.05in 0.52in 0.78in 0.52in; padding:0; }
-    .mp-card { box-shadow:none; }
+    .lso-print-header { position: fixed; top:0; left:0; right:0; height:1.05in; }
+    .lso-print-footer { position: fixed; bottom:0; left:0; right:0; height:0.80in; margin-top:0; }
+    .lso-print-content { margin: 1.30in 0.60in 1.05in 0.60in; padding:0; }
+    .mp-table .sel-col { display:none; }
+    .mp-table tbody tr.row-unselected { display:none; }
   }
 
   @media (max-width: 920px) {
@@ -135,14 +144,14 @@
 
 <div class="screen-toolbar">
   <div>
-    <h1>🖨️ LSO Members Directory — Print Preview (Short Bond 8.5" x 11")</h1>
-    <p>Official header/footer • All system management fields • Professional layout • Membership / Probationary / Trainee tabs</p>
+    <h1>LSO Members Directory — Print Preview (Portrait 8.5" x 13" Portrait)</h1>
+    <p>Official header 1.05in / footer 0.80in • Safe margins 1.30 / 0.60 / 1.05in • Individual selection • Professional bordered tables</p>
   </div>
   <div class="actions">
     <button class="btn btn-secondary" onclick="switchStage('Membership Period')">Membership</button>
     <button class="btn btn-secondary" onclick="switchStage('Probationary Period')">Probationary</button>
     <button class="btn btn-secondary" onclick="switchStage('Trainee Period')">Trainee</button>
-    <button class="btn btn-primary" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <button class="btn btn-primary" id="printBtn" onclick="window.print()">Print / Save as PDF</button>
   </div>
 </div>
 
@@ -150,6 +159,15 @@
   <button class="preview-tab active" data-stage="Membership Period" onclick="switchStage('Membership Period')">Membership Period <span id="cnt-membership">3</span></button>
   <button class="preview-tab" data-stage="Probationary Period" onclick="switchStage('Probationary Period')">Probationary Period <span id="cnt-probationary">2</span></button>
   <button class="preview-tab" data-stage="Trainee Period" onclick="switchStage('Trainee Period')">Trainee Period <span id="cnt-trainee">2</span></button>
+</div>
+
+<div class="selection-bar">
+  <div class="sel-count"><strong id="selCount">3 selected</strong><span id="selTotal">of 3 listed • Membership Period</span></div>
+  <div class="sel-tools">
+    <button class="sel-btn" onclick="selectAll(true)">Select All</button>
+    <button class="sel-btn" onclick="selectAll(false)">Clear</button>
+    <button class="sel-btn primary" onclick="window.print()">Print Selected</button>
+  </div>
 </div>
 
 <div class="preview-stage">
@@ -408,57 +426,70 @@ const sampleMembers = {
   ]
 };
 
+let currentStage = 'Membership Period';
+const selectedByIndex = {
+  'Membership Period': new Set([0, 1, 2]),
+  'Probationary Period': new Set([0, 1]),
+  'Trainee Period': new Set([0, 1])
+};
+
 function safeText(v){ return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function dateLabel(v){ if(!v) return '—'; const d=new Date(v+'T00:00:00'); if(isNaN(d)) return v; return new Intl.DateTimeFormat('en-PH',{year:'numeric',month:'short',day:'numeric'}).format(d); }
 
-function memberCard(member,i){
-  const fields = [
-    {sec:'Personal Information', lbl:'Full Name', val:member.fullName},
-    {sec:'Personal Information', lbl:'Membership ID', val:member.membershipId},
-    {sec:'Personal Information', lbl:'Student Number', val:member.studentNumber},
-    {sec:'Personal Information', lbl:'Age', val:member.age},
-    {sec:'Personal Information', lbl:'Birthdate', val:dateLabel(member.birthdate)},
-    {sec:'Personal Information', lbl:'Sex', val:member.sex},
-    {sec:'Personal Information', lbl:'Home Address', val:member.homeAddress, full:true},
-    {sec:'Personal Information', lbl:'DLSUD Outlook', val:member.outlook},
-    {sec:'Academic Information', lbl:'College', val:member.college},
-    {sec:'Academic Information', lbl:'Course', val:member.course},
-    {sec:'Academic Information', lbl:'Year Level', val:member.yearLevel},
-    {sec:'Academic Information', lbl:'Section', val:member.section},
-    {sec:'Academic Information', lbl:'CYS', val:member.cys},
-    {sec:'Academic Information', lbl:'Academic Status', val:member.academicStatus},
-    {sec:'Organization Information', lbl:'Position in Organization', val:member.organizationPosition},
-    {sec:'Organization Information', lbl:'Specific Organization Role', val:member.organizationRole},
-    {sec:'Organization Information', lbl:'Member Status', val:member.memberStatus},
-    {sec:'Organization Information', lbl:'Membership Stage', val:member.membershipStage},
-    {sec:'Organization Information', lbl:'Current Period Group', val:member.periodGroup},
-    {sec:'Organization Information', lbl:'Orchestra Section', val:member.orchestraSection},
-    {sec:'Organization Information', lbl:'Primary Instrument', val:member.primaryInstrument},
-    {sec:'Organization Information', lbl:'Stage Notes', val:member.stageNotes, full:true},
-    {sec:'Membership Timeline', lbl:'Trainee Period Start', val:dateLabel(member.traineeStartDate)},
-    {sec:'Membership Timeline', lbl:'Probationary Period Start', val: member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)},
-    {sec:'Membership Timeline', lbl:'Probationary Skipped', val: member.probationarySkipped ? 'Yes' : 'No'},
-    {sec:'Membership Timeline', lbl:'Membership Period Start', val:dateLabel(member.regularMemberDate)},
-    {sec:'Membership Timeline', lbl:'Date Registered', val:dateLabel(member.dateRegistered)},
-    {sec:'Membership Timeline', lbl:'Last Profile Review', val:dateLabel(member.lastProfileReview)},
-    {sec:'Membership Timeline', lbl:'Review Status', val:member.reviewStatus},
-    {sec:'Membership Timeline', lbl:'Record Quality', val: member.recordQuality ? member.recordQuality+'%' : '—'},
-    {sec:'Record Notes', lbl:'Remarks / Notes', val:member.remarks, full:true}
+function memberRecordTable(member, i){
+  const sections = [
+    { name:'Personal Information', no:'01', rows:[
+      ['Full Name', member.fullName],
+      ['Membership ID', member.membershipId],
+      ['Student Number', member.studentNumber],
+      ['Age', member.age],
+      ['Birthdate', dateLabel(member.birthdate)],
+      ['Sex', member.sex],
+      ['Home Address', member.homeAddress],
+      ['DLSUD Outlook', member.outlook]
+    ]},
+    { name:'Academic Information', no:'02', rows:[
+      ['College', member.college],
+      ['Course', member.course],
+      ['Year Level', member.yearLevel],
+      ['Section', member.section],
+      ['CYS', member.cys],
+      ['Academic Status', member.academicStatus]
+    ]},
+    { name:'Organization Information', no:'03', rows:[
+      ['Position in Organization', member.organizationPosition],
+      ['Specific Organization Role', member.organizationRole],
+      ['Member Status', member.memberStatus],
+      ['Membership Stage', member.membershipStage],
+      ['Current Period Group', member.periodGroup],
+      ['Orchestra Section', member.orchestraSection],
+      ['Primary Instrument', member.primaryInstrument],
+      ['Stage Notes', member.stageNotes]
+    ]},
+    { name:'Membership Timeline', no:'04', rows:[
+      ['Trainee Period Start', dateLabel(member.traineeStartDate)],
+      ['Probationary Period Start', member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)],
+      ['Probationary Skipped', member.probationarySkipped ? 'Yes' : 'No'],
+      ['Membership Period Start', dateLabel(member.regularMemberDate)],
+      ['Date Registered', dateLabel(member.dateRegistered)],
+      ['Last Profile Review', dateLabel(member.lastProfileReview)],
+      ['Review Status', member.reviewStatus],
+      ['Record Quality', member.recordQuality ? member.recordQuality+'%' : '—']
+    ]},
+    { name:'Record Notes', no:'05', rows:[
+      ['Remarks / Notes', member.remarks]
+    ]}
   ];
-  
-  const sections = {};
-  fields.forEach(f=>{ if(!sections[f.sec]) sections[f.sec]=[]; sections[f.sec].push(f); });
-  const order = ['Personal Information','Academic Information','Organization Information','Membership Timeline','Record Notes'];
-  const icons = {'Personal Information':'01','Academic Information':'02','Organization Information':'03','Membership Timeline':'04','Record Notes':'05'};
-  
-  const sectionsHtml = order.map(sec=>{
-    const list = sections[sec]; if(!list) return '';
-    return `<div class="mp-section"><div class="mp-section-head"><span>${icons[sec]}</span><h4>${safeText(sec)}</h4></div><div class="mp-field-grid">${list.map(f=>`<div class="mp-field${f.full?' full':''}"><span>${safeText(f.lbl)}</span><strong>${safeText(f.val||'—')}</strong></div>`).join('')}</div></div>`;
-  }).join('');
-  
+
+  const tablesHtml = sections.map(sec =>
+    `<table class="mp-detail-table"><thead><tr><th colspan="2"><span class="mp-sec-no">${sec.no}</span>${safeText(sec.name)}</th></tr></thead><tbody>${
+      sec.rows.map(([label, val]) => `<tr><th scope="row">${safeText(label)}</th><td>${safeText(val||'—')}</td></tr>`).join('')
+    }</tbody></table>`
+  ).join('');
+
   const badgeClass = member.periodGroup==='Membership Period' ? 'badge-green' : member.periodGroup==='Probationary Period' ? 'badge-gold' : 'badge-blue';
-  const initials = member.fullName.split(' ').slice(0,2).map(s=>s[0]).join('').toUpperCase();
-  
+  const initials = String(member.fullName||'M').split(' ').slice(0,2).map(s=>s[0]).join('').toUpperCase();
+
   return `<article class="mp-card">
     <header class="mp-card-header">
       <div class="mp-card-identity">
@@ -476,43 +507,68 @@ function memberCard(member,i){
       </div>
       <div class="mp-card-index">#${String(i+1).padStart(3,'0')}</div>
     </header>
-    <div class="mp-card-body">${sectionsHtml}</div>
+    <div class="mp-card-body">${tablesHtml}</div>
   </article>`;
 }
 
-function renderStage(stage){
+function selectedMembers(stage){
   const members = sampleMembers[stage] || [];
+  const sel = selectedByIndex[stage] || new Set();
+  return members.filter((_, idx) => sel.has(idx));
+}
+
+function scopeLabel(stage){
+  const total = (sampleMembers[stage]||[]).length;
+  const count = selectedMembers(stage).length;
+  return count === total
+    ? `All Listed • ${count} record${count===1?'':'s'}`
+    : `Selected Members • ${count} of ${total} listed`;
+}
+
+function renderStage(stage){
+  currentStage = stage;
+  const members = sampleMembers[stage] || [];
+  const sel = selectedByIndex[stage] || new Set();
+  const chosen = selectedMembers(stage);
   const today = new Date();
   const dateStr = new Intl.DateTimeFormat('en-PH',{year:'numeric',month:'long',day:'numeric'}).format(today);
-  
-  const summaryRows = members.map((m,i)=>`<tr><td>${i+1}</td><td><strong>${safeText(m.fullName)}</strong><br><small>${safeText(m.membershipId)} • ${safeText(m.studentNumber)}</small></td><td>${safeText(m.orchestraSection)}<br><small>${safeText(m.primaryInstrument)}</small></td><td>${safeText(m.course||m.college)}<br><small>${safeText(m.yearLevel)} ${safeText(m.section)}</small></td><td>${safeText(m.organizationPosition)}<br><small>${safeText(m.organizationRole)}</small></td><td>${safeText(m.memberStatus)}</td><td>${safeText(m.recordQuality)}%</td></tr>`).join('');
-  
+
+  document.getElementById('selCount').textContent = `${chosen.length} selected`;
+  document.getElementById('selTotal').textContent = `of ${members.length} listed • ${stage}`;
+  document.getElementById('printBtn').disabled = chosen.length === 0;
+
+  const summaryRows = members.map((m,i)=>{
+    const isSel = sel.has(i);
+    return `<tr class="${isSel?'':'row-unselected'}"><td class="sel-col"><input type="checkbox" data-idx="${i}" ${isSel?'checked':''} aria-label="Select ${safeText(m.fullName)}"></td><td class="c-index">${i+1}</td><td><strong>${safeText(m.fullName)}</strong><small>${safeText(m.membershipId)} • ${safeText(m.studentNumber)}</small></td><td>${safeText(m.orchestraSection)}<small>${safeText(m.primaryInstrument)}</small></td><td>${safeText(m.course||m.college)}<small>${safeText(m.yearLevel)} ${safeText(m.section)}</small></td><td>${safeText(m.organizationPosition)}<small>${safeText(m.organizationRole)}</small></td><td>${safeText(m.memberStatus)}</td><td class="c-index">${safeText(m.recordQuality)}%</td></tr>`;
+  }).join('');
+
   document.getElementById('printContent').innerHTML = `
     <header class="mp-doc-head">
       <h1>LASALLIAN SYMPHONY ORCHESTRA</h1>
-      <div class="mp-subtitle">Official Members Directory • ${safeText(stage)} • Short Bond (8.5" x 11")</div>
+      <div class="mp-subtitle">Official Members Directory • ${safeText(stage)} • Portrait (8.5" x 13") Portrait</div>
       <div class="mp-meta">
         <span><strong>Generated:</strong> ${safeText(dateStr)}</span>
         <span><strong>By:</strong> Administrator</span>
-        <span><strong>Records:</strong> ${members.length}</span>
-        <span><strong>Paper:</strong> Short Bond Letter (215.9mm x 279.4mm)</span>
+        <span><strong>Records:</strong> ${chosen.length}</span>
+        <span><strong>Paper:</strong> Portrait 8.5" x 13" Portrait</span>
       </div>
       <div class="mp-filters">
+        <b>Print Scope:</b> ${safeText(scopeLabel(stage))}<br>
         <b>Filters Applied:</b> Search: None • Status: All • Orchestra Section: All • Position: All<br>
-        <b>Scope:</b> ${safeText(stage)} only • ${members.length} member${members.length===1?'':'s'} matched • Sorted by Full Name (A-Z)<br>
+        <b>Coverage:</b> ${safeText(stage)} only • Sorted by Full Name (A-Z)<br>
         <b>Fields:</b> All information as indicated in System Management (Personal, Academic, Organization, Membership Timeline, Record Notes) including profile photo, quality score, and remarks.<br>
-        <b>Paper Size:</b> Short Bond 8.5" x 11" (215.9mm x 279.4mm) — official LSO print with header/footer on every page
+        <b>Paper Size:</b> Portrait 8.5" x 13" (215.9mm x 330.2mm) portrait — official LSO header (1.05in) &amp; footer (0.80in) on every page, safe content margins 1.30in top / 0.60in sides / 1.05in bottom
       </div>
-      <div class="mp-note">This document uses the official LSO header and footer. For borderless professional output, enable <b>Background graphics</b> and set <b>Margins: None</b> in the browser print dialog. The system requests 8.5in x 11in short bond paper.</div>
+      <div class="mp-note">This document uses the official LSO header (1.05in) and footer (0.80in). For professional output, enable <b>Background graphics</b> and set <b>Margins: None</b> in the browser print dialog. Unchecked rows are excluded from the detailed records and hidden when printing.</div>
     </header>
 
     <section class="mp-summary">
-      <div class="mp-summary-head"><h3>Directory Summary • ${safeText(stage)}</h3><span>${members.length} record${members.length===1?'':'s'} • Short Bond</span></div>
-      <div class="mp-table-wrap"><table class="mp-table"><thead><tr><th>#</th><th>Member / IDs</th><th>Section / Instrument</th><th>Program / Year</th><th>Organization</th><th>Status</th><th>Quality</th></tr></thead><tbody>${summaryRows}</tbody></table></div>
+      <div class="mp-summary-head"><h3>Directory Summary • ${safeText(stage)}</h3><span>${chosen.length} of ${members.length} selected • Portrait Portrait</span></div>
+      <div class="mp-table-wrap"><table class="mp-table"><thead><tr><th class="sel-col">✓</th><th class="c-index">#</th><th>Member / IDs</th><th>Section / Instrument</th><th>Program / Year</th><th>Organization</th><th>Status</th><th class="c-index">Quality</th></tr></thead><tbody>${summaryRows}</tbody></table></div>
     </section>
 
     <section class="mp-cards">
-      ${members.map((m,i)=>memberCard(m,i)).join('')}
+      ${chosen.map((m)=>memberRecordTable(m, members.indexOf(m))).join('') || '<div class="mp-summary"><div class="mp-summary-head"><h3>No records selected</h3><span>0</span></div><div style="padding:6mm; font-size:8px; color:#6c8079;">Tick at least one checkbox in the summary table above to include that member in the official document.</div></div>'}
     </section>
 
     <section class="mp-signatory">
@@ -521,11 +577,20 @@ function renderStage(stage){
     </section>
 
     <div class="mp-print-meta">
-      <b>Lasallian Symphony Orchestra</b> • Official Members Directory • ${safeText(stage)} • Generated ${safeText(dateStr)} • ${members.length} record${members.length===1?'':'s'}<br>
+      <b>Lasallian Symphony Orchestra</b> • Official Members Directory • ${safeText(stage)} • Generated ${safeText(dateStr)} • ${chosen.length} record${chosen.length===1?'':'s'}<br>
       This is a system-generated document containing all member information as indicated in System Management. Keep confidential.<br>
-      Paper: Short Bond (8.5" x 11" / 215.9mm x 279.4mm) • Official Header & Footer • LSO Database System
+      Paper: Portrait (8.5" x 13" / 215.9mm x 330.2mm) Portrait • Official Header &amp; Footer • LSO Database System
     </div>
   `;
+
+  document.querySelectorAll('#printContent .mp-table tbody input[type="checkbox"]').forEach(box=>{
+    box.addEventListener('change', ()=>{
+      const idx = Number(box.getAttribute('data-idx'));
+      const set = selectedByIndex[currentStage];
+      if (box.checked) set.add(idx); else set.delete(idx);
+      renderStage(currentStage);
+    });
+  });
 
   document.querySelectorAll('.preview-tab').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.stage===stage);
@@ -533,6 +598,12 @@ function renderStage(stage){
 }
 
 function switchStage(stage){ renderStage(stage); }
+
+function selectAll(on){
+  const members = sampleMembers[currentStage] || [];
+  selectedByIndex[currentStage] = new Set(on ? members.map((_, i)=>i) : []);
+  renderStage(currentStage);
+}
 
 renderStage('Membership Period');
 </script>
