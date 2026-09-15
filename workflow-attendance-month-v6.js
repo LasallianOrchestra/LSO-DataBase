@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v8-attendance-lifecycle-workflow';
+  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v9-print-live-feed-fix';
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -139,6 +139,46 @@
     return activeAttendanceRosterMode() === 'Archive';
   }
 
+  // Monthly and semestral attendance are only ever finalized in the Current
+  // roster scope (Archive copies are view-only), but finalizing automatically
+  // switches the workspace to the Archive view. A gate that only reads the
+  // currently displayed roster mode therefore loses track of the locked period
+  // and blocks official printing. Resolve the lifecycle across both scopes and
+  // prefer the scope that actually holds the Finalized state.
+  function resolvePeriodLifecycle(kind, month, semester, group) {
+    const governance = window.LSOAttendanceGovernance;
+    const scopes = [...new Set([activeAttendanceRosterMode(), 'Current'])];
+    let fallback = null;
+    for (const mode of scopes) {
+      const state = kind === 'month'
+        ? governance?.getMonthState?.(month, semester, group, mode)
+        : governance?.getSemesterState?.(semester, group, mode);
+      if (!state) continue;
+      if (!fallback) fallback = { state, mode };
+      if (state.state === 'Finalized') return { state, mode };
+    }
+    return fallback || { state: { state: 'Draft' }, mode: 'Current' };
+  }
+
+  function resolveMonthLifecycle(month = calendarMonthKey(), semester = activeSemester(), group = activeAttendanceGroup()) {
+    return resolvePeriodLifecycle('month', month, semester, group);
+  }
+
+  function resolveSemesterLifecycle(semester = activeSemester(), group = activeAttendanceGroup()) {
+    return resolvePeriodLifecycle('semester', '', semester, group);
+  }
+
+  // Official live computation for the selected month. The governance snapshot
+  // is the same engine used at Review/Finalize time, so the live feed, the
+  // member records, and the printed monthly rating never disagree.
+  function liveMonthSnapshot(month = calendarMonthKey(), semester = activeSemester(), group = activeAttendanceGroup()) {
+    return window.LSOAttendanceGovernance?.calculateMonthSnapshot?.(month, semester, group, 'Current') || null;
+  }
+
+  function emptyStatusCounts() {
+    return { Present: 0, Late: 0, Absent: 0, Excused: 0, 'Not Required': 0 };
+  }
+
   function selectedValidatedArchive() {
     return window.LSOAttendanceGovernance?.getSelectedArchive?.() || null;
   }
@@ -221,14 +261,14 @@
     return memberAttendanceGroupOnDate(member, event?.date);
   }
 
-  function memberEligibleForAttendanceEvent(member, event) {
-    if (!memberMatchesAttendanceRosterMode(member) || !event) return false;
+  function memberEligibleForAttendanceEvent(member, event, mode = activeAttendanceRosterMode()) {
+    if (!memberMatchesAttendanceRosterMode(member, activeAttendanceGroup(), mode) || !event) return false;
 
     // Current rosters must always show every person who is currently assigned to
     // the selected membership group. The event date must not hide their name.
     // The saved attendanceGroup field keeps Official, Trainee, and Probationary
     // attendance completely separate even when they use the same event.
-    if (activeAttendanceRosterMode() === 'Current') return true;
+    if (mode === 'Current') return true;
 
     // Archive mode remains historical: show a former-stage member when the event
     // occurred during that stage or when a stored record already exists.
@@ -251,13 +291,13 @@
     });
   }
 
-  function membersForAttendanceGroup() {
+  function membersForAttendanceGroup(mode = activeAttendanceRosterMode()) {
     return getMembers()
-      .filter((member) => memberMatchesAttendanceRosterMode(member))
+      .filter((member) => memberMatchesAttendanceRosterMode(member, activeAttendanceGroup(), mode))
       .sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)));
   }
 
-  function groupRecordsForEvents(events) {
+  function groupRecordsForEvents(events, mode = activeAttendanceRosterMode()) {
     const eventMap = new Map(events.map((event) => [event.id, event]));
     const memberMap = new Map(getMembers().map((member) => [member.id, member]));
     return getAttendance().filter((record) => {
@@ -267,7 +307,7 @@
         record.status &&
         event &&
         member &&
-        memberMatchesAttendanceRosterMode(member) &&
+        memberMatchesAttendanceRosterMode(member, activeAttendanceGroup(), mode) &&
         attendanceRecordGroup(record, event, member) === activeAttendanceGroup()
       );
     });
@@ -445,42 +485,49 @@
       return;
     }
 
-    const allEvents = monthlyActivityEvents();
-    const members = membersForAttendanceGroup(monthlyRehearsalEvents());
-    const memberIds = new Set(members.map((member) => member.id));
-    const events = allEvents.filter((event) => members.some((member) => memberEligibleForAttendanceEvent(member, event)));
-    const records = groupRecordsForEvents(events).filter((record) => memberIds.has(record.memberId));
-    const counts = statusCounts(records);
-    const marked = records.length;
-    const overallRate = rateFromCounts(counts);
-    const percent = (count) => marked ? `${Math.round((count / marked) * 100)}%` : '0%';
+    const month = calendarMonthKey();
+    const members = membersForAttendanceGroup();
+    // The live feed is computed by the same official engine used at Review and
+    // Finalize time, so the displayed counts and member ratings always match
+    // the monthly rating that will be archived and printed.
+    const snapshot = liveMonthSnapshot(month);
+    const events = snapshot ? snapshot.eventCount : monthlyActivityEvents().length;
+    const counts = snapshot?.counts || emptyStatusCounts();
+    const marked = snapshot ? snapshot.recordCount : 0;
+    const overallRate = snapshot ? snapshot.groupRate : null;
+    const totalMarks = counts.Present + counts.Late + counts.Absent + counts.Excused + counts['Not Required'];
+    const percent = (count) => totalMarks ? `${Math.round((count / totalMarks) * 100)}%` : '0%';
 
     metrics.innerHTML = [
       metricMarkup('Group Members', members.length, attendanceGroupShortLabel()),
-      metricMarkup('Recorded Activities', events.length, `${marked} attendance marks`),
+      metricMarkup('Recorded Activities', events, `${marked} attendance marks`),
       metricMarkup('Present', counts.Present, percent(counts.Present)),
       metricMarkup('Late', counts.Late, percent(counts.Late)),
       metricMarkup('Absent', counts.Absent, percent(counts.Absent)),
-      metricMarkup('Overall Rate', overallRate === null ? '—' : `${overallRate}%`, 'Present + Late ÷ counted')
+      metricMarkup('Overall Rate', overallRate === null || overallRate === undefined ? '—' : `${overallRate}%`, 'Average of member rates')
     ].join('');
 
     if (el('overallAttendanceCaption')) {
-      el('overallAttendanceCaption').textContent = events.length
-        ? `${attendanceRosterModeLabel()} • ${attendanceGroupShortLabel()} • ${calendarMonthLabel()} • ${events.length} completed activit${events.length === 1 ? 'y' : 'ies'} • ${marked} recorded statuses`
+      el('overallAttendanceCaption').textContent = events
+        ? `${attendanceRosterModeLabel()} • ${attendanceGroupShortLabel()} • ${calendarMonthLabel()} • ${events} completed activit${events === 1 ? 'y' : 'ies'} • ${marked} recorded statuses`
         : `No completed ${attendanceRosterModeLabel().toLowerCase()} ${attendanceGroupShortLabel().toLowerCase()} attendance activities in ${calendarMonthLabel()}.`;
     }
     if (el('attendanceGroupHeading')) el('attendanceGroupHeading').textContent = `${attendanceRosterModeLabel()} — ${attendanceGroupShortLabel()}`;
 
     tableBody.innerHTML = members.length ? members.map((member) => {
-      const summary = memberRehearsalSummary(member.id);
+      const entry = snapshot?.members?.[member.id];
+      const summary = entry ? null : memberSummaryForEvents(member.id, monthlyActivityEvents());
+      const memberCounts = entry?.counts || summary?.counts || emptyStatusCounts();
+      const memberActivities = entry ? entry.eventCount : (summary?.records.length || 0);
+      const memberRate = entry ? (entry.rate ?? null) : (summary?.rate ?? null);
       return `<tr>
         <td><strong>${safeText(member.fullName)}</strong><small class="table-subtext">${safeText(member.membershipId)} • ${safeText(member.periodGroup)}</small></td>
-        <td>${summary.totalRehearsals}</td>
-        <td>${summary.counts.Present}</td>
-        <td>${summary.counts.Late}</td>
-        <td>${summary.counts.Absent}</td>
-        <td>${summary.counts.Excused}</td>
-        <td><span class="badge ${summary.rate === null ? 'badge-gray' : summary.rate >= 80 ? 'badge-green' : summary.rate >= 60 ? 'badge-gold' : 'badge-red'}">${summary.rate === null ? 'No data' : `${summary.rate}%`}</span></td>
+        <td>${memberActivities}</td>
+        <td>${memberCounts.Present || 0}</td>
+        <td>${memberCounts.Late || 0}</td>
+        <td>${memberCounts.Absent || 0}</td>
+        <td>${memberCounts.Excused || 0}</td>
+        <td><span class="badge ${memberRate === null ? 'badge-gray' : memberRate >= 80 ? 'badge-green' : memberRate >= 60 ? 'badge-gold' : 'badge-red'}">${memberRate === null ? 'No data' : `${memberRate}%`}</span></td>
       </tr>`;
     }).join('') : `<tr><td colspan="7"><div class="empty-state compact-empty"><h4>No ${safeText(attendanceGroupShortLabel())} records</h4><p>Members assigned to this attendance group will appear here.</p></div></td></tr>`;
   }
@@ -497,7 +544,7 @@
       else selectedAttendanceMemberId = '';
       return;
     }
-    const members = membersForAttendanceGroup(monthlyRehearsalEvents());
+    const members = membersForAttendanceGroup();
     select.innerHTML = '<option value="">Choose a member…</option>' + members.map((member) =>
       `<option value="${safeText(member.id)}">${safeText(member.fullName)} — ${safeText(member.periodGroup)}</option>`
     ).join('');
@@ -528,33 +575,41 @@
       return;
     }
 
-    const member = membersForAttendanceGroup(monthlyRehearsalEvents()).find((item) => item.id === selectedAttendanceMemberId);
+    const member = membersForAttendanceGroup().find((item) => item.id === selectedAttendanceMemberId);
     if (!member) {
-      container.innerHTML = '<div class="dashboard-empty-state"><span>⌕</span><strong>Select a member</strong><small>Their rehearsal totals and printable history will appear here.</small></div>';
+      container.innerHTML = '<div class="dashboard-empty-state"><span>⌕</span><strong>Select a member</strong><small>Their monthly totals, rating, and printable history will appear here.</small></div>';
       history.innerHTML = '';
       actions.classList.add('hidden');
       return;
     }
 
-    const summary = memberRehearsalSummary(member.id);
+    const month = calendarMonthKey();
+    const monthEventsAll = eventsInCalendarMonth(activityEvents());
+    const summary = memberSummaryForEvents(member.id, monthEventsAll);
+    // Official monthly computation (same engine as Review/Finalize), so the
+    // record panel shows the exact accumulated counts and rating for the month.
+    const officialEntry = liveMonthSnapshot(month)?.members?.[member.id];
+    const counts = officialEntry?.counts || summary.counts;
+    const rate = officialEntry ? (officialEntry.rate ?? null) : summary.rate;
     container.innerHTML = `<div class="individual-member-heading"><div class="member-avatar">${safeText(String(member.fullName || 'M').split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase())}</div><div><strong>${safeText(member.fullName)}</strong><small>${safeText(member.membershipId)} • ${safeText(member.periodGroup)}</small></div></div>
       <div class="individual-stat-grid">
-        ${metricMarkup('Monthly Rehearsals', summary.totalRehearsals, calendarMonthLabel())}
-        ${metricMarkup('Present', summary.counts.Present)}
-        ${metricMarkup('Late', summary.counts.Late)}
-        ${metricMarkup('Absent', summary.counts.Absent)}
-        ${metricMarkup('Excused', summary.counts.Excused)}
-        ${metricMarkup('Attendance Rate', summary.rate === null ? '—' : `${summary.rate}%`, 'Excused excluded')}
+        ${metricMarkup('Monthly Activities', summary.totalEvents, calendarMonthLabel())}
+        ${metricMarkup('Present', counts.Present || 0)}
+        ${metricMarkup('Late', counts.Late || 0)}
+        ${metricMarkup('Absent', counts.Absent || 0)}
+        ${metricMarkup('Excused', counts.Excused || 0)}
+        ${metricMarkup('Attendance Rate', rate === null ? '—' : `${rate}%`, 'Excused excluded')}
       </div>`;
 
     const attendanceByEvent = new Map(summary.records.map((record) => [record.eventId, record]));
-    history.innerHTML = summary.events.length ? `<div class="individual-history-header"><strong>${safeText(calendarMonthLabel())} Rehearsal History</strong><span>${summary.recorded} of ${summary.totalRehearsals} marked</span></div>${summary.events.map((event) => {
+    history.innerHTML = summary.events.length ? `<div class="individual-history-header"><strong>${safeText(calendarMonthLabel())} Activity History</strong><span>${summary.recorded} of ${summary.totalEvents} marked</span></div>${summary.events.map((event) => {
       const record = attendanceByEvent.get(event.id) || {};
       const status = record.status || 'Not marked';
       const badge = status === 'Present' ? 'badge-green' : status === 'Late' || status === 'Excused' ? 'badge-gold' : status === 'Absent' ? 'badge-red' : 'badge-gray';
       const workflow = eventWorkflowState(event, record.attendanceGroup || activeAttendanceGroup(), record.rosterModeAtEdit || activeAttendanceRosterMode());
-      return `<div class="attendance-history-row"><div><strong>${safeText(event.title)}</strong><small>${safeText(dateLabel(event.date, { short: true }))}${event.venue ? ` • ${safeText(event.venue)}` : ''}</small></div><span class="badge ${badge}">${safeText(status)}</span><span class="badge ${workflow === 'Finalized' ? 'badge-green' : 'badge-gold'}">${safeText(workflow)}</span><small>${safeText(record.remarks || '')}</small></div>`;
-    }).join('')}` : '<div class="dashboard-empty-state"><span>□</span><strong>No completed rehearsals</strong><small>Create rehearsal events in the attendance calendar.</small></div>';
+      const verified = !['Finalized', 'Draft'].includes(workflow) ? workflow : (window.LSOAttendanceGovernance?.isVerified?.(event, record.attendanceGroup || activeAttendanceGroup(), record.rosterModeAtEdit || activeAttendanceRosterMode()) ? 'Verified' : workflow);
+      return `<div class="attendance-history-row"><div><strong>${safeText(event.title)}</strong><small>${safeText(dateLabel(event.date, { short: true }))}${event.venue ? ` • ${safeText(event.venue)}` : ''}${event.type ? ` • ${safeText(event.type)}` : ''}</small></div><span class="badge ${badge}">${safeText(status)}</span><span class="badge ${verified === 'Finalized' ? 'badge-green' : verified === 'Verified' ? 'badge-purple' : 'badge-gold'}">${safeText(verified)}</span><small>${safeText(record.remarks || '')}</small></div>`;
+    }).join('')}` : '<div class="dashboard-empty-state"><span>□</span><strong>No completed activities</strong><small>Create attendance activities in the attendance calendar.</small></div>';
     actions.classList.remove('hidden');
   }
 
@@ -652,8 +707,12 @@
 
   function printIndividualAttendance() {
     const member = getMembers().find((item) => item.id === selectedAttendanceMemberId);
-    if (!member) return;
-    const snapshot = window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), activeAttendanceRosterMode()) || { members: {}, months: [], groupRate: null, endDate: '' };
+    if (!member) {
+      window.LSOApp?.showToast?.('Select a member first to print their semestral report.', true);
+      return;
+    }
+    const semesterLifecycle = resolveSemesterLifecycle();
+    const snapshot = window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || { members: {}, months: [], groupRate: null, endDate: '' };
     const item = snapshot.members?.[member.id] || { monthlyRates: [], rate: null, monthsCounted: 0 };
     const rows = (item.monthlyRates || []).map((entry) => `<tr><td>${safeText(entry.month)}</td><td>${entry.rate == null ? '—' : `${entry.rate}%`}</td><td>Finalized monthly rating</td></tr>`).join('');
     const summaryHtml = `<div class="summary">${[
@@ -667,15 +726,15 @@
     }));
   }
 
-  function eventDetailReportTable(events) {
+  function eventDetailReportTable(events, mode = activeAttendanceRosterMode()) {
     const attendance = getAttendance();
     const rows = events.map((event) => {
       const memberMap = new Map(getMembers().map((member) => [member.id, member]));
       const records = attendance.filter((record) => {
         const member = memberMap.get(record.memberId);
-        return record.eventId === event.id && record.status && member && memberMatchesAttendanceRosterMode(member) && attendanceRecordGroup(record, event, member) === activeAttendanceGroup();
+        return record.eventId === event.id && record.status && member && memberMatchesAttendanceRosterMode(member, activeAttendanceGroup(), mode) && attendanceRecordGroup(record, event, member) === activeAttendanceGroup();
       });
-      const workflow = eventWorkflowState(event);
+      const workflow = eventWorkflowState(event, activeAttendanceGroup(), mode);
       return `<tr><td>${safeText(dateLabel(event.date, { short: true }))}</td><td>${safeText(event.title)}</td><td>${safeText(event.type || 'Activity')}</td><td>${safeText(event.venue || '—')}</td><td>${safeText(workflow)}</td><td>${records.length}</td></tr>`;
     }).join('');
     return `<h2 class="report-section">Activity Breakdown</h2><p class="report-note">Each row lists one completed activity, its verification state, and the number of recorded attendance entries.</p><table><thead><tr><th>Date</th><th>Activity</th><th>Type</th><th>Venue</th><th>Verification</th><th>Recorded</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No completed activities in this report period.</td></tr>'}</tbody></table>`;
@@ -683,18 +742,23 @@
 
   function printCurrentAttendanceGroupRoster() {
     const members = membersForAttendanceGroup();
-    const rehearsals = monthlyRehearsalEvents();
-    const records = groupRecordsForEvents(rehearsals);
+    const records = groupRecordsForEvents(monthlyActivityEvents());
     const modeLabel = attendanceRosterModeLabel();
+    // Official live monthly rating source so the roster print matches the
+    // Separated Group Summary and the finalized monthly rating.
+    const snapshot = archiveModeActive()
+      ? (selectedValidatedArchive()?.snapshot || null)
+      : liveMonthSnapshot();
     const summaryHtml = `<div class="summary">${[
       [modeLabel, members.length],
       ['Month', calendarMonthLabel()],
       ['Recorded Entries', records.length]
     ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>`;
     const rows = members.map((member) => {
-      const summary = memberRehearsalSummary(member.id);
+      const entry = snapshot?.members?.[member.id];
+      const rate = entry ? (entry.rate ?? null) : memberRehearsalSummary(member.id).rate;
       const recordStatus = activeAttendanceRosterMode() === 'Archive' ? 'Archived Attendance Record' : 'Current';
-      return `<tr><td>${safeText(member.fullName)}</td><td>${safeText(member.membershipId || '—')}</td><td>${safeText(member.orchestraSection || '—')}</td><td>${safeText(member.primaryInstrument || '—')}</td><td>${safeText(recordStatus)}</td><td>${summary.rate === null ? '—' : `${summary.rate}%`}</td></tr>`;
+      return `<tr><td>${safeText(member.fullName)}</td><td>${safeText(member.membershipId || '—')}</td><td>${safeText(member.orchestraSection || '—')}</td><td>${safeText(member.primaryInstrument || '—')}</td><td>${safeText(recordStatus)}</td><td>${rate === null || rate === undefined ? '—' : `${rate}%`}</td></tr>`;
     }).join('');
     openPrintDocument(printableDocument({
       title: `${modeLabel} — ${attendanceGroupShortLabel()} Attendance`,
@@ -705,11 +769,11 @@
   }
 
   function printOverallAttendance() {
-    const semesterState = window.LSOAttendanceGovernance?.getSemesterState?.(activeSemester(), activeAttendanceGroup(), activeAttendanceRosterMode());
-    if (!semesterState || semesterState.state !== 'Finalized') {
+    const semesterLifecycle = resolveSemesterLifecycle();
+    if (semesterLifecycle.state.state !== 'Finalized') {
       return window.LSOApp?.showToast?.('Finalize the semestral attendance rating before printing the official semester report.', true);
     }
-    const snapshot = window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), activeAttendanceRosterMode()) || { monthCount: 0, months: [], members: {}, groupRate: null, endDate: '' };
+    const snapshot = window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || { monthCount: 0, months: [], members: {}, groupRate: null, endDate: '' };
     const membersById = new Map(getMembers().map((member) => [member.id, member]));
     const memberRows = Object.entries(snapshot.members || {}).map(([memberId, item]) => {
       const member = membersById.get(memberId) || { fullName: item.memberName || memberId, membershipId: '' };
@@ -730,18 +794,25 @@
   }
 
   function printMonthlyAttendance() {
-    const monthlyState = window.LSOAttendanceGovernance?.getMonthState?.(calendarMonthKey(), activeSemester(), activeAttendanceGroup(), activeAttendanceRosterMode());
-    if (!monthlyState || monthlyState.state !== 'Finalized') {
+    // The official print gate resolves the lifecycle across roster scopes: the
+    // month is finalized under the Current scope even though the workspace may
+    // already be showing the Archive view created by that finalization.
+    const monthLifecycle = resolveMonthLifecycle();
+    if (monthLifecycle.state.state !== 'Finalized') {
       return window.LSOApp?.showToast?.('Finalize the selected attendance month before printing its official monthly rating.', true);
     }
     const monthLabel = calendarMonthLabel();
+    // The official report is always computed from the roster scope that owns the
+    // month lifecycle (the Current roster), so printing from the Archive view
+    // still shows the members and records that were actually finalized.
+    const scopeMode = monthLifecycle.mode;
     const monthEvents = eventsInCalendarMonth(activityEvents());
-    const members = membersForAttendanceGroup(monthEvents.filter((event) => normalize(event.type) === 'rehearsal'));
+    const members = membersForAttendanceGroup(scopeMode);
     const memberIds = new Set(members.map((member) => member.id));
-    const events = monthEvents.filter((event) => members.some((member) => memberEligibleForAttendanceEvent(member, event)));
-    const records = groupRecordsForEvents(events).filter((record) => memberIds.has(record.memberId));
+    const events = monthEvents.filter((event) => members.some((member) => memberEligibleForAttendanceEvent(member, event, scopeMode)));
+    const records = groupRecordsForEvents(events, scopeMode).filter((record) => memberIds.has(record.memberId));
     const counts = statusCounts(records);
-    const monthlySnapshot = window.LSOAttendanceGovernance?.getMonthSnapshot?.(calendarMonthKey(), activeSemester(), activeAttendanceGroup(), activeAttendanceRosterMode());
+    const monthlySnapshot = window.LSOAttendanceGovernance?.getMonthSnapshot?.(calendarMonthKey(), activeSemester(), activeAttendanceGroup(), scopeMode);
     const rate = monthlySnapshot?.groupRate ?? rateFromCounts(counts);
     const summaryHtml = `<div class="summary">${[
       ['Members', members.length], ['Activities', events.length], ['Present', counts.Present], ['Late', counts.Late], ['Absent', counts.Absent], ['Overall Rate', rate === null ? '—' : `${rate}%`]
@@ -755,25 +826,40 @@
       title: `${attendanceRosterModeLabel()} — ${attendanceGroupShortLabel()} — ${monthLabel} Attendance Report`,
       subtitle: `${activeSemester()} • ${members.length} members • ${events.length} completed activities • ${records.length} recorded statuses`,
       summaryHtml,
-      tableHtml: `${eventDetailReportTable(events)}<h2 class="report-section">${safeText(attendanceGroupShortLabel())} Monthly Summary</h2><p class="report-note">This monthly report is isolated from the other attendance groups.</p><table><thead><tr><th>Member</th><th>Attendance Rate</th></tr></thead><tbody>${rows || '<tr><td colspan="2">No member records.</td></tr>'}</tbody></table>`,
+      tableHtml: `${eventDetailReportTable(events, scopeMode)}<h2 class="report-section">${safeText(attendanceGroupShortLabel())} Monthly Summary</h2><p class="report-note">This monthly report is isolated from the other attendance groups.</p><table><thead><tr><th>Member</th><th>Attendance Rate</th></tr></thead><tbody>${rows || '<tr><td colspan="2">No member records.</td></tr>'}</tbody></table>`,
       footer: `${attendanceGroupShortLabel()} monthly attendance report for ${monthLabel}, ${activeSemester()}.`
     }));
   }
 
   function printIndividualMonthlyAttendance() {
-    const monthlyState = window.LSOAttendanceGovernance?.getMonthState?.(calendarMonthKey(), activeSemester(), activeAttendanceGroup(), activeAttendanceRosterMode());
-    if (!monthlyState || monthlyState.state !== 'Finalized') {
+    const monthLifecycle = resolveMonthLifecycle();
+    if (monthLifecycle.state.state !== 'Finalized') {
       return window.LSOApp?.showToast?.('Finalize the selected attendance month before printing an official member monthly report.', true);
     }
-    const member = membersForAttendanceGroup(rehearsalEvents()).find((item) => item.id === selectedAttendanceMemberId);
-    if (!member) return;
+    const member = membersForAttendanceGroup(monthLifecycle.mode).find((item) => item.id === selectedAttendanceMemberId)
+      || (() => {
+        // Archive view can list members preserved in a validated snapshot who
+        // are no longer part of the active roster; let them print too.
+        if (!archiveModeActive()) return null;
+        const archived = selectedValidatedArchive()?.snapshot?.members?.[selectedAttendanceMemberId];
+        return archived ? { id: selectedAttendanceMemberId, fullName: archived.memberName || selectedAttendanceMemberId, membershipId: '', periodGroup: '' } : null;
+      })();
+    if (!member) {
+      window.LSOApp?.showToast?.('Select a member first to print their official monthly report.', true);
+      return;
+    }
     const monthLabel = calendarMonthLabel();
-    const events = eventsInCalendarMonth(rehearsalEvents());
+    const events = eventsInCalendarMonth(activityEvents());
     const summary = memberSummaryForEvents(member.id, events);
     const recordMap = new Map(summary.records.map((record) => [record.eventId, record]));
+    // Prefer the frozen official snapshot so the printed totals and rating
+    // match the finalized monthly archive exactly.
+    const officialEntry = window.LSOAttendanceGovernance?.getMonthSnapshot?.(calendarMonthKey(), activeSemester(), activeAttendanceGroup(), monthLifecycle.mode)?.members?.[member.id];
+    const counts = officialEntry?.counts || summary.counts;
+    const rate = officialEntry ? officialEntry.rate : summary.rate;
     const summaryHtml = `<div class="summary">${[
-      ['Rehearsals', summary.totalEvents], ['Present', summary.counts.Present], ['Late', summary.counts.Late],
-      ['Absent', summary.counts.Absent], ['Excused', summary.counts.Excused], ['Attendance Rate', summary.rate === null ? '—' : `${summary.rate}%`]
+      ['Activities', summary.totalEvents], ['Present', counts.Present], ['Late', counts.Late],
+      ['Absent', counts.Absent], ['Excused', counts.Excused], ['Attendance Rate', rate === null || rate === undefined ? '—' : `${rate}%`]
     ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>`;
     const rows = summary.events.map((event) => {
       const record = recordMap.get(event.id) || {};
@@ -1087,8 +1173,28 @@
       }
     }, true);
 
-    ['lso:members-changed', 'lso:operations-changed', 'lso:duty-hours-changed', 'lso:attendance-semester-changed', 'lso:attendance-month-changed', 'lso:attendance-group-changed', 'lso:attendance-roster-mode-changed', 'lso:attendance-period-changed', 'lso:cloud-state-changed', 'lso:auth-changed'].forEach((name) => {
+    ['lso:members-changed', 'lso:operations-changed', 'lso:duty-hours-changed', 'lso:attendance-semester-changed', 'lso:attendance-group-changed', 'lso:attendance-roster-mode-changed', 'lso:attendance-period-changed', 'lso:cloud-state-changed', 'lso:auth-changed'].forEach((name) => {
       window.addEventListener(name, () => scheduleRenderEverything(name === 'lso:cloud-state-changed' ? 70 : 35));
+    });
+    // The month workspace calendar must follow external month changes (for
+    // example, selecting a validated archive from the Monthly Archive list).
+    // Without this the calendar cursor keeps pointing at the previous month and
+    // every month-scoped panel and print would target the wrong period.
+    window.addEventListener('lso:attendance-month-changed', (event) => {
+      const month = String(event?.detail?.month || window.LSOAttendanceMonth || '');
+      if (/^\d{4}-\d{2}$/.test(month) && month !== calendarMonthKey()) {
+        const nextCursor = new Date(`${month}-01T00:00:00`);
+        if (!Number.isNaN(nextCursor.getTime())) {
+          calendarCursor = nextCursor;
+          if (String(selectedCalendarDate || '').slice(0, 7) !== month) {
+            selectedCalendarDate = `${month}-01`;
+            window.LSOAttendanceSelectedDate = selectedCalendarDate;
+          }
+          window.LSOAttendanceMonth = month;
+          saveCalendarState();
+        }
+      }
+      scheduleRenderEverything(35);
     });
     document.querySelectorAll('[data-view="attendanceView"]').forEach((button) => button.addEventListener('click', () => {
       scheduleRenderEverything(attendanceRenderPending ? 90 : 55, true);

@@ -1,0 +1,113 @@
+LASALLIAN SYMPHONY ORCHESTRA
+ATTENDANCE — PRINT FINAL MONTHLY RATING FIX, LIVE FEED ACCURACY, AND MEMBER RECORD REPAIR
+Date: 2026-09-15
+Modules: workflow-attendance-month-v6.js (v9), attendance-governance-v2.js (v13), index.html
+
+=====================================================================
+PROBLEM 1 — "Finalize the selected attendance month before printing"
+even though the month was already finalized
+=====================================================================
+
+ROOT CAUSE
+- Monthly finalizations are always stored under the Current Roster scope.
+  Example lifecycle key: "First Semester::Official Members::Current::2026-09".
+  The Archive roster mode is view-only and can never hold a finalization.
+- When a month is finalized, the workspace automatically switches to the
+  Archive view so the user can see the locked copy.
+- The print gate of "Print Final Monthly Rating" (and "Print Member Monthly
+  Report" and "Print Semestral Rating") looked up the lifecycle using the
+  roster mode that was CURRENTLY DISPLAYED. Right after finalization that is
+  the Archive mode, so the lookup hit "...::Archive::2026-09", found nothing,
+  and falsely reported that the month was not finalized.
+- Even if the gate had passed, the printed report was recomputed in the
+  Archive scope, which lists only former-stage members. The document came out
+  empty ("No completed activities", "No member records").
+
+THE FIX
+- workflow-attendance-month-v6.js now resolves the month/semester lifecycle
+  across roster scopes (resolveMonthLifecycle / resolveSemesterLifecycle) and
+  prefers the scope that actually holds the Finalized state.
+- The official prints are always computed from the roster scope that owns the
+  month lifecycle (the Current roster), then overlaid with the frozen
+  finalization snapshot, so the printed rating equals the archived rating.
+- Selecting a validated archive from the Monthly Archive list now moves the
+  month workspace calendar to that archived month, so printing targets the
+  exact month the user selected.
+
+=====================================================================
+PROBLEM 2 — Live feed accuracy after "Verify and Lock Activity"
+=====================================================================
+
+ROOT CAUSE
+- The Separated Group Summary table (the live feed) only counted events typed
+  "Rehearsal", while the official monthly rating counts every activity of the
+  month (rehearsals, concerts, performances). The two numbers could disagree.
+- Lock-state changes did not force the month workspace panels to recompute.
+
+THE FIX
+- The Separated Group Summary is now rendered from the official governance
+  computation (the same calculateMonthSnapshot engine used by Review and
+  Finalize). Member rows show Activities, Present, Late, Absent, Excused, and
+  the exact member rating for the selected month. The Overall Rate KPI is the
+  official "average of member rates" that will be finalized and printed.
+- Verify, Unverify, Finalize, and Unlock now trigger a forced refresh of the
+  month workspace (refreshLiveAttendanceFeed), so the Separated Group Summary
+  and the Individual Search panels recompute immediately after
+  "Verify and Lock Activity" is clicked.
+- Advanced Analytics: the Verified Rate now counts locked records
+  (Verified + Finalized), not only event-level Finalized rosters, so the
+  rating updates the moment an activity is verified and locked. Labels were
+  corrected to reflect the monthly scope.
+
+=====================================================================
+PROBLEM 3 — Individual Search / Selected Group Member Record
+=====================================================================
+
+ROOT CAUSE
+- The member record and its history only counted rehearsal events, so members
+  whose attendance was recorded on other activity types showed no accumulated
+  Present/Late/Absent/Excused counts and no rating.
+- The Advanced Analytics panel counted a different event set than the record
+  panel, so the two could disagree.
+
+THE FIX
+- The member record now uses the official monthly snapshot: accumulated
+  Present, Late, Absent, Excused counts and the exact monthly Attendance Rate
+  for the selected member, identical to the Separated Group Summary and to
+  the value that is finalized.
+- The monthly history now lists every activity of the month (all types) with
+  the member's status, verification state (Draft / Verified / Finalized), and
+  remarks — the complete documentation trail for the month.
+- The official member monthly print uses the same full-month data and the
+  frozen snapshot values.
+
+=====================================================================
+SUPABASE
+=====================================================================
+No schema change is required. The month/semester lifecycle, the validated
+archives, and the frozen snapshots all live inside the existing synchronized
+"lso_system_settings_v2" document (attendancePeriodGovernance), which the
+cloud connector already syncs. This repair is entirely client-side and works
+for both offline (localStorage) and cloud-connected deployments.
+
+=====================================================================
+DEPLOYMENT NOTES
+=====================================================================
+- index.html cache-busting stamps were bumped for the two changed scripts
+  (20260915-print-live-feed-fix). The service worker fetches .js files
+  network-first, and users receive the new files on their next normal load.
+- The Separated Group Summary column header now reads "Activities" because the
+  table counts every activity of the month, not rehearsals only.
+
+=====================================================================
+AFFECTED BUTTONS / PANELS
+=====================================================================
+- Print Final Monthly Rating (Attendance Workflow Center header and calendar
+  "Print This Month") — now works in both Current and Archive views.
+- Print Member Monthly Report — now works in both views, including archived
+  members who are no longer on the active roster.
+- Print Semestral Rating and Print Member Semester Report — same scope fix.
+- Separated Group Summary (live feed table) — official computation, live.
+- Individual Search / Selected Group Member Record — accurate accumulated
+  counts, rating, and full monthly history.
+- Advanced Analytics — verified rating reflects Verify-and-Lock immediately.
