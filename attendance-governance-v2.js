@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v12-attendance-verify-live-sync';
+  window.__LSO_ATTENDANCE_GOVERNANCE_VERSION__ = 'v13-attendance-print-live-feed-fix';
 
   const EVENTS_KEY = 'lso_events_v2';
   const ATTENDANCE_KEY = 'lso_attendance_v2';
@@ -860,6 +860,7 @@
     window.LSOOperations?.logActivity?.('Finalized attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()} • revision ${workflow.revision}`);
     window.LSOApp?.showToast?.('Attendance finalized and locked.');
     setTimeout(render, 60);
+    refreshLiveAttendanceFeed();
   }
 
   function unlockAttendance() {
@@ -897,6 +898,7 @@
     window.LSOOperations?.logActivity?.('Unlocked finalized attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()} • ${reason.trim()}`);
     window.LSOApp?.showToast?.('Attendance unlocked. Save corrections, then finalize it again.');
     setTimeout(render, 60);
+    refreshLiveAttendanceFeed();
   }
 
   function verifyAttendance() {
@@ -943,6 +945,7 @@
     window.LSOOperations?.logActivity?.('Verified attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()}`);
     window.LSOApp?.showToast?.('Attendance Verified and locked.');
     setTimeout(render, 60);
+    refreshLiveAttendanceFeed();
   }
 
   function unverifyAttendance() {
@@ -976,6 +979,7 @@
     window.LSOOperations?.logActivity?.('Unverified attendance', 'Attendance Audit', `${event.title} • ${activeGroup()} • ${activeMode()}`);
     window.LSOApp?.showToast?.('Attendance unverified. Save corrections, then verify it again.');
     setTimeout(render, 60);
+    refreshLiveAttendanceFeed();
   }
 
 
@@ -1826,11 +1830,18 @@
     const counts = statusCounts(items.map(({ record }) => record));
     const workingRate = rateFromCounts(counts);
     const month = monthState();
-    const finalizedItems = items.filter(({ record, event }) => String(event.date || '').slice(0, 7) === activeMonth() && workflowState(event, record.attendanceGroup || activeGroup(), record.rosterModeAtEdit || 'Current') === 'Finalized');
-    const finalizedCounts = statusCounts(finalizedItems.map(({ record }) => record));
+    // Locked records are the ones that can no longer be edited: event-level
+    // Finalized rosters AND Verified rosters. Both feed the verified rating so
+    // the analytics update the moment "Verify and Lock Activity" is clicked.
+    const lockedItems = items.filter(({ record, event }) => {
+      const recordGroup = record.attendanceGroup || activeGroup();
+      const recordMode = record.rosterModeAtEdit || 'Current';
+      return workflowState(event, recordGroup, recordMode) === 'Finalized' || isVerified(event, recordGroup, recordMode);
+    });
+    const lockedCounts = statusCounts(lockedItems.map(({ record }) => record));
     const verifiedRate = month.state === 'Finalized' && month.snapshot?.members?.[memberId]
       ? month.snapshot.members[memberId].rate
-      : rateFromCounts(finalizedCounts);
+      : rateFromCounts(lockedCounts);
     let absenceStreak = 0;
     for (let index = counted.length - 1; index >= 0; index -= 1) {
       if (counted[index].record.status !== 'Absent') break;
@@ -1844,7 +1855,11 @@
     if (absenceStreak >= 2) risks.push(`${absenceStreak} consecutive absences`);
     if (counts.Late >= 3) risks.push(`${counts.Late} Late records`);
     const draftCount = new Set(items
-      .filter(({ record, event }) => workflowState(event, record.attendanceGroup || activeGroup(), record.rosterModeAtEdit || 'Current') !== 'Finalized')
+      .filter(({ record, event }) => {
+        const recordGroup = record.attendanceGroup || activeGroup();
+        const recordMode = record.rosterModeAtEdit || 'Current';
+        return workflowState(event, recordGroup, recordMode) !== 'Finalized' && !isVerified(event, recordGroup, recordMode);
+      })
       .map(({ event }) => event.id)).size;
     return {
       totalRecords: items.length,
@@ -1852,7 +1867,7 @@
       counts,
       workingRate,
       verifiedRate,
-      finalizedRecordCount: finalizedItems.length,
+      finalizedRecordCount: lockedItems.length,
       draftEventCount: draftCount,
       absenceStreak,
       lateCount: counts.Late,
@@ -1925,12 +1940,12 @@
     container.innerHTML = `
       <div class="individual-analytics-heading"><div><span>Advanced Analytics</span><strong>${safeText(member?.fullName || 'Selected member')}</strong></div><div class="attendance-risk-list">${riskMarkup}</div></div>
       <div class="individual-stat-grid advanced-attendance-grid">
-        <div class="attendance-kpi"><span>Working Rate</span><strong>${signals.workingRate === null ? '—' : `${signals.workingRate}%`}</strong><small>Draft + finalized records</small></div>
-        <div class="attendance-kpi"><span>Verified Rate</span><strong>${signals.verifiedRate === null ? '—' : `${signals.verifiedRate}%`}</strong><small>Finalized records only</small></div>
+        <div class="attendance-kpi"><span>Working Rate</span><strong>${signals.workingRate === null ? '—' : `${signals.workingRate}%`}</strong><small>All ${activeMonth()} records, live</small></div>
+        <div class="attendance-kpi"><span>Verified Rate</span><strong>${signals.verifiedRate === null ? '—' : `${signals.verifiedRate}%`}</strong><small>Locked records (Verified + Finalized)</small></div>
         <div class="attendance-kpi"><span>On-Time Rate</span><strong>${signals.onTimeRate === null ? '—' : `${signals.onTimeRate}%`}</strong><small>Present ÷ Present + Late</small></div>
         <div class="attendance-kpi"><span>Consecutive Absences</span><strong>${signals.absenceStreak}</strong><small>Latest counted sequence</small></div>
-        <div class="attendance-kpi"><span>Late Records</span><strong>${signals.lateCount}</strong><small>${activeSemester()}</small></div>
-        <div class="attendance-kpi"><span>Draft Events</span><strong>${signals.draftEventCount}</strong><small>Not yet verified</small></div>
+        <div class="attendance-kpi"><span>Late Records</span><strong>${signals.lateCount}</strong><small>${activeMonth()} monthly scope</small></div>
+        <div class="attendance-kpi"><span>Draft Events</span><strong>${signals.draftEventCount}</strong><small>Not yet verified or finalized</small></div>
       </div>`;
   }
 
@@ -2079,6 +2094,15 @@
     renderGovernance();
     renderVerificationMetrics();
     renderIndividualRiskSignals();
+  }
+
+  // Every lock-state change (Verify, Unverify, Finalize, Unlock) must be
+  // recomputed immediately in the Separated Group Summary live feed and the
+  // Individual Search record panels. Those panels are owned by the month
+  // workspace module, so request a forced refresh; this keeps the live feed
+  // accurate even if a persistence path skips the storage-change event.
+  function refreshLiveAttendanceFeed() {
+    window.LSOAttendanceMonthWorkspace?.refresh?.();
   }
 
   function interceptLockedEdits(event) {

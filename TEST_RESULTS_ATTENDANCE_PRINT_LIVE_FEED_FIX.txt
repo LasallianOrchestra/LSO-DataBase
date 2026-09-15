@@ -1,0 +1,56 @@
+LSO ATTENDANCE — PRINT FINAL MONTHLY RATING FIX + LIVE FEED ACCURACY REPAIR
+VALIDATION RESULTS
+Date: 2026-09-15
+
+RESULT: 26/26 AUTOMATED CHECKS PASSED
+
+Method: the real production modules (management-attendance-member-info-v4.js,
+workflow-attendance-month-v6.js, attendance-governance-v2.js) were loaded
+against the real index.html DOM inside an isolated jsdom environment with a
+seeded September 2026 dataset (3 Official members, 2 rehearsals + 1 concert,
+9 attendance records) and driven through the full administrator workflow.
+
+VERIFY AND LOCK → LIVE FEED
+[PASS] Verify and Lock Activity persists the verified lock on the activity.
+[PASS] The month workspace panels refresh immediately after Verify and Lock.
+[PASS] Separated Group Summary row (Ana): 3 activities, 3 Present, 0 Late, 0 Absent, 0 Excused, 100%.
+[PASS] Separated Group Summary row (Ben): 3 activities, 2 Present, 1 Late, 0 Absent, 0 Excused, 100%.
+[PASS] Separated Group Summary row (Cara): 3 activities, 0 Present, 0 Late, 1 Absent, 2 Excused, 0%.
+[PASS] Live feed Overall Rate equals the official governance group rate (average of member rates, 67%).
+[PASS] Advanced Analytics Verified Rate updates immediately after Verify and Lock (locked records counted).
+
+INDIVIDUAL SEARCH — SELECTED GROUP MEMBER RECORD
+[PASS] Member record shows the accumulated monthly counts (Present, Late, Absent, Excused) and rating.
+[PASS] Monthly history lists every activity of the month (all types) with status and verification state.
+
+PRINT FINAL MONTHLY RATING (ROOT-CAUSE BUG)
+[PASS] Month finalizes successfully and the workspace auto-switches to the Archive view.
+[PASS] Print Final Monthly Rating works immediately after finalization from the Archive view (previously blocked).
+[PASS] Printed monthly rating uses the frozen official rate (67%).
+[PASS] Printed report includes the complete finalized member roster (previously empty in Archive view).
+[PASS] Print Final Monthly Rating also works from the Current view.
+[PASS] Print Member Monthly Report works from the Archive view.
+[PASS] Selecting a validated archive syncs the month workspace calendar to that archived month.
+[PASS] Print Final Monthly Rating prints the archived month that is actually selected.
+
+SEMESTRAL AND LIFECYCLE SAFETY
+[PASS] Semester finalization succeeds once all months are finalized.
+[PASS] Print Semestral Rating works from the Archive view (same scope repair).
+[PASS] Reopening a month returns it to Reopened state.
+[PASS] The print gate correctly blocks a reopened month again (no over-permissive regression).
+
+STATIC AND SYNTAX INTEGRITY
+[PASS] node --check passed for workflow-attendance-month-v6.js and attendance-governance-v2.js.
+[PASS] All local script references in index.html resolve to existing files.
+[PASS] Cache-busting stamps bumped for the two changed scripts (20260915-print-live-feed-fix).
+
+SUPABASE
+[PASS] No schema change required — lifecycle state remains in the existing
+       synchronized lso_system_settings_v2 document (attendancePeriodGovernance).
+       No Supabase SQL script is needed for this repair.
+
+LIVE BROWSER LIMITATION
+An interactive signed-in Supabase browser session is not available in this
+execution environment, so the workflow was validated against the real modules
+and DOM with seeded data. Final visual confirmation should be performed on the
+deployed website after publishing.
