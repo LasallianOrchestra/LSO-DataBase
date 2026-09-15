@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LSO Members Directory Print Preview • Short Bond • Official Header/Footer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @page { size: 8.5in 11in; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:#e9efec; color:#17211d; font-family: Inter, Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { width: 100%; min-width: 280px; }
+  
+  /* Screen preview wrapper */
+  .screen-toolbar {
+    position: sticky; top:0; z-index:200;
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;
+    padding: 12px 18px; background: #0b3d2e; color:#fff; border-bottom: 3px solid #c7a547;
+  }
+  .screen-toolbar h1 { margin:0; font-size:16px; letter-spacing:-0.01em; }
+  .screen-toolbar p { margin:2px 0 0; font-size:11px; color:#c9f5dc; }
+  .screen-toolbar .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn { display:inline-flex; align-items:center; gap:6px; min-height:40px; padding:9px 14px; border-radius:10px; border:1px solid transparent; font-weight:800; font-size:12px; cursor:pointer; }
+  .btn-primary { background:#fff; color:#0b3d2e; border-color:#fff; }
+  .btn-secondary { background:rgba(255,255,255,0.12); color:#fff; border-color:rgba(255,255,255,0.22); }
+  .btn:hover { transform: translateY(-1px); }
+  
+  .preview-stage {
+    padding: 18px; display:grid; place-items:start center; min-height: 100vh;
+  }
+  
+  /* The actual print document - short bond */
+  .lso-print-document {
+    width: 8.5in; background:#fff; box-shadow: 0 18px 60px rgba(11,61,46,0.22);
+    position:relative; overflow:hidden;
+  }
+  
+  /* Fixed header/footer repeating on each printed page */
+  .lso-print-header { position: relative; top:0; left:0; right:0; height: 0.92in; background:#fff; border-bottom: 1.2px solid #0b3d2e; overflow:hidden; }
+  .lso-print-header img { width:100%; height:100%; object-fit: fill; display:block; }
+  .lso-print-footer { position: relative; bottom:0; left:0; right:0; height: 0.62in; background:#fff; border-top: 0.8px solid #c7a547; overflow:hidden; margin-top: 6mm; }
+  .lso-print-footer img { width:100%; height:100%; object-fit: fill; display:block; }
+  
+  .lso-print-content { padding: 6mm 0.52in 4mm 0.52in; }
+  
+  /* Document heading */
+  .mp-doc-head { text-align:center; padding: 6mm 5mm 5mm; margin: 0 0 5mm; border: 1px solid #d7e7df; border-top: 3.5px solid #0b3d2e; border-bottom: 2px solid #c7a547; border-radius: 3mm; background: linear-gradient(180deg, #f7fbf9 0%, #ffffff 100%); }
+  .mp-doc-head h1 { margin:0; font-size: 14.5px; color:#0b3d2e; letter-spacing: -0.01em; line-height:1.2; }
+  .mp-doc-head .mp-subtitle { margin: 2mm 0 0; font-size: 9.5px; color:#135441; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; }
+  .mp-doc-head .mp-meta { margin: 2.5mm 0 0; display:flex; flex-wrap:wrap; justify-content:center; gap: 3mm; font-size:7.2px; color:#5a7169; }
+  .mp-doc-head .mp-meta span { display:inline-flex; gap:1.2mm; }
+  .mp-doc-head .mp-meta strong { color:#0b3d2e; }
+  .mp-doc-head .mp-filters { margin-top: 3mm; padding: 2.5mm 3mm; border-radius: 2mm; background:#f2fcf7; border:1px dashed #cfe3da; font-size:6.8px; color:#4c635a; text-align:left; line-height:1.5; }
+  .mp-doc-head .mp-filters b { color:#0b3d2e; }
+  .mp-doc-head .mp-note { margin-top:3mm; font-size:6.5px; color:#6c8079; line-height:1.45; }
+  
+  /* Summary table */
+  .mp-summary { margin: 0 0 6mm; border:1px solid #d7e7df; border-radius: 3mm; overflow:hidden; background:#fff; }
+  .mp-summary-head { display:flex; justify-content:space-between; align-items:center; gap:3mm; padding: 3mm 4mm; background: linear-gradient(90deg, #0b3d2e 0%, #167055 100%); color:#fff; }
+  .mp-summary-head h3 { margin:0; font-size:10px; letter-spacing:0.02em; }
+  .mp-summary-head span { font-size:7px; background: rgba(255,255,255,0.18); padding: 1mm 2.5mm; border-radius:999px; }
+  .mp-table-wrap { overflow:hidden; }
+  .mp-table { width:100%; border-collapse: collapse; font-size: 7px; }
+  .mp-table th { background:#f4faf7; color:#3f5a52; font-size:6.5px; text-transform:uppercase; letter-spacing:0.06em; padding: 2mm 2mm; text-align:left; border-bottom:1px solid #d7e7df; white-space:nowrap; }
+  .mp-table td { padding: 2mm 2mm; border-bottom:1px solid #e8f0ec; vertical-align:top; line-height:1.35; }
+  .mp-table td strong { color:#0b3d2e; font-size:7.2px; }
+  .mp-table td small { display:block; color:#6c8079; font-size:6px; margin-top:0.5mm; }
+  .mp-table tr:nth-child(even) td { background:#fcfefd; }
+  
+  /* Member cards */
+  .mp-cards { display:grid; gap: 5mm; }
+  .mp-card { border:1px solid #cbdcd5; border-radius: 3mm; overflow:hidden; background:#fff; break-inside: avoid; page-break-inside: avoid; box-shadow: 0 1mm 3mm rgba(11,61,46,0.06); }
+  .mp-card-header { display:flex; justify-content:space-between; align-items:flex-start; gap:3mm; padding: 3.5mm 4mm; background: linear-gradient(135deg, #0b3d2e 0%, #135441 55%, #167055 100%); color:#fff; }
+  .mp-card-identity { display:flex; gap:3mm; align-items:flex-start; min-width:0; flex:1; }
+  .mp-avatar { width:12mm; height:12mm; border-radius: 2.5mm; background:#fff; color:#0b3d2e; display:grid; place-items:center; font-weight:900; font-size:4.5mm; flex:0 0 12mm; border: 0.6mm solid #c7a547; overflow:hidden; box-shadow: 0 0.5mm 2mm rgba(0,0,0,0.12); }
+  .mp-avatar.has-photo { background:#fff; padding:0; }
+  .mp-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+  .mp-card-title { min-width:0; flex:1; }
+  .mp-card-title h2 { margin:0; font-size:10.5px; line-height:1.25; color:#fff; overflow-wrap: anywhere; }
+  .mp-card-title p { margin: 0.8mm 0 0; font-size:6.8px; color:#c9f5dc; line-height:1.35; overflow-wrap:anywhere; }
+  .mp-badges { display:flex; flex-wrap:wrap; gap:1.2mm; margin-top:1.8mm; }
+  .mp-badge { display:inline-flex; align-items:center; padding:0.7mm 2mm; border-radius:999px; font-size:5.8px; font-weight:800; letter-spacing:0.02em; line-height:1; border:0.25mm solid transparent; }
+  .badge-green { background:#dff7e9; color:#0d6c49; border-color:#8eb9a4; }
+  .badge-gold { background:#fff4cc; color:#7a5a00; border-color:#d4a017; }
+  .badge-blue { background:#e3eefc; color:#1e4a8a; border-color:#8aa8d6; }
+  .badge-gray { background:#edf1ef; color:#4b5c56; border-color:#b9c7c1; }
+  .mp-card .mp-badge.badge-gray { background:#edf1ef; color:#4b5c56; border-color:#b9c7c1; }
+  .mp-card-index { flex:0 0 auto; font-size:9px; font-weight:900; color:#e5c35d; background: rgba(0,0,0,0.18); border:1px solid rgba(229,195,93,0.35); padding:1.5mm 2.5mm; border-radius:999px; letter-spacing:0.04em; }
+  
+  .mp-card-body { padding: 3.5mm 4mm; }
+  .mp-section { margin: 0 0 3.5mm; }
+  .mp-section:last-child { margin-bottom:0; }
+  .mp-section-head { display:flex; align-items:center; gap:2mm; margin:0 0 2mm; padding-bottom:1.2mm; border-bottom:0.6mm solid #e5c35d; }
+  .mp-section-head span { width:5mm; height:5mm; border-radius:50%; background:#0b3d2e; color:#fff; display:grid; place-items:center; font-size:3.8px; font-weight:900; flex:0 0 5mm; }
+  .mp-section-head h4 { margin:0; font-size:7.8px; color:#0b3d2e; text-transform:uppercase; letter-spacing:0.05em; font-weight:800; }
+  .mp-field-grid { display:grid; grid-template-columns: 1fr 1fr; gap:1.8mm; }
+  .mp-field { border:0.25mm solid #d8e6df; border-radius:1.2mm; padding:1.8mm 2.2mm; background:#f9fbf9; min-height:8.5mm; display:grid; align-content:start; }
+  .mp-field.full { grid-column:1 / -1; }
+  .mp-field span { display:block; font-size:5px; text-transform:uppercase; letter-spacing:0.07em; color:#5a7169; font-weight:800; margin-bottom:0.8mm; line-height:1.2; }
+  .mp-field strong { display:block; font-size:7px; color:#17211d; line-height:1.35; font-weight:600; overflow-wrap: anywhere; word-break: break-word; }
+  .mp-field.full strong { white-space: pre-wrap; }
+  
+  /* Signatory */
+  .mp-signatory { display:grid; grid-template-columns: 1fr 1fr; gap:12mm; margin-top:8mm; padding-top:5mm; border-top:0.4mm solid #d7e7df; }
+  .mp-signatory > div { text-align:center; }
+  .mp-signatory .mp-sign-line { border-top:0.4mm solid #263b33; padding-top:2mm; margin-top:10mm; }
+  .mp-signatory strong { display:block; font-size:8px; color:#0b3d2e; }
+  .mp-signatory span { display:block; font-size:6px; color:#5a7169; text-transform:uppercase; letter-spacing:0.05em; margin-top:1mm; }
+  
+  .mp-print-meta { margin-top:5mm; text-align:center; font-size:6px; color:#8aa89b; line-height:1.5; }
+  .mp-print-meta b { color:#0b3d2e; }
+
+  /* Tabs for preview */
+  .preview-tabs { display:flex; gap:6px; padding:10px 14px; background:#fff; border-bottom:1px solid #dce9e4; }
+  .preview-tab { min-height:36px; padding:8px 12px; border-radius:9px; border:1px solid #dce9e4; background:#f7fbf9; font-weight:800; font-size:11px; cursor:pointer; }
+  .preview-tab.active { background:#0b3d2e; color:#fff; border-color:#0b3d2e; }
+
+  @media print {
+    html, body { background:#fff; }
+    .screen-toolbar, .preview-tabs { display:none !important; }
+    .preview-stage { padding:0; background:#fff; display:block; }
+    .lso-print-document { width:8.5in; box-shadow:none; }
+    .lso-print-header { position: fixed; top:0; left:0; right:0; }
+    .lso-print-footer { position: fixed; bottom:0; left:0; right:0; margin-top:0; }
+    .lso-print-content { margin: 1.05in 0.52in 0.78in 0.52in; padding:0; }
+    .mp-card { box-shadow:none; }
+  }
+
+  @media (max-width: 920px) {
+    .preview-stage { padding: 8px; }
+    .lso-print-document { width: 100%; max-width: 8.5in; }
+  }
+</style>
+</head>
+<body>
+
+<div class="screen-toolbar">
+  <div>
+    <h1>🖨️ LSO Members Directory — Print Preview (Short Bond 8.5" x 11")</h1>
+    <p>Official header/footer • All system management fields • Professional layout • Membership / Probationary / Trainee tabs</p>
+  </div>
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="switchStage('Membership Period')">Membership</button>
+    <button class="btn btn-secondary" onclick="switchStage('Probationary Period')">Probationary</button>
+    <button class="btn btn-secondary" onclick="switchStage('Trainee Period')">Trainee</button>
+    <button class="btn btn-primary" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  </div>
+</div>
+
+<div class="preview-tabs" id="previewTabs">
+  <button class="preview-tab active" data-stage="Membership Period" onclick="switchStage('Membership Period')">Membership Period <span id="cnt-membership">3</span></button>
+  <button class="preview-tab" data-stage="Probationary Period" onclick="switchStage('Probationary Period')">Probationary Period <span id="cnt-probationary">2</span></button>
+  <button class="preview-tab" data-stage="Trainee Period" onclick="switchStage('Trainee Period')">Trainee Period <span id="cnt-trainee">2</span></button>
+</div>
+
+<div class="preview-stage">
+  <div class="lso-print-document" id="printDocument">
+    <div class="lso-print-header"><img src="lso-official-header.png" alt="LSO Official Header"></div>
+    <div class="lso-print-content" id="printContent"></div>
+    <div class="lso-print-footer"><img src="lso-official-footer.png" alt="LSO Official Footer"></div>
+  </div>
+</div>
+
+<script>
+const sampleMembers = {
+  "Membership Period": [
+    {
+      fullName: "Juan Dela Cruz",
+      membershipId: "LSO-2023-001",
+      studentNumber: "2021-12345",
+      age: "21",
+      birthdate: "2003-05-14",
+      sex: "Male",
+      homeAddress: "123 Anahaw St., Dasmariñas City, Cavite, Philippines 4114",
+      outlook: "juan.delacruz@dlsud.edu.ph",
+      college: "College of Liberal Arts and Communication",
+      course: "AB Communication",
+      yearLevel: "3rd Year",
+      section: "COM-31",
+      cys: "CLAC / AB Communication / 3rd Year - COM-31",
+      academicStatus: "Regular",
+      organizationPosition: "Executive Board",
+      organizationRole: "President",
+      memberStatus: "Active",
+      membershipStage: "Regular Member",
+      periodGroup: "Membership Period",
+      stageNotes: "Audition passed with distinction. Assigned as section leader for String. Excellent leadership record.",
+      orchestraSection: "String",
+      primaryInstrument: "Violin",
+      traineeStartDate: "2022-08-15",
+      probationaryStartDate: "2022-11-10",
+      probationarySkipped: false,
+      regularMemberDate: "2023-02-20",
+      dateRegistered: "2022-08-10",
+      lastProfileReview: "2024-08-01",
+      reviewStatus: "Current",
+      recordQuality: "96",
+      remarks: "Active officer, 100% attendance for 1st Semester 2024. Qualified for contract generation.",
+      profilePhoto: ""
+    },
+    {
+      fullName: "Maria Clara Santos",
+      membershipId: "LSO-2023-045",
+      studentNumber: "2022-67890",
+      age: "20",
+      birthdate: "2004-02-22",
+      sex: "Female",
+      homeAddress: "456 Sampaguita Ave., Imus City, Cavite",
+      outlook: "maria.santos@dlsud.edu.ph",
+      college: "College of Engineering, Architecture and Technology",
+      course: "BS Architecture",
+      yearLevel: "2nd Year",
+      section: "ARC-22",
+      cys: "CEAT / BS Architecture / 2nd Year - ARC-22",
+      academicStatus: "Regular",
+      organizationPosition: "Member",
+      organizationRole: "Section Leader - Woodwinds",
+      memberStatus: "Active",
+      membershipStage: "Regular Member",
+      periodGroup: "Membership Period",
+      stageNotes: "Promoted after exemplary probationary performance. Woodwind specialist.",
+      orchestraSection: "Woodwinds",
+      primaryInstrument: "Flute",
+      traineeStartDate: "2022-09-01",
+      probationaryStartDate: "2023-01-05",
+      probationarySkipped: false,
+      regularMemberDate: "2023-05-15",
+      dateRegistered: "2022-08-28",
+      lastProfileReview: "2024-07-20",
+      reviewStatus: "Current",
+      recordQuality: "92",
+      remarks: "Consistent performer, handles sectional rehearsals.",
+      profilePhoto: ""
+    },
+    {
+      fullName: "Antonio Reyes",
+      membershipId: "LSO-2022-089",
+      studentNumber: "2020-11223",
+      age: "22",
+      birthdate: "2002-11-30",
+      sex: "Male",
+      homeAddress: "789 Molave St., General Trias, Cavite",
+      outlook: "antonio.reyes@dlsud.edu.ph",
+      college: "College of Business Administration and Accountancy",
+      course: "BS Management Accounting",
+      yearLevel: "4th Year",
+      section: "MA-41",
+      cys: "CBAA / BS Management Accounting / 4th Year - MA-41",
+      academicStatus: "Graduating",
+      organizationPosition: "Member",
+      organizationRole: "Treasurer Assistant",
+      memberStatus: "Active",
+      membershipStage: "Regular Member",
+      periodGroup: "Membership Period",
+      stageNotes: "Senior member, graduating this semester. Eligible for alumni transition.",
+      orchestraSection: "Percussion",
+      primaryInstrument: "Snare Drum",
+      traineeStartDate: "2021-08-20",
+      probationaryStartDate: "2021-11-15",
+      probationarySkipped: false,
+      regularMemberDate: "2022-03-10",
+      dateRegistered: "2021-08-18",
+      lastProfileReview: "2024-06-15",
+      reviewStatus: "For Review",
+      recordQuality: "88",
+      remarks: "Needs final clearance for graduation. Instrument returned.",
+      profilePhoto: ""
+    }
+  ],
+  "Probationary Period": [
+    {
+      fullName: "Sofia Lim",
+      membershipId: "LSO-2024-012",
+      studentNumber: "2023-33445",
+      age: "19",
+      birthdate: "2005-07-08",
+      sex: "Female",
+      homeAddress: "321 Yakal St., Bacoor City, Cavite",
+      outlook: "sofia.lim@dlsud.edu.ph",
+      college: "College of Science",
+      course: "BS Psychology",
+      yearLevel: "1st Year",
+      section: "PSY-11",
+      cys: "COS / BS Psychology / 1st Year - PSY-11",
+      academicStatus: "Regular",
+      organizationPosition: "Member",
+      organizationRole: "Trainee - Brass",
+      memberStatus: "Active",
+      membershipStage: "Probationary",
+      periodGroup: "Probationary Period",
+      stageNotes: "Completed trainee duty hours (First Sem). Under evaluation for Membership.",
+      orchestraSection: "Brass",
+      primaryInstrument: "Trumpet",
+      traineeStartDate: "2023-08-20",
+      probationaryStartDate: "2024-01-10",
+      probationarySkipped: false,
+      regularMemberDate: "",
+      dateRegistered: "2023-08-18",
+      lastProfileReview: "2024-08-10",
+      reviewStatus: "Current",
+      recordQuality: "84",
+      remarks: "80% attendance, pending 10 hrs duty for completion.",
+      profilePhoto: ""
+    },
+    {
+      fullName: "Miguel Torres",
+      membershipId: "LSO-2024-018",
+      studentNumber: "2023-55667",
+      age: "20",
+      birthdate: "2004-09-12",
+      sex: "Male",
+      homeAddress: "654 Narra St., Dasmariñas, Cavite",
+      outlook: "miguel.torres@dlsud.edu.ph",
+      college: "College of Education",
+      course: "BSEd Music",
+      yearLevel: "2nd Year",
+      section: "BSEd-21",
+      cys: "COEd / BSEd Music / 2nd Year - BSEd-21",
+      academicStatus: "Regular",
+      organizationPosition: "Member",
+      organizationRole: "Probationary - Piano",
+      memberStatus: "Active",
+      membershipStage: "Probationary",
+      periodGroup: "Probationary Period",
+      stageNotes: "Direct entry to probationary after audition. Fast-track candidate.",
+      orchestraSection: "Piano",
+      primaryInstrument: "Piano",
+      traineeStartDate: "2023-09-01",
+      probationaryStartDate: "2023-09-01",
+      probationarySkipped: false,
+      regularMemberDate: "",
+      dateRegistered: "2023-08-30",
+      lastProfileReview: "2024-08-12",
+      reviewStatus: "Current",
+      recordQuality: "90",
+      remarks: "Excellent musicality, accompanist for String section.",
+      profilePhoto: ""
+    }
+  ],
+  "Trainee Period": [
+    {
+      fullName: "Andrea Bautista",
+      membershipId: "LSO-2024-102",
+      studentNumber: "2024-00123",
+      age: "18",
+      birthdate: "2006-03-15",
+      sex: "Female",
+      homeAddress: "987 Acacia St., Silang, Cavite",
+      outlook: "andrea.bautista@dlsud.edu.ph",
+      college: "College of Liberal Arts and Communication",
+      course: "AB Communication",
+      yearLevel: "1st Year",
+      section: "COM-11",
+      cys: "CLAC / AB Communication / 1st Year - COM-11",
+      academicStatus: "Regular",
+      organizationPosition: "Member",
+      organizationRole: "Trainee - String",
+      memberStatus: "Active",
+      membershipStage: "Trainee",
+      periodGroup: "Trainee Period",
+      stageNotes: "New recruit, audition scheduled Aug 2024. Needs orientation.",
+      orchestraSection: "String",
+      primaryInstrument: "Viola",
+      traineeStartDate: "2024-08-15",
+      probationaryStartDate: "",
+      probationarySkipped: false,
+      regularMemberDate: "",
+      dateRegistered: "2024-08-14",
+      lastProfileReview: "2024-08-14",
+      reviewStatus: "Current",
+      recordQuality: "72",
+      remarks: "New trainee, duty hours tracking started.",
+      profilePhoto: ""
+    },
+    {
+      fullName: "Carlos Mendoza",
+      membershipId: "LSO-2024-115",
+      studentNumber: "2024-00456",
+      age: "19",
+      birthdate: "2005-12-05",
+      sex: "Male",
+      homeAddress: "147 Mahogany St., Dasmariñas, Cavite",
+      outlook: "carlos.mendoza@dlsud.edu.ph",
+      college: "College of Criminal Justice Education",
+      course: "BS Criminology",
+      yearLevel: "1st Year",
+      section: "CRIM-12",
+      cys: "CCJE / BS Criminology / 1st Year - CRIM-12",
+      academicStatus: "Regular",
+      organizationPosition: "Member",
+      organizationRole: "Trainee - Percussion",
+      memberStatus: "Active",
+      membershipStage: "Trainee",
+      periodGroup: "Trainee Period",
+      stageNotes: "Skipped probationary planned due to prior band experience.",
+      orchestraSection: "Percussion",
+      primaryInstrument: "Bass Drum",
+      traineeStartDate: "2024-08-10",
+      probationaryStartDate: "",
+      probationarySkipped: true,
+      regularMemberDate: "",
+      dateRegistered: "2024-08-09",
+      lastProfileReview: "2024-08-09",
+      reviewStatus: "Current",
+      recordQuality: "68",
+      remarks: "Candidate for direct promotion to Membership after trainee evaluation.",
+      profilePhoto: ""
+    }
+  ]
+};
+
+function safeText(v){ return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function dateLabel(v){ if(!v) return '—'; const d=new Date(v+'T00:00:00'); if(isNaN(d)) return v; return new Intl.DateTimeFormat('en-PH',{year:'numeric',month:'short',day:'numeric'}).format(d); }
+
+function memberCard(member,i){
+  const fields = [
+    {sec:'Personal Information', lbl:'Full Name', val:member.fullName},
+    {sec:'Personal Information', lbl:'Membership ID', val:member.membershipId},
+    {sec:'Personal Information', lbl:'Student Number', val:member.studentNumber},
+    {sec:'Personal Information', lbl:'Age', val:member.age},
+    {sec:'Personal Information', lbl:'Birthdate', val:dateLabel(member.birthdate)},
+    {sec:'Personal Information', lbl:'Sex', val:member.sex},
+    {sec:'Personal Information', lbl:'Home Address', val:member.homeAddress, full:true},
+    {sec:'Personal Information', lbl:'DLSUD Outlook', val:member.outlook},
+    {sec:'Academic Information', lbl:'College', val:member.college},
+    {sec:'Academic Information', lbl:'Course', val:member.course},
+    {sec:'Academic Information', lbl:'Year Level', val:member.yearLevel},
+    {sec:'Academic Information', lbl:'Section', val:member.section},
+    {sec:'Academic Information', lbl:'CYS', val:member.cys},
+    {sec:'Academic Information', lbl:'Academic Status', val:member.academicStatus},
+    {sec:'Organization Information', lbl:'Position in Organization', val:member.organizationPosition},
+    {sec:'Organization Information', lbl:'Specific Organization Role', val:member.organizationRole},
+    {sec:'Organization Information', lbl:'Member Status', val:member.memberStatus},
+    {sec:'Organization Information', lbl:'Membership Stage', val:member.membershipStage},
+    {sec:'Organization Information', lbl:'Current Period Group', val:member.periodGroup},
+    {sec:'Organization Information', lbl:'Orchestra Section', val:member.orchestraSection},
+    {sec:'Organization Information', lbl:'Primary Instrument', val:member.primaryInstrument},
+    {sec:'Organization Information', lbl:'Stage Notes', val:member.stageNotes, full:true},
+    {sec:'Membership Timeline', lbl:'Trainee Period Start', val:dateLabel(member.traineeStartDate)},
+    {sec:'Membership Timeline', lbl:'Probationary Period Start', val: member.probationarySkipped ? 'Skipped' : dateLabel(member.probationaryStartDate)},
+    {sec:'Membership Timeline', lbl:'Probationary Skipped', val: member.probationarySkipped ? 'Yes' : 'No'},
+    {sec:'Membership Timeline', lbl:'Membership Period Start', val:dateLabel(member.regularMemberDate)},
+    {sec:'Membership Timeline', lbl:'Date Registered', val:dateLabel(member.dateRegistered)},
+    {sec:'Membership Timeline', lbl:'Last Profile Review', val:dateLabel(member.lastProfileReview)},
+    {sec:'Membership Timeline', lbl:'Review Status', val:member.reviewStatus},
+    {sec:'Membership Timeline', lbl:'Record Quality', val: member.recordQuality ? member.recordQuality+'%' : '—'},
+    {sec:'Record Notes', lbl:'Remarks / Notes', val:member.remarks, full:true}
+  ];
+  
+  const sections = {};
+  fields.forEach(f=>{ if(!sections[f.sec]) sections[f.sec]=[]; sections[f.sec].push(f); });
+  const order = ['Personal Information','Academic Information','Organization Information','Membership Timeline','Record Notes'];
+  const icons = {'Personal Information':'01','Academic Information':'02','Organization Information':'03','Membership Timeline':'04','Record Notes':'05'};
+  
+  const sectionsHtml = order.map(sec=>{
+    const list = sections[sec]; if(!list) return '';
+    return `<div class="mp-section"><div class="mp-section-head"><span>${icons[sec]}</span><h4>${safeText(sec)}</h4></div><div class="mp-field-grid">${list.map(f=>`<div class="mp-field${f.full?' full':''}"><span>${safeText(f.lbl)}</span><strong>${safeText(f.val||'—')}</strong></div>`).join('')}</div></div>`;
+  }).join('');
+  
+  const badgeClass = member.periodGroup==='Membership Period' ? 'badge-green' : member.periodGroup==='Probationary Period' ? 'badge-gold' : 'badge-blue';
+  const initials = member.fullName.split(' ').slice(0,2).map(s=>s[0]).join('').toUpperCase();
+  
+  return `<article class="mp-card">
+    <header class="mp-card-header">
+      <div class="mp-card-identity">
+        <div class="mp-avatar">${safeText(initials)}</div>
+        <div class="mp-card-title">
+          <h2>${safeText(member.fullName)}</h2>
+          <p>${safeText(member.membershipId)} • ${safeText(member.studentNumber)} • ${safeText(member.orchestraSection)} • ${safeText(member.primaryInstrument)}</p>
+          <div class="mp-badges">
+            <span class="mp-badge ${badgeClass}">${safeText(member.periodGroup)}</span>
+            <span class="mp-badge badge-gray">${safeText(member.memberStatus)}</span>
+            <span class="mp-badge badge-gray">Quality: ${safeText(member.recordQuality)}%</span>
+            <span class="mp-badge badge-gray">${safeText(member.organizationPosition)}${member.organizationRole ? ' • '+safeText(member.organizationRole) : ''}</span>
+          </div>
+        </div>
+      </div>
+      <div class="mp-card-index">#${String(i+1).padStart(3,'0')}</div>
+    </header>
+    <div class="mp-card-body">${sectionsHtml}</div>
+  </article>`;
+}
+
+function renderStage(stage){
+  const members = sampleMembers[stage] || [];
+  const today = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-PH',{year:'numeric',month:'long',day:'numeric'}).format(today);
+  
+  const summaryRows = members.map((m,i)=>`<tr><td>${i+1}</td><td><strong>${safeText(m.fullName)}</strong><br><small>${safeText(m.membershipId)} • ${safeText(m.studentNumber)}</small></td><td>${safeText(m.orchestraSection)}<br><small>${safeText(m.primaryInstrument)}</small></td><td>${safeText(m.course||m.college)}<br><small>${safeText(m.yearLevel)} ${safeText(m.section)}</small></td><td>${safeText(m.organizationPosition)}<br><small>${safeText(m.organizationRole)}</small></td><td>${safeText(m.memberStatus)}</td><td>${safeText(m.recordQuality)}%</td></tr>`).join('');
+  
+  document.getElementById('printContent').innerHTML = `
+    <header class="mp-doc-head">
+      <h1>LASALLIAN SYMPHONY ORCHESTRA</h1>
+      <div class="mp-subtitle">Official Members Directory • ${safeText(stage)} • Short Bond (8.5" x 11")</div>
+      <div class="mp-meta">
+        <span><strong>Generated:</strong> ${safeText(dateStr)}</span>
+        <span><strong>By:</strong> Administrator</span>
+        <span><strong>Records:</strong> ${members.length}</span>
+        <span><strong>Paper:</strong> Short Bond Letter (215.9mm x 279.4mm)</span>
+      </div>
+      <div class="mp-filters">
+        <b>Filters Applied:</b> Search: None • Status: All • Orchestra Section: All • Position: All<br>
+        <b>Scope:</b> ${safeText(stage)} only • ${members.length} member${members.length===1?'':'s'} matched • Sorted by Full Name (A-Z)<br>
+        <b>Fields:</b> All information as indicated in System Management (Personal, Academic, Organization, Membership Timeline, Record Notes) including profile photo, quality score, and remarks.<br>
+        <b>Paper Size:</b> Short Bond 8.5" x 11" (215.9mm x 279.4mm) — official LSO print with header/footer on every page
+      </div>
+      <div class="mp-note">This document uses the official LSO header and footer. For borderless professional output, enable <b>Background graphics</b> and set <b>Margins: None</b> in the browser print dialog. The system requests 8.5in x 11in short bond paper.</div>
+    </header>
+
+    <section class="mp-summary">
+      <div class="mp-summary-head"><h3>Directory Summary • ${safeText(stage)}</h3><span>${members.length} record${members.length===1?'':'s'} • Short Bond</span></div>
+      <div class="mp-table-wrap"><table class="mp-table"><thead><tr><th>#</th><th>Member / IDs</th><th>Section / Instrument</th><th>Program / Year</th><th>Organization</th><th>Status</th><th>Quality</th></tr></thead><tbody>${summaryRows}</tbody></table></div>
+    </section>
+
+    <section class="mp-cards">
+      ${members.map((m,i)=>memberCard(m,i)).join('')}
+    </section>
+
+    <section class="mp-signatory">
+      <div><div class="mp-sign-line"><strong>Juan Dela Cruz</strong><span>Prepared By / EVP for Membership</span></div></div>
+      <div><div class="mp-sign-line"><strong></strong><span>Authorized Officer / President</span></div></div>
+    </section>
+
+    <div class="mp-print-meta">
+      <b>Lasallian Symphony Orchestra</b> • Official Members Directory • ${safeText(stage)} • Generated ${safeText(dateStr)} • ${members.length} record${members.length===1?'':'s'}<br>
+      This is a system-generated document containing all member information as indicated in System Management. Keep confidential.<br>
+      Paper: Short Bond (8.5" x 11" / 215.9mm x 279.4mm) • Official Header & Footer • LSO Database System
+    </div>
+  `;
+
+  document.querySelectorAll('.preview-tab').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.stage===stage);
+  });
+}
+
+function switchStage(stage){ renderStage(stage); }
+
+renderStage('Membership Period');
+</script>
+
+</body>
+</html>
