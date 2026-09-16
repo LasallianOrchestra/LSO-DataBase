@@ -1,0 +1,135 @@
+LASALLIAN SYMPHONY ORCHESTRA
+LSO V83 — ATTENDANCE ROSTER INPUT STABILITY
+("attendance keeps refreshing by itself and cannot be saved")
+Date: 2026-09-16
+Modules: management-attendance-member-info-v4.js (V83), attendance-workflow-v58.css,
+         lso-ui-bundle-v73.css, index.html (cache stamps)
+Optional: LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql (Supabase)
+
+=====================================================================
+THE REPORT
+=====================================================================
+
+"Attendance is automatically refreshing per second and we cannot take or
+save the attendance activity."
+
+Both halves of that report come from the same place: the attendance roster is
+rebuilt from the database, and the rebuild throws away whatever the officer has
+typed but not yet saved.
+
+=====================================================================
+ROOT CAUSE
+=====================================================================
+
+1. THE ROSTER IS A WHOLE-TABLE HTML REPLACEMENT
+   renderAttendanceRoster() in management-attendance-member-info-v4.js builds the
+   entire #attendanceRosterBody as an HTML string and assigns it to innerHTML.
+   Every select (.attendance-status) and every text field (.attendance-remarks)
+   is destroyed and re-created from the stored records. Nothing on screen that
+   has not been saved survives a single rebuild — not the status, not the
+   remark, not the caret, not the focus.
+
+2. EVERY BACKGROUND EVENT TRIGGERS A REBUILD
+   The rebuild runs from many places, and none of them checked whether the
+   officer was in the middle of entering data:
+
+   - lso:cloud-state-changed -> scheduleCloudRefresh() -> refreshView() ->
+     renderAttendance(), 140 ms after ANY shared-database write or poll
+     (attendance, events, duty hours, activity log, settings — any key).
+   - The shared-database poll itself (every 9 s while active, 22 s when quiet)
+     whenever another officer saved from another device.
+   - This device's own save round-trip: Save -> upload -> server state applied
+     back -> cloud-state-changed -> rebuild. The officer's next edit, made while
+     the save was still in flight, was wiped by that rebuild.
+   - The attendance governance reconciliation and the 60 s month-workspace
+     interval, which re-render even when nothing changed.
+
+3. NO BACK-PRESSURE
+   There was no minimum interval between rebuilds and no "do not disturb while
+   the officer is typing" rule, so in a busy period — several officers recording
+   attendance at the same time — the roster could be rebuilt several times per
+   second. That is the "refreshing every second" the officers see. When the
+   rebuild landed between the last mark and the click on Save Attendance, the
+   button answered "No attendance changes to save", which is the "cannot save"
+   half of the report.
+
+Reproduced end-to-end in a headless run of the real index.html and the real
+modules (attendance-loop-audit/harness.js): the officer marks three rows, waits
+while another device saves, and all three marks are gone.
+
+=====================================================================
+THE FIX (client-side — no database change required)
+=====================================================================
+
+A. THE LIVE ROSTER IS NOW AUTHORITATIVE FOR UNSAVED EDITS
+   Before any rebuild the module snapshots what the officer has changed since
+   the last render ("the draft": status + remarks per member, plus the focused
+   field and its caret). After the rebuild the draft is re-applied on top of
+   whatever the refresh produced. Unsaved work is never lost again.
+
+   Precedence is deliberate:
+   - rows the officer has NOT touched show the newest stored value, so a change
+     made on another device still appears immediately;
+   - rows the officer IS editing keep the unsaved value until Save Attendance
+     is used.
+
+B. NO-OP REBUILDS ARE SKIPPED ENTIRELY
+   The rendered HTML is compared with the last render. When the stored roster
+   is unchanged the DOM is not touched at all: no flicker, no lost focus, and
+   nothing to lose. This alone removes most of the visible churn.
+
+C. BACKGROUND REFRESHES ARE FILTERED, DEFERRED AND THROTTLED
+   - Filtered: a background refresh only reaches the roster when the changed
+     shared-database keys actually affect attendance (events, attendance,
+     members, settings, monthly reports). Duty-hour, instrument and activity-log
+     traffic no longer re-renders the attendance workspace.
+   - Deferred: while a roster field has focus, or while unsaved edits exist, the
+     refresh waits and runs as soon as the officer leaves the field (or after a
+     short quiet period), never during data entry.
+   - Throttled: at most one background rebuild every 2.2 s, widening to 6.6 s if
+     refreshes keep queuing up — a hard stop for a refresh storm.
+   - Pending refreshes are also released when the tab becomes visible again.
+
+D. THE OFFICER CAN SEE THE STATE
+   A gold "N unsaved changes" banner appears above the roster while edits are
+   pending (it is kept on screen through refreshes), and every row holding an
+   unsaved edit is marked with a gold edge. Save Attendance clears both.
+
+E. UNCHANGED BEHAVIOUR
+   Save Attendance, Verify & Lock, Finalize, Reopen, Mark All Present, the
+   search box, LOA handling, the Archive roster, printing, and every other
+   attendance workflow behave exactly as before. The fix only decides WHEN the
+   roster may be rebuilt and WHAT is put back afterwards.
+
+=====================================================================
+SUPABASE (OPTIONAL)
+=====================================================================
+
+The repair above is entirely client-side and works with the current database.
+
+LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql is an OPTIONAL companion patch
+for busy deployments. lso_update_state currently rewrites a column and bumps
+updated_at even when the payload is byte-for-byte identical to what is already
+stored. Because every device re-downloads the whole shared state whenever
+updated_at moves, one device's harmless re-save makes every other device
+re-apply and re-render. The patch renames the current functions to *_core (all
+permissions and validations are preserved) and wraps them with a no-op guard:
+identical payload -> no write, no updated_at bump, no forced re-download.
+It is idempotent and has a rollback script at the bottom of the file.
+
+Run the client-side fix first; the SQL is a performance and stability extra.
+
+=====================================================================
+DEPLOYMENT NOTES
+=====================================================================
+
+- index.html cache-busting stamps were bumped for management-attendance-member-info-v4.js
+  and lso-ui-bundle-v73.css. The service worker serves .js/.css network-first, so
+  users receive the new files on their next normal load; no service-worker change
+  and no cache-name bump are required.
+- The new indicator markup is created by the module itself, so no index.html
+  structure change was needed (this keeps the attendance governance module, which
+  owns #attendanceRecordingState, untouched).
+- Deploy on a test branch first, sign in, open Attendance, select an activity,
+  mark a few rows and wait: the marks must stay on screen and the banner must
+  show the unsaved count. Then save and confirm the values persist.
