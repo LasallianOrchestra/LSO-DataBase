@@ -205,6 +205,32 @@
 .attendance-recording-state.state-finalized { border-color: #b6d8c8; background: #eef8f3; }
 .attendance-recording-state.state-reopened { border-color: #e0b8b2; background: #fff7f6; }
 
+/* V83 — unsaved attendance edit indicator (roster input protection). */
+.attendance-draft-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.72rem;
+  margin: 0 0 0.55rem;
+  border: 1px solid #e5c98a;
+  border-left: 4px solid #c8a03c;
+  border-radius: 0.55rem;
+  background: #fff8e8;
+}
+.attendance-draft-indicator[hidden] { display: none; }
+.attendance-draft-indicator strong { color: #7a5a10; font-size: 0.92rem; }
+.attendance-draft-indicator span { color: #6f6552; font-size: 0.82rem; }
+
+/* V83 — rows that hold edits which are not saved yet. */
+.attendance-table tr.attendance-row-draft > td:first-child {
+  box-shadow: inset 3px 0 0 #c8a03c;
+}
+@media (max-width: 920px) {
+  .attendance-draft-indicator { flex-direction: column; align-items: flex-start; }
+}
+
 /* The monthly lifecycle is the authoritative finalization path. */
 #attendanceGovernancePanel #finalizeAttendanceButton,
 #attendanceGovernancePanel #unlockAttendanceButton { display: none !important; }

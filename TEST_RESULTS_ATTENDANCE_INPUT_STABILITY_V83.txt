@@ -1,0 +1,88 @@
+LSO ATTENDANCE — ROSTER INPUT STABILITY (V83)
+VALIDATION RESULTS
+Date: 2026-09-16
+
+RESULT: 24/24 AUTOMATED CHECKS PASSED
+
+Method: the real production page (index.html) was loaded with the real scripts
+in a headless DOM, signed in as an Administrator through the real login form
+against the Supabase RPC mock, given a seeded September 2026 roster (34 members,
+5 activities in the month), and driven through the attendance workflow. A second
+device was simulated by writing to the shared database every second while the
+officer was mid-entry. Harness: attendance-loop-audit/harness.js.
+
+---------------------------------------------------------------------
+BEFORE THE FIX (same harness, same scenarios)
+---------------------------------------------------------------------
+[FAIL] Officer marks 3 rows, another device saves -> all 3 marks lost.
+       before: ["Late/unsaved note 0","Absent/unsaved note 1","Absent/unsaved note 2"]
+       after:  ["/","/","/"]
+[FAIL] Roster DOM rebuilt on the shared-database round-trip with no throttle.
+[FAIL] Save Attendance answers "No attendance changes to save" when the refresh
+       lands between the last mark and the click.
+
+---------------------------------------------------------------------
+AFTER THE FIX
+---------------------------------------------------------------------
+SCENARIO 1 — DRAFT MONTH, IDLE (12 s window)
+[PASS] Three unsaved marks survive the window untouched.
+[PASS] Roster DOM rebuilds: 0 (previously 1 destructive rebuild).
+[PASS] Unsaved-changes banner reads "3 unsaved changes".
+[PASS] 3 rows carry the draft row marker.
+[PASS] No browser errors.
+
+SCENARIO 2 — ANOTHER DEVICE SAVING EVERY SECOND (the reported symptom)
+[PASS] The officer's 3 unsaved marks are preserved across the remote refresh.
+[PASS] A row the officer did NOT touch shows the newest remote value
+       ("Excused/remote update 3"), so cross-device updates are not hidden.
+[PASS] A remote overwrite attempt on a row the officer is editing does not
+       clobber the unsaved edit (local unsaved input wins until saved).
+[PASS] Roster DOM rebuilds in the 12 s window: 1 (throttled, input-preserving).
+[PASS] Shared records still updated from the remote device (50 -> 53 records).
+[PASS] No browser errors.
+
+SCENARIO 3 — FINALIZED MONTH WITH AN APPROVED LOA
+[PASS] Month review checklist still passes (6/6 checks, 3 LOA entries verified).
+[PASS] Finalization completes and the archive copy is created.
+[PASS] LOA rows still render as Excused with the LOA remark.
+[PASS] Roster DOM rebuilds while idle: 0; no settings/attendance write churn.
+[PASS] No browser errors.
+
+SCENARIO 4 — SAVE ROUND-TRIP
+[PASS] Save Attendance stores the marked values ("Late/saved note 0", ...).
+[PASS] Values are unchanged 9 s later, after the cloud round-trip and refresh.
+[PASS] The on-screen roster matches the stored values after saving.
+[PASS] Unsaved-changes banner clears after a successful save.
+
+SCENARIO 5 — REGRESSION SMOKE (all 11 views)
+[PASS] Every navigation item opens without a browser error.
+[PASS] Attendance can still be recorded and saved after full navigation.
+[PASS] Zero uncaught errors across the whole run.
+
+---------------------------------------------------------------------
+STATIC AND DEPLOYMENT INTEGRITY
+---------------------------------------------------------------------
+[PASS] node --check passes for management-attendance-member-info-v4.js.
+[PASS] index.html cache-busting stamps bumped for the changed script and bundle.
+[PASS] New CSS exists in both attendance-workflow-v58.css and the served
+       lso-ui-bundle-v73.css (the bundle is what the page loads).
+[PASS] No database schema change is required by the fix.
+
+---------------------------------------------------------------------
+SUPABASE (OPTIONAL PATCH)
+---------------------------------------------------------------------
+[PASS] LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql is idempotent and only
+       wraps (never rewrites) lso_update_state / lso_update_state_v69.
+[PASS] Identical payload -> no write, no updated_at bump, no version bump.
+[PASS] Any real change is delegated to the original implementation, so every
+       permission, role and attendance validation is preserved.
+[PASS] Rollback script included in the same file.
+
+---------------------------------------------------------------------
+LIVE BROWSER LIMITATION
+---------------------------------------------------------------------
+An interactive signed-in Supabase browser session is not available in this
+execution environment. The workflow was validated against the real modules, the
+real DOM and a faithful RPC mock. Final visual confirmation should be done on
+the deployed website: open Attendance, select an activity, mark a few rows, wait
+for a refresh, then save.

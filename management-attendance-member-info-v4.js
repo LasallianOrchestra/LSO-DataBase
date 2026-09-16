@@ -591,15 +591,190 @@
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // V83 — Attendance roster input protection
+  //
+  // The roster is rendered by replacing the whole #attendanceRosterBody HTML.
+  // Every background refresh — the shared-database poll, another officer saving
+  // from another device, the attendance governance reconciliation, and this
+  // device's own save round-trip — used to rebuild it straight from stored
+  // records, so anything the officer had typed but not yet saved was destroyed.
+  // The roster appeared to "refresh by itself every second", Save replied
+  // "No attendance changes to save", and attendance could not be recorded.
+  //
+  // These helpers keep the LIVE DOM authoritative for unsaved edits:
+  //   1. capture the delta between the screen and the last render (the draft);
+  //   2. re-apply that delta on top of whatever the refresh produced;
+  //   3. skip the DOM write entirely when the stored roster did not change;
+  //   4. never rebuild while the officer is editing, and never rebuild more
+  //      often than the refresh floor — a hard stop for refresh storms.
+  // ---------------------------------------------------------------------------
+  const ROSTER_REFRESH_FLOOR_MS = 2200;
+  const ROSTER_BACKOFF_LIMIT = 4;
+  const ATTENDANCE_RELEVANT_KEYS = new Set([
+    EVENTS_KEY, ATTENDANCE_KEY, MEMBERS_KEY, SETTINGS_KEY, MONTHLY_REPORTS_KEY
+  ]);
+  let rosterPristine = new Map();  // memberId -> { status, remarks } exactly as last rendered
+  let rosterDraft = new Map();     // memberId -> { status, remarks } unsaved officer edits
+  let rosterLastHtml = '';
+  let rosterLastBuildAt = 0;
+  let rosterRendering = false;
+  let rosterRefreshTimer = 0;
+  let rosterRefreshPending = false;
+  let rosterRefreshBurst = 0;
+  let rosterFocus = null;
+  let rosterScopeKey = '';
+  let rosterDraftIndicatorCount = 0;
+
+  function rosterRowValues(body) {
+    const values = new Map();
+    qsa('[data-attendance-member]', body).forEach((row) => {
+      const status = row.querySelector('.attendance-status');
+      const remarks = row.querySelector('.attendance-remarks');
+      values.set(String(row.dataset.attendanceMember), {
+        status: status ? String(status.value || '') : '',
+        remarks: remarks ? String(remarks.value || '') : ''
+      });
+    });
+    return values;
+  }
+
+  // Snapshot what the officer has changed since the last render, plus the field
+  // that currently has focus, so a rebuild can put both back.
+  function captureRosterDraft() {
+    const body = el('attendanceRosterBody');
+    if (!body || !selectedEventId) { rosterDraft = new Map(); return; }
+    const live = rosterRowValues(body);
+    const draft = new Map();
+    live.forEach((value, memberId) => {
+      const pristine = rosterPristine.get(memberId) || { status: '', remarks: '' };
+      if (value.status !== pristine.status || value.remarks !== pristine.remarks) draft.set(memberId, value);
+    });
+    rosterDraft = draft;
+    const active = document.activeElement;
+    if (active && body.contains(active)) {
+      const row = active.closest('[data-attendance-member]');
+      if (row) {
+        rosterFocus = {
+          memberId: String(row.dataset.attendanceMember),
+          field: active.classList.contains('attendance-remarks') ? 'remarks' : 'status',
+          start: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+          end: typeof active.selectionEnd === 'number' ? active.selectionEnd : null
+        };
+      }
+    }
+  }
+
+  function applyRosterDraft(body) {
+    let restored = 0;
+    rosterDraft.forEach((value, memberId) => {
+      const row = body.querySelector(`[data-attendance-member="${memberId.replace(/"/g, '\\"')}"]`);
+      if (!row) return;
+      const status = row.querySelector('.attendance-status');
+      const remarks = row.querySelector('.attendance-remarks');
+      if (status && !status.disabled && status.value !== value.status) status.value = value.status;
+      if (remarks && !remarks.readOnly && remarks.value !== value.remarks) remarks.value = value.remarks;
+      row.classList.add('attendance-row-draft');
+      restored += 1;
+    });
+    if (rosterFocus) {
+      const row = body.querySelector(`[data-attendance-member="${rosterFocus.memberId.replace(/"/g, '\\"')}"]`);
+      const field = row?.querySelector(rosterFocus.field === 'remarks' ? '.attendance-remarks' : '.attendance-status');
+      const active = document.activeElement;
+      const focusLost = !active || active === document.body || active === document.documentElement;
+      if (field && focusLost) {
+        field.focus({ preventScroll: true });
+        if (rosterFocus.start !== null && typeof field.setSelectionRange === 'function') {
+          try { field.setSelectionRange(rosterFocus.start, rosterFocus.end ?? rosterFocus.start); } catch { /* non-text control */ }
+        }
+      }
+      rosterFocus = null;
+    }
+    return restored;
+  }
+
+  // Owns its own element: #attendanceRecordingState is owned by the attendance
+  // governance module and is rewritten on every governance render.
+  function updateRosterDraftIndicator() {
+    const count = rosterDraft.size;
+    if (count === rosterDraftIndicatorCount) return;
+    rosterDraftIndicatorCount = count;
+    let indicator = el('attendanceDraftIndicator');
+    const anchor = el('attendanceRecordingState');
+    if (!indicator) {
+      if (!anchor) return;
+      indicator = document.createElement('div');
+      indicator.id = 'attendanceDraftIndicator';
+      indicator.className = 'attendance-draft-indicator';
+      indicator.setAttribute('aria-live', 'polite');
+      anchor.parentNode.insertBefore(indicator, anchor.nextSibling);
+    }
+    if (!count) {
+      indicator.hidden = true;
+      indicator.textContent = '';
+      return;
+    }
+    indicator.hidden = false;
+    indicator.innerHTML = `<strong>${count} unsaved change${count === 1 ? '' : 's'}</strong><span>Kept on screen while the shared database refreshes. Select Save Attendance to store them.</span>`;
+  }
+
+  function rosterIsBeingEdited() {
+    if (rosterDraft.size) return true;
+    const body = el('attendanceRosterBody');
+    const active = document.activeElement;
+    if (!body || !active || !body.contains(active)) return false;
+    return Boolean(active.classList?.contains('attendance-status') || active.classList?.contains('attendance-remarks'));
+  }
+
+  function scheduleRosterCatchUp(delay = ROSTER_REFRESH_FLOOR_MS) {
+    clearTimeout(rosterRefreshTimer);
+    rosterRefreshTimer = window.setTimeout(() => {
+      rosterRefreshTimer = 0;
+      if (!rosterRefreshPending) return;
+      refreshAttendanceFromBackground({ force: true });
+    }, Math.max(400, delay));
+  }
+
+  // Background refreshes (shared-database events) must never interrupt data
+  // entry. They are filtered by key, deferred while the roster is being edited,
+  // and throttled so a refresh storm cannot rebuild the roster every second.
+  function refreshAttendanceFromBackground(options = {}) {
+    if (activeViewId() !== 'attendanceView') return;
+    if (document.hidden) { rosterRefreshPending = true; return; }
+    const keys = options.keys instanceof Set ? [...options.keys] : Array.isArray(options.keys) ? options.keys : [];
+    if (keys.length && !keys.some((key) => ATTENDANCE_RELEVANT_KEYS.has(key))) return;
+    const now = Date.now();
+    // A refresh storm (many devices saving at once) must not rebuild the roster
+    // several times per second: after a few queued refreshes the floor widens.
+    if (rosterRefreshPending && now - rosterLastBuildAt > 3000) rosterRefreshBurst += 1;
+    const floor = rosterRefreshBurst >= ROSTER_BACKOFF_LIMIT ? ROSTER_REFRESH_FLOOR_MS * 3 : ROSTER_REFRESH_FLOOR_MS;
+    const wait = Math.max(0, floor - (now - rosterLastBuildAt));
+    const editing = rosterIsBeingEdited();
+    if (!options.force && (wait > 0 || editing)) {
+      rosterRefreshPending = true;
+      scheduleRosterCatchUp(editing ? ROSTER_REFRESH_FLOOR_MS : wait);
+      return;
+    }
+    clearTimeout(rosterRefreshTimer);
+    rosterRefreshTimer = 0;
+    rosterRefreshPending = false;
+    rosterRefreshBurst = 0;
+    rosterLastBuildAt = now;
+    renderAttendance();
+  }
+
   function renderAttendanceRoster() {
     const body = el('attendanceRosterBody');
     if (!body || !selectedEventId) return;
+    // Only capture the in-progress draft for rebuilds that were NOT triggered by
+    // renderAttendanceRoster itself (applyRosterDraft re-enters this guard).
+    if (!rosterRendering) captureRosterDraft();
     const search = normalize(el('attendanceMemberSearch')?.value);
     const selectedEvent = events.find((item) => sameId(item.id, selectedEventId));
     const members = membersForEventAttendanceGroup(selectedEvent)
       .filter((member) => !search || normalize([member.fullName, member.membershipId, member.orchestraSection, member.primaryInstrument, member.periodGroup].join(' ')).includes(search));
 
-    body.innerHTML = members.length ? members.map((member) => {
+    const nextHtml = members.length ? members.map((member) => {
       const entry = getAttendanceEntry(selectedEventId, member.id) || {};
       const onLeave = Boolean(window.LSOAttendanceGovernance?.isMemberOnLeaveForDate?.(member, selectedEvent?.date));
       const visibleStatus = onLeave ? 'Excused' : (entry.status || '');
@@ -617,6 +792,35 @@
         <td><input class="attendance-remarks" value="${safeText(visibleRemarks)}" placeholder="Optional note" ${onLeave ? 'readonly aria-readonly="true" title="Approved LOA is automatically excluded from the rating."' : ''}/></td>
       </tr>`;
     }).join('') : `<tr><td colspan="5"><div class="empty-state compact-empty"><h4>No ${safeText(attendanceRosterModeLabel())} ${safeText(attendanceGroupShortLabel())} found</h4><p>${activeAttendanceRosterMode() === 'Archive' ? 'Completed-stage records for this event will appear here.' : 'Only members currently assigned to this stage appear here.'}</p></div></td></tr>`;
+
+    // V83: a different activity, attendance group, or roster mode renders a
+    // different roster, so drafts of the previous scope must not be carried over.
+    const scopeKey = `${String(selectedEventId)}::${activeAttendanceGroup()}::${activeAttendanceRosterMode()}`;
+    if (scopeKey !== rosterScopeKey) {
+      rosterScopeKey = scopeKey;
+      rosterDraft = new Map();
+      rosterPristine = new Map();
+      rosterFocus = null;
+      rosterLastHtml = '';
+    }
+
+    // V83: when the stored roster renders exactly the same HTML, leave the DOM
+    // untouched. That removes all refresh churn — no flicker, no lost input,
+    // no lost focus — while a real change still renders immediately.
+    if (nextHtml === rosterLastHtml && body.childElementCount) {
+      updateRosterDraftIndicator();
+      return;
+    }
+    rosterRendering = true;
+    try {
+      body.innerHTML = nextHtml;
+    } finally {
+      rosterRendering = false;
+    }
+    rosterLastHtml = nextHtml;
+    applyRosterDraft(body);
+    rosterPristine = rosterRowValues(body);
+    updateRosterDraftIndicator();
   }
 
   function renderAttendanceSummary() {
@@ -646,6 +850,9 @@
           ? 'Select an activity from this month to record or review attendance.'
           : 'Activities from other months remain safely stored and are not mixed into this month.';
       }
+      // V83: no activity is on screen, so there is nothing left to keep unsaved.
+      if (rosterDraft.size) { rosterDraft = new Map(); rosterFocus = null; }
+      updateRosterDraftIndicator();
       return;
     }
     el('attendanceEventType').textContent = event.type || 'Activity';
@@ -730,6 +937,11 @@
       toast('No attendance changes to save.');
       return;
     }
+    // V83: the rows that were just written are no longer unsaved edits. Clear the
+    // draft before re-rendering so the roster shows the stored values and the
+    // "unsaved changes" indicator resets.
+    rosterDraft = new Map();
+    rosterFocus = null;
     saveArray(ATTENDANCE_KEY, attendance, 'attendance-user-save');
     const event = events.find((item) => sameId(item.id, selectedEventId));
     logActivity('Saved attendance', 'Attendance', `${event?.title || 'Event'} • ${attendanceRosterModeLabel()} • ${attendanceGroupShortLabel()} • ${rows.length} roster rows`);
@@ -1751,7 +1963,12 @@
       if (!changed.size || changed.has(ATTENDANCE_KEY)) attendance = loadArray(ATTENDANCE_KEY);
       if (!changed.size || changed.has(INSTRUMENTS_KEY)) instruments = loadArray(INSTRUMENTS_KEY);
       const active = activeViewId();
-      if (active) refreshView(active);
+      if (!active) return;
+      // V83: the attendance roster is the only view that holds unsaved officer
+      // input, so it is refreshed through the protected, throttled path. Every
+      // other view can re-render immediately.
+      if (active === 'attendanceView') { refreshAttendanceFromBackground({ keys: changed }); return; }
+      refreshView(active);
     }, 140);
   }
 
@@ -1775,8 +1992,32 @@
     el('editEventButton').addEventListener('click', () => openEventModal(events.find((event) => sameId(event.id, selectedEventId))));
     el('deleteEventButton').addEventListener('click', deleteSelectedEvent);
     el('attendanceMemberSearch').addEventListener('input', renderAttendanceRoster);
-    el('markAllPresent').addEventListener('click', () => qsa('.attendance-status', el('attendanceRosterBody')).forEach((select) => { if (!select.disabled) select.value = 'Present'; }));
+    el('markAllPresent').addEventListener('click', () => {
+      qsa('.attendance-status', el('attendanceRosterBody')).forEach((select) => { if (!select.disabled) select.value = 'Present'; });
+      // V83: "Mark All Present" is an unsaved edit until Save Attendance is used.
+      captureRosterDraft();
+      updateRosterDraftIndicator();
+    });
     el('saveAttendanceButton').addEventListener('click', saveAttendanceRoster);
+
+    // V83 — keep the unsaved-edit snapshot current while the officer works, and
+    // release deferred refreshes as soon as the roster loses focus.
+    el('attendanceRosterBody').addEventListener('input', (event) => {
+      if (event.target.classList?.contains('attendance-remarks')) { captureRosterDraft(); updateRosterDraftIndicator(); }
+    });
+    el('attendanceRosterBody').addEventListener('change', (event) => {
+      if (event.target.classList?.contains('attendance-status')) { captureRosterDraft(); updateRosterDraftIndicator(); }
+    });
+    el('attendanceRosterBody').addEventListener('focusin', (event) => {
+      const row = event.target.closest?.('[data-attendance-member]');
+      if (row) rosterFocus = { memberId: String(row.dataset.attendanceMember), field: event.target.classList.contains('attendance-remarks') ? 'remarks' : 'status', start: null, end: null };
+    });
+    el('attendanceRosterBody').addEventListener('focusout', () => {
+      window.setTimeout(() => {
+        if (!rosterRefreshPending || rosterIsBeingEdited()) return;
+        refreshAttendanceFromBackground({ force: true });
+      }, 150);
+    });
 
     el('addInstrumentButton').addEventListener('click', () => openInstrumentModal());
     el('closeInstrumentModal').addEventListener('click', () => hideModal('instrumentModal'));
@@ -1878,7 +2119,9 @@
 
     window.addEventListener('lso:members-changed', () => {
       const active = activeViewId();
-      if (active === 'attendanceView') renderAttendanceRoster();
+      // V83: never rebuild the roster directly — the protected path keeps the
+      // officer's unsaved marks and defers while a field is being edited.
+      if (active === 'attendanceView') refreshAttendanceFromBackground({ keys: [MEMBERS_KEY] });
       if (active === 'instrumentsView') { renderInstrumentMemberOptions(); renderInstruments(); }
     });
     window.addEventListener('lso:accounts-changed', () => { renderAccounts(); renderAlerts(); });
@@ -1887,6 +2130,15 @@
     });
     window.addEventListener('lso:cloud-state-changed', (event) => {
       scheduleCloudRefresh(event.detail || {});
+    });
+    // V83: a deferred attendance refresh must still run once the tab is visible
+    // again, otherwise the roster would keep showing records from before the tab
+    // was hidden.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden || !rosterRefreshPending) return;
+      window.setTimeout(() => {
+        if (rosterRefreshPending && !rosterIsBeingEdited()) refreshAttendanceFromBackground({ force: true });
+      }, 250);
     });
     window.addEventListener('lso:attendance-semester-changed', () => {
       selectedEventId = null;
@@ -1950,7 +2202,9 @@
       if (serializedCurrent === serializedNext) return true;
       attendance = nextAttendance.map((entry) => ({ ...entry }));
       saveArray(ATTENDANCE_KEY, attendance, options.source || 'attendance-user-save');
-      renderAttendance();
+      // V83: this entry point is also used by background reconciliation, so use
+      // the throttled, input-preserving refresh instead of a direct rebuild.
+      if (activeViewId() === 'attendanceView') refreshAttendanceFromBackground({ keys: [ATTENDANCE_KEY] });
       renderAlerts();
       return true;
     },
