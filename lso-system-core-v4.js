@@ -72,14 +72,14 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '8.3.0',
-    build: '2026.09.19-self-attendance-v84.1',
+    app: '8.3.1',
+    build: '2026.09.19-self-attendance-live-v85.1',
     // The permission MODEL is unchanged (the V82 resource model is extended), so
     // the schema target stays on the V82 migration the server reports.
     schemaTarget: '013_role_sync_interview_v82',
-    cache: 'lso-enterprise-v84-self-attendance',
+    cache: 'lso-enterprise-v85-self-attendance-live',
     permissions: 'permissions-manifest-v9-self-attendance-view',
-    databaseInstaller: 'LSO_SELF_ATTENDANCE_MONITORING_V84.sql'
+    databaseInstaller: 'LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql'
   });
 
 
