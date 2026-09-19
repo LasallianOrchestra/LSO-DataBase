@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-v20260913-drawer-toggle-fix-v76';
+const CACHE_VERSION = 'lso-website-v20260919-self-attendance-v84';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -29,6 +29,7 @@ const CORE_PATHS = [
   './attendance-governance-v2.js',
   './attendance-workflow-v58.js',
   './duty-hours-member-info-v14.js',
+  './own-attendance-member-info-v1.js',
   './pdf-lib.min.js',
   './monthly-report-template-data.js',
   './monthly-report-print-v31.js',

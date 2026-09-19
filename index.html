@@ -55,7 +55,7 @@
 <link href="favicon-32x32.png?v=20260717-logos" rel="icon" sizes="32x32" type="image/png"/>
 <link href="apple-touch-icon.png?v=20260721-pwa-v1" rel="apple-touch-icon"/>
 <link href="manifest.webmanifest?v=20260814-system-refresh-v73" rel="manifest"/>
-<link href="lso-ui-bundle-v73.css?v=20260916-attendance-input-stability-v83" rel="stylesheet"/>
+<link href="lso-ui-bundle-v73.css?v=20260919-self-attendance-v84" rel="stylesheet"/>
 <link href="members-directory-print-v1.css?v=20260915-print-directory-v2" rel="stylesheet"/>
 <style id="lso-login-color-critical-v6">
 .auth-card .auth-heading p:not(.eyebrow){color:#42584E!important;opacity:1!important;-webkit-text-fill-color:#42584E!important}.auth-card .auth-heading h2{color:#0B3D2E!important}.auth-card .field>span{color:#2F453B!important}.auth-card input::placeholder{color:#66736D!important;opacity:1!important}.auth-tab{color:#4F6259!important}.auth-tab.active{color:#0B3D2E!important}.auth-submit{color:#fff!important}
@@ -220,6 +220,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <button class="nav-item" data-view="monthlyReportView">Monthly Report</button>
 <button class="nav-item" data-view="attendanceView">Attendance</button>
 <button class="nav-item" data-view="dutyHoursView">Duty Hours</button>
+<button class="nav-item" data-view="ownAttendanceView">My Attendance</button>
 
 <button class="nav-item admin-only" data-view="accountsView">Accounts <span class="nav-count hidden" id="pendingAccountCount">0</span></button>
 <button class="nav-item admin-only" data-view="systemHealthView">System Administration</button>
@@ -986,6 +987,25 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 </article>
 </section>
 
+<section class="view" id="ownAttendanceView">
+<div class="attendance-command-header futuristic-command-header own-attendance-header">
+<div><p class="eyebrow">Attendance</p><h3>My Attendance</h3><p>Your own attendance record, exactly as filed by the Attendance officers. This section is read-only: you can view and monitor your attendance, but it can never be edited here.</p></div>
+<div class="inline-actions"><button class="button button-secondary" id="ownAttendanceRefreshButton" type="button">Refresh My Attendance</button><button class="button button-primary" id="ownAttendancePrintButton" type="button">Print My Attendance</button></div>
+</div>
+<article class="panel own-attendance-identity">
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Linked Member</p><h3 id="ownAttendanceMemberName">My Attendance</h3><p class="panel-subtitle" id="ownAttendanceMemberMeta">Member record</p></div><span class="badge badge-gold">Read-only</span></div>
+<p class="own-attendance-readonly-note"><strong>View and monitor only.</strong> Attendance is recorded, reviewed, and finalized by authorized officers. This section contains no edit, delete, or submission control, and it shows only the records linked to your own member profile.</p>
+</article>
+<div class="own-attendance-summary" id="ownAttendanceSummary"></div>
+<article class="panel own-attendance-record-panel">
+<div class="panel-header stack-mobile"><div><p class="eyebrow">Session Record</p><h3>Attendance per Activity</h3><p class="panel-subtitle">Every activity with an attendance record linked to your member profile, newest first.</p></div><label class="field own-attendance-filter"><span>Filter by month</span><select id="ownAttendanceMonthFilter"><option value="">All recorded months</option></select></label></div>
+<p class="own-attendance-status-note" id="ownAttendanceStatus" role="status">Loading your attendance record…</p>
+<div class="table-wrap own-attendance-table-wrap" id="ownAttendanceTableWrap">
+<table class="own-attendance-table"><caption class="sr-only">My attendance records</caption><thead><tr><th>Date</th><th>Activity</th><th>Type</th><th>Status</th><th>Remarks</th></tr></thead><tbody id="ownAttendanceTableBody"></tbody></table>
+</div>
+<div class="empty-state own-attendance-empty hidden" id="ownAttendanceEmpty"><div class="empty-icon">◉</div><h4>No attendance record yet</h4><p>Once an Attendance officer files a record for your activities, your own entries appear here automatically. Nothing on this screen can be edited.</p></div>
+</article>
+</section>
 <section class="view" id="accountsView">
 <article class="panel accounts-workspace-panel">
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review registrations and choose each account role before approval. The Administrator can customize every non-Administrator role's landing page, visible modules, Attendance calendars, and action permissions in System Administration → Role &amp; Permission Center.</p></div><div class="accounts-refresh-control"><span id="accountsRefreshStatus" role="status">Loaded when this page opens</span><button class="button button-secondary" id="refreshAccountsButton" type="button">Refresh Accounts</button></div></div>
@@ -1295,14 +1315,14 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260820-all-roles-supabase-v82"></script>
+<script src="lso-system-core-v4.js?v=20260919-self-attendance-v84"></script>
 <script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
-<script src="role-access-v6.js?v=20260820-all-roles-supabase-v82"></script>
-<script src="cloud-staff-v8.js?v=20260907-settings-permission-pending-fix"></script>
-<script src="app-member-information-v5.js?v=20260817-interview-access-v74"></script>
+<script src="role-access-v6.js?v=20260919-self-attendance-v84"></script>
+<script src="cloud-staff-v8.js?v=20260919-self-attendance-v84"></script>
+<script src="app-member-information-v5.js?v=20260919-self-attendance-v84"></script>
 <script src="lso-shell-layout-v75.js?v=20260913-responsive-fixes-v75"></script>
 <script src="auth-view-controller-v18.js?v=20260913-responsive-fixes-v75"></script>
-<script src="auth.js?v=20260913-responsive-fixes-v75"></script>
+<script src="auth.js?v=20260919-self-attendance-v84"></script>
 <script src="maintenance-mode-v62.js?v=20260807-maintenance-gate-v62"></script>
 <script src="management-attendance-member-info-v4.js?v=20260916-attendance-input-stability-v83"></script>
 <script src="ui-enhancements.js?v=20260913-responsive-fixes-v75"></script>
@@ -1312,6 +1332,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="attendance-governance-v2.js?v=20260915-print-live-feed-fix"></script>
 <script src="attendance-workflow-v58.js?v=20260805-attendance-workflow-v58"></script>
 <script src="duty-hours-member-info-v14.js?v=20260805-attendance-duty-performance-v52"></script>
+<script src="own-attendance-member-info-v1.js?v=20260919-self-attendance-v84"></script>
 <script src="pdf-lib.min.js?v=1.17.1"></script>
 <script src="official-pdf-assets-v51.js?v=20260817-interview-pdf-fetch-fix-v76"></script>
 <script src="interview-manager-v5.js?v=20260817-interview-professional-form-v78"></script>
@@ -1326,11 +1347,11 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="permissions-dynamic-v38.js?v=20260817-interview-access-v74"></script>
 <script src="dashboard-command-center-v5.js?v=20260814-premium-ui-r3"></script>
 <script src="login-logo-3d-v1.js?v=20260723-login-logo-3d-v1"></script>
-<script src="system-enterprise-v2.js?v=20260817-interview-access-v74"></script>
+<script src="system-enterprise-v2.js?v=20260919-self-attendance-v84"></script>
 <script src="mobile-shell-controller-v37.js?v=20260913-responsive-fixes-v75"></script>
-<script src="role-permission-center-v39.js?v=20260820-all-roles-supabase-v82"></script>
-<script src="operations-governance-v61.js?v=20260814-system-refresh-v73"></script>
+<script src="role-permission-center-v39.js?v=20260919-self-attendance-v84"></script>
+<script src="operations-governance-v61.js?v=20260919-self-attendance-v84"></script>
 <script src="members-directory-print-v1.js?v=20260915-print-directory-v1"></script>
-<script src="pwa-enterprise-v41.js?v=20260913-drawer-toggle-fix-v76"></script>
+<script src="pwa-enterprise-v41.js?v=20260919-self-attendance-v84"></script>
 </body>
 </html>

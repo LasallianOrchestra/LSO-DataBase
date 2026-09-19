@@ -8,7 +8,12 @@
   const clone = (value) => JSON.parse(JSON.stringify(value || {}));
   const defaults = clone(core.PERMISSIONS || { views: {}, actions: {}, columns: {}, attendanceGroups: {} });
   const defaultLandings = Object.fromEntries(Object.values(ROLES).map((roleName) => [roleName, defaults.views?.[roleName]?.[0] || 'dashboardView']));
-  const ASSIGNABLE_VIEWS = new Set(['dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView']);
+  const ASSIGNABLE_VIEWS = new Set(['dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView','ownAttendanceView']);
+  // Identity-bound self-service modules may only be granted to the role they
+  // belong to. My Attendance shows a member their own attendance record, so it
+  // is restricted to Trainee/Probationary exactly like the selfDutyPunch action.
+  // This mirrors the server guard in LSO_SELF_ATTENDANCE_MONITORING_V84.sql.
+  const ROLE_RESTRICTED_VIEWS = { ownAttendanceView: new Set(['Trainee/Probationary']) };
   const PROTECTED_ACTIONS = new Set(['manageAccounts','manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth']);
   const ATTENDANCE_GROUPS = new Set(['Official Members','Trainee Members','Probationary Members']);
 
@@ -29,6 +34,11 @@
 
   function normalizeList(value) {
     return [...new Set((Array.isArray(value) ? value : []).map((item) => String(item || '').trim()).filter(Boolean))];
+  }
+
+  function viewAllowedForRole(viewId, roleName) {
+    const restricted = ROLE_RESTRICTED_VIEWS[String(viewId || '')];
+    return !restricted || restricted.has(roleName);
   }
 
   // Shared-state write permission is derived from the operational actions selected by
@@ -74,7 +84,7 @@
       const roleName = String(row?.roleName || row?.role || '');
       if (!Object.values(ROLES).includes(roleName) || roleName === ROLES.ADMIN) return;
 
-      next.views[roleName] = normalizeList(row.views).filter((viewId) => ASSIGNABLE_VIEWS.has(viewId) && Boolean(document.getElementById(viewId)));
+      next.views[roleName] = normalizeList(row.views).filter((viewId) => ASSIGNABLE_VIEWS.has(viewId) && viewAllowedForRole(viewId, roleName) && Boolean(document.getElementById(viewId)));
       next.attendanceGroups[roleName] = normalizeList(row.attendanceGroups).filter((group) => ATTENDANCE_GROUPS.has(group));
       actionKeys.forEach((action) => {
         next.actions[action] = normalizeList(next.actions[action]).filter((item) => item !== roleName);
@@ -133,7 +143,9 @@
   }
 
   function canAccessView(viewId, account = currentAccount()) {
-    return (manifest.views?.[role(account)] || []).includes(String(viewId || ''));
+    const roleName = role(account);
+    if (!viewAllowedForRole(viewId, roleName)) return false;
+    return (manifest.views?.[roleName] || []).includes(String(viewId || ''));
   }
 
   function can(action, account = currentAccount()) {
@@ -251,6 +263,7 @@
     defaultView,
     roleDescription,
     deniedMessage,
+    viewAllowedForRole,
     viewsForRole: (account = currentAccount()) => [...(manifest.views?.[role(account)] || [])],
     permissionManifest: () => clone(manifest),
     landingManifest: () => ({ ...landingViews }),

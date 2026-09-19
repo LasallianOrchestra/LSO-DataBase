@@ -7,6 +7,7 @@ Module,Contract,Allowed,Allowed,Not allowed,Not allowed,Not allowed
 Module,Monthly Report,Allowed,Allowed,Not allowed,Not allowed,Not allowed
 Module,Attendance,Allowed,Allowed,Allowed,Allowed,Not allowed
 Module,Duty Hours,Allowed,Allowed,Not allowed,Allowed,Allowed
+Module,My Attendance,Not allowed,Not allowed,Not allowed,Not allowed,Allowed
 Module,Action Center,Allowed,Not allowed,Not allowed,Not allowed,Not allowed
 Protected Module,Accounts,Allowed,Protected,Protected,Protected,Protected
 Protected Module,System Health,Allowed,Protected,Protected,Protected,Protected

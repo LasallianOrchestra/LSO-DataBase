@@ -25,7 +25,10 @@ window.renderAll = renderAll;
       [ROLES.STAFF]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
       [ROLES.MEMBERSHIP]: ['dashboardView', 'membersView', 'contractView', 'monthlyReportView', 'attendanceView', 'dutyHoursView'],
       [ROLES.SECRETARY]: ['dashboardView', 'membersView', 'attendanceView', 'dutyHoursView'],
-      [ROLES.TRAINEE]: ['dutyHoursView']
+      // Trainee/Probationary accounts receive two modules only: Duty Hours
+      // (self-service Time In/Time Out) and My Attendance (read-only viewing of
+      // their own attendance record). Neither module grants an edit permission.
+      [ROLES.TRAINEE]: ['dutyHoursView', 'ownAttendanceView']
     }),
     actions: Object.freeze({
       manageAccounts: [ROLES.ADMIN],
@@ -69,12 +72,14 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '8.2.0',
-    build: '2026.08.20-all-roles-supabase-fix.1',
+    app: '8.3.0',
+    build: '2026.09.19-self-attendance-v84.1',
+    // The permission MODEL is unchanged (the V82 resource model is extended), so
+    // the schema target stays on the V82 migration the server reports.
     schemaTarget: '013_role_sync_interview_v82',
-    cache: 'lso-enterprise-v82-all-roles-supabase',
-    permissions: 'permissions-manifest-v8-server-native-interview',
-    databaseInstaller: 'LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql'
+    cache: 'lso-enterprise-v84-self-attendance',
+    permissions: 'permissions-manifest-v9-self-attendance-view',
+    databaseInstaller: 'LSO_SELF_ATTENDANCE_MONITORING_V84.sql'
   });
 
 

@@ -321,7 +321,7 @@
       const fallback = window.LSORoleAccess.defaultView(account);
       if (viewId !== fallback) showToast(window.LSORoleAccess.deniedMessage(), true);
       viewId = fallback;
-    } else if (account?.role === 'Trainee/Probationary' && viewId !== 'dutyHoursView') viewId = 'dutyHoursView';
+    } else if (account?.role === 'Trainee/Probationary' && viewId !== 'dutyHoursView' && viewId !== 'ownAttendanceView') viewId = 'dutyHoursView';
     qsa('.view').forEach((view) => view.classList.toggle('active', view.id === viewId));
     qsa('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === viewId));
     const titleMap = {
@@ -332,6 +332,7 @@
       monthlyReportView: 'Overall Monthly Report',
       attendanceView: 'Attendance',
       dutyHoursView: 'Duty Hours',
+      ownAttendanceView: 'My Attendance',
       accountsView: 'Account Management',
       systemHealthView: 'System Administration',
       dataView: 'Data & Recovery'

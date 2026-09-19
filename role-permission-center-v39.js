@@ -14,6 +14,7 @@
     ['monthlyReportView','Monthly Report','Three-phase monthly filing, validation, PDF preview/download, finalization, and report archive.'],
     ['attendanceView','Attendance','Activity creation, Official/Trainee/Probationary rosters, LOA/Excused rules, Review, Finalize, Archive, revisions, and semester ratings.'],
     ['dutyHoursView','Duty Hours','Trainee/Probationary live rosters, Time In/Out punches, approvals, manual ledgers, archives, totals, and certifications.'],
+    ['ownAttendanceView','My Attendance','Identity-bound self-service: the signed-in Trainee/Probationary member can view and monitor their own attendance record only. Read-only — it carries no editing control and never shows another member.'],
     ['accountsView','Accounts','Security owner area for account approval, role assignment, activation, and account maintenance.'],
     ['systemHealthView','System Administration','Security owner area for diagnostics, Role Management, Maintenance Mode, and protected system controls.'],
     ['dataView','Data & Recovery','Security owner protection workspace for backup, validation, recovery points, restore, data transfer, Data Quality, Audit Trail, and deployment integrity.']
@@ -54,6 +55,12 @@
     // Self-service Duty punches require a linked Trainee/Probationary account.
     // All other operational permissions are assigned by the Administrator.
     selfDutyPunch: new Set(['Trainee/Probationary'])
+  };
+  // Identity-bound self-service modules belong to one role only. My Attendance
+  // shows a member their own record, so no other role may ever hold it. The
+  // Supabase save/read functions enforce the same restriction.
+  const ROLE_RESTRICTED_VIEWS = {
+    ownAttendanceView: new Set(['Trainee/Probationary'])
   };
 
   let payload = null;
@@ -112,6 +119,10 @@
     if (type === 'view' && PROTECTED_VIEWS.has(key)) return true;
     if (type === 'action' && PROTECTED_ACTIONS.has(key)) return true;
     if (type === 'action' && key === 'selfDutyPunch' && roleName !== 'Trainee/Probationary') return true;
+    if (type === 'view') {
+      const compatibleView = ROLE_RESTRICTED_VIEWS[key];
+      if (compatibleView && !compatibleView.has(roleName)) return true;
+    }
     const compatible = ROLE_RESTRICTED_ACTIONS[key];
     return Boolean(type === 'action' && compatible && !compatible.has(roleName));
   }

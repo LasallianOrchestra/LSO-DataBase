@@ -1,0 +1,123 @@
+LASALLIAN SYMPHONY ORCHESTRA — ORCHESTRA MANAGEMENT SYSTEM
+SELF-ATTENDANCE MONITORING (V84) — INSTALLATION & VERIFICATION GUIDE
+Build: 2026.09.19-self-attendance-v84.1     Website version 8.3.0
+Database patch: LSO_SELF_ATTENDANCE_MONITORING_V84.sql
+==============================================================================
+
+1. WHAT THIS RELEASE ADDS
+------------------------------------------------------------------------------
+A new section, "My Attendance" (module id: ownAttendanceView), available to
+Trainee/Probationary accounts only. It shows the signed-in member's own
+attendance record in read-only form, next to the existing Duty Hours
+self-service workspace.
+
+Guarantees built into the release:
+  * Identity-bound scope. The section is filtered by the account's linked
+    member id (account.memberId) resolved from the session. Nothing in the URL,
+    the interface, or any query string can widen or change that scope.
+  * View-only by construction. The section renders no input, no editable field,
+    and no control that writes. The module code calls no write API, and the new
+    permission is a module (view) grant with no matching action, so a role
+    holding it receives ZERO shared-database write columns.
+  * Role-locked. Only Trainee/Probationary may ever hold the permission. The
+    Supabase read and save functions enforce that guard server-side, the Role &
+    Permission Center disables the toggle for every other role, and the browser
+    permission layer rejects it for other roles even if a payload carries it.
+  * Fail-closed. If the permission is revoked, the navigation item disappears,
+    opening the section is refused (the shell returns to Duty Hours), and the
+    section is hidden in the DOM.
+
+2. FILES IN THIS RELEASE
+------------------------------------------------------------------------------
+NEW   own-attendance-member-info-v1.js          the read-only self view
+NEW   LSO_SELF_ATTENDANCE_MONITORING_V84.sql    Supabase patch (required)
+NEW   self-attendance-audit/harness.js          V84 verification harness (+ README)
+NEW   SELF_ATTENDANCE_MONITORING_V84_GUIDE.txt  this guide
+NEW   BUILD_INFO_SELF_ATTENDANCE_V84.txt        build summary
+NEW   TEST_RESULTS_SELF_ATTENDANCE_V84.txt      verification evidence
+NEW   FILE_MANIFEST_SELF_ATTENDANCE_V84.txt     upload list
+EDIT  index.html                                navigation item, view markup, cache strings
+EDIT  lso-ui-bundle-v73.css                     Trainee workspace lock + section styling
+EDIT  lso-system-core-v4.js                     packaged Trainee default + version block
+EDIT  role-access-v6.js                         assignable views + identity-bound view guard
+EDIT  role-permission-center-v39.js             module definition + role locking
+EDIT  system-enterprise-v2.js                   permission matrix labels (both tables)
+EDIT  operations-governance-v61.js              Trainee/Probationary role template
+EDIT  app-member-information-v5.js              Trainee view pin + page title
+EDIT  auth.js                                   Trainee navigation allow-list + page title
+EDIT  cloud-staff-v8.js                         deploy-order compatibility module list
+EDIT  ROLE_PERMISSION_MATRIX.csv                My Attendance row
+EDIT  service-worker-enterprise-v41.js          cache version + precache list
+EDIT  service-worker.js                         mirrored cache version
+EDIT  pwa-enterprise-v41.js                     active-cache marker
+
+3. INSTALL ORDER (DO NOT SKIP)
+------------------------------------------------------------------------------
+The website and the database are updated in this order so the permission is
+never offered by the interface before Supabase can store it:
+
+  STEP 1 — Supabase > SQL Editor > New query > paste and run:
+           LSO_SELF_ATTENDANCE_MONITORING_V84.sql
+           The script prints one verification row. Confirm:
+             result = PASS
+             migrationInstalled = true
+             traineeDefaultHasMyAttendance = true
+             otherRoleDefaultsExcludeMyAttendance = true
+             traineeDefaultWriteColumns = []
+             unexpectedRoleGrants = []
+
+  STEP 2 — Upload every file listed in FILE_MANIFEST_SELF_ATTENDANCE_V84.txt to
+           the GitHub Pages repository. Keep the exact file names.
+
+  STEP 3 — Commit and wait for the GitHub Pages deployment, then open the
+           website and press Ctrl+F5 to clear the cached shell.
+
+  STEP 4 — Sign in as Administrator and open:
+           System Administration > Access Control > Account Role >
+           Trainee/Probationary Members
+           The module "My Attendance" is listed with Duty Hours and is enabled.
+           Press Save Role Permissions only if you want to change the selection;
+           the patch already applied it to the existing configuration.
+
+  STEP 5 — Sign in with a Trainee/Probationary account linked to a member and
+           confirm the navigation shows exactly two items: Duty Hours and
+           My Attendance. Open My Attendance and confirm the rows match that
+           member's own attendance and that no editing control is present.
+
+4. WHAT THE DATABASE PATCH DOES (AND DOES NOT DO)
+------------------------------------------------------------------------------
+Adds        the ownAttendanceView module to the packaged Trainee/Probationary
+            default, to the permission-center read/save whitelists, and (once)
+            to an already-saved Trainee/Probationary configuration.
+Keeps       every other role default, every saved role selection, and all
+            operational data (accounts, members, attendance, duty hours,
+            monthly reports, settings, audit history, recovery points).
+Leaves      the permission model unchanged: schemaVersion 13 / permissionModel
+            'v82'. Only the supported resource lists are extended, which is why
+            the schema target and the V82 synchronization health RPC stay as
+            they are.
+Never       grants a write column, an edit action, or access to another
+            member's attendance record.
+
+Re-running the script is safe. The one-time grant is protected by the migration
+marker 014_self_attendance_view_v84, so a selection an Administrator later
+removes is never re-granted by a re-run.
+
+5. HOW TO UNDO
+------------------------------------------------------------------------------
+Website:  restore the previous files from the backup package, or revoke the
+          permission in System Administration > Access Control > Account Role >
+          Trainee/Probationary Members (clear "My Attendance", Save).
+Database: see section 8 of LSO_SELF_ATTENDANCE_MONITORING_V84.sql. Rolling back
+          hides the section; it never deletes attendance records.
+
+6. VERIFICATION EVIDENCE
+------------------------------------------------------------------------------
+See TEST_RESULTS_SELF_ATTENDANCE_V84.txt. The release was verified twice:
+  * the migration was executed on a real PostgreSQL server through the real
+    V82 -> V84 sequence (28/28 checks), and
+  * the real website was driven headlessly as Trainee, revoked Trainee, and
+    Administrator, including the Role & Permission Center role locking
+    (32/32 checks).
+Reproduce with:
+  node self-attendance-audit/harness.js        (from the repository root)

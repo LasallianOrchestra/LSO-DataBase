@@ -537,6 +537,10 @@
     window.LSOCurrentAccount = normalized;
     document.body.dataset.accountRole = normalized.role;
     const traineeAccess = normalized.role === 'Trainee/Probationary';
+    // Modules a Trainee/Probationary account may keep in its navigation. Duty
+    // Hours is the self-service punch workspace; My Attendance is the
+    // read-only self view. Everything else stays hidden.
+    const traineeNavViews = new Set(['dutyHoursView', 'ownAttendanceView']);
     const roleAccess = window.LSORoleAccess;
     document.body.dataset.accessMode = normalized.role === 'Administrator'
       ? 'full'
@@ -558,7 +562,7 @@
     document.querySelectorAll('.admin-only').forEach((node) => node.classList.toggle('hidden', normalized.role !== 'Administrator'));
     document.querySelectorAll('.trainee-only').forEach((node) => node.classList.toggle('hidden', !traineeAccess));
     document.querySelectorAll('.nav-item').forEach((node) => {
-      const allowed = roleAccess?.canAccessView?.(node.dataset.view, normalized) ?? (!traineeAccess || node.dataset.view === 'dutyHoursView');
+      const allowed = roleAccess?.canAccessView?.(node.dataset.view, normalized) ?? (!traineeAccess || traineeNavViews.has(node.dataset.view));
       node.classList.toggle('role-hidden', !allowed);
       node.setAttribute('aria-hidden', String(!allowed));
       if (!allowed) node.tabIndex = -1;
@@ -572,7 +576,7 @@
     if (!maintenanceState?.blocked) openAuthenticatedLanding(normalized);
     emit('lso:auth-changed', normalized);
     window.LSOPermissions?.apply?.();
-    document.title = traineeAccess ? 'Duty Hours | LSO Orchestra Management System' : 'LSO Orchestra Management System';
+    document.title = traineeAccess ? 'Duty Hours & My Attendance | LSO Orchestra Management System' : 'LSO Orchestra Management System';
     startAccountRefresh();
     stopLoginCooldownTicker();
     startInactivityTracking();
