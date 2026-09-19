@@ -1,5 +1,7 @@
 /* ============================================================================
-   LASALLIAN SYMPHONY ORCHESTRA — V84 "MY ATTENDANCE" (SELF-SERVICE, READ-ONLY)
+   LASALLIAN SYMPHONY ORCHESTRA — V85 "MY ATTENDANCE" (SELF-SERVICE, READ-ONLY)
+   Module file kept as own-attendance-member-info-v1.js (precached by the
+   service worker); behaviour level: V85 live feed.
 
    Purpose
      Gives a signed-in Trainee/Probationary member a section that shows ONLY
@@ -7,23 +9,42 @@
      exactly one member (account.memberId); every row rendered here is filtered
      by that member id and nothing else.
 
+   V85 — live feed
+     - The rows are read from the synchronized shared-database cache the moment
+       the cloud layer announces a change (the cache is written before the
+       change event is emitted), so the section can never lag behind the copy
+       the officers just saved. Previously the rows were taken from the
+       operations module, whose own copy refreshes on a later debounce, which
+       could leave this section one synchronization behind.
+     - Every synchronization heartbeat refreshes the "Live" indicator and the
+       checked-at time while the section is open.
+     - The section re-renders whenever it becomes the active view, however it
+       was opened (navigation click, shell fallback, or programmatic setView).
+     - If the shared database is still on the pre-V85 state loader (which sends
+       an empty attendance list to Trainee/Probationary accounts), the section
+       says so plainly and names the Supabase patch to run, instead of showing a
+       misleading "no attendance record yet".
+
    Read-only guarantee (by construction)
      - This module never calls a write path. It does not use
        LSOOperations.replaceAttendance, the attendance roster save, any form
-       submission, or any shared-state column write.
+       submission, or any shared-state column write. LSOStorage is used through
+       getItem only.
      - The view contains no inputs, no selects that change data, and no edit
        controls. The only interactive controls are the month filter (a local
-       read-only filter) and the print action.
+       read-only filter), the refresh action, and the print action.
      - There is no "edit attendance" permission to grant. The permission is a
        module (view) grant only; the V82 write-column derivation is untouched,
        so a role with only this module receives zero shared-database write
-       columns from it.
+       columns.
 
    Data sources (all read-only)
-     - window.LSOApp.getMembers()            -> member directory (own record)
-     - window.LSOOperations.getEvents()      -> attendance activities
-     - window.LSOOperations.getAttendance()  -> attendance records
-     - window.LSOBrand.printHeader()         -> branded printable header
+     - LSOStorage.getItem('lso_attendance_v2')   -> own attendance rows (V85 server scope)
+     - LSOStorage.getItem('lso_events_v2')       -> the activities those rows belong to
+     - window.LSOApp.getMembers()                -> member directory (own record)
+     - window.LSOOperations.getEvents()/getAttendance() -> fallback when the cache is unavailable
+     - window.LSOCloud.cloneState()?.scope       -> server-side scope marker (diagnostics only)
+     - window.LSOBrand.printHeader()             -> branded printable header
    ============================================================================ */
 (() => {
   'use strict';
@@ -32,15 +53,25 @@
   const TRAINEE_ROLE = 'Trainee/Probationary';
   const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const PH_TIME_ZONE = 'Asia/Manila';
+  const ATTENDANCE_KEY = 'lso_attendance_v2';
+  const EVENTS_KEY = 'lso_events_v2';
+  const MEMBERS_KEY = 'lso_member_database_v1';
+  // Marker the V85 state loader attaches to every Trainee/Probationary payload.
+  const SERVER_SCOPE_MODEL = 'v85-own-record';
+  const DATABASE_PATCH = 'LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql';
+  const REFRESH_KEYS = new Set([ATTENDANCE_KEY, EVENTS_KEY, MEMBERS_KEY]);
 
   const el = (id) => document.getElementById(id);
   const safe = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
-  const sameId = (left, right) => String(left ?? '') !== '' && String(left ?? '') === String(right ?? '');
+  const sameId = (left, right) => String(left ?? '').trim() !== '' && String(left ?? '').trim() === String(right ?? '').trim();
   const text = (value) => String(value ?? '').trim();
 
   let renderFrame = 0;
   let renderSignature = '';
   let selectedMonth = '';
+  let lastRows = [];
+  let lastHeartbeatAt = '';
+  let viewObserver = null;
 
   // --------------------------------------------------------------------------
   // Identity — the viewer is resolved from the session only. No URL parameter,
@@ -76,16 +107,64 @@
   }
 
   // --------------------------------------------------------------------------
-  // Presentation helpers
+  // Shared-database access (read-only). The cloud layer writes the synchronized
+  // cache BEFORE it emits its change events, so reading the cache here always
+  // yields the copy that was just downloaded. The operations module getters are
+  // kept only as a fallback for environments without the cache.
   // --------------------------------------------------------------------------
-  function phToday() {
+  function storageArray(key) {
     try {
-      return new Intl.DateTimeFormat('en-CA', { timeZone: PH_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const raw = window.LSOStorage?.getItem ? window.LSOStorage.getItem(key) : window.localStorage?.getItem(key);
+      if (raw === null || raw === undefined) return null;
+      const parsed = JSON.parse(raw || '[]');
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return new Date().toISOString().slice(0, 10);
+      return null;
     }
   }
 
+  function attendanceRecords() {
+    const cached = storageArray(ATTENDANCE_KEY);
+    if (cached) return cached;
+    return window.LSOOperations?.getAttendance?.() || [];
+  }
+
+  function activityRecords() {
+    const cached = storageArray(EVENTS_KEY);
+    if (cached) return cached;
+    return window.LSOOperations?.getEvents?.() || [];
+  }
+
+  function cloudConfigured() {
+    return window.LSOCloud?.isConfigured?.() === true;
+  }
+
+  function cloudLoaded() {
+    return window.LSOCloud?.isLoaded?.() === true;
+  }
+
+  function cloudOnline() {
+    return window.LSOCloud?.isOnline?.() === true;
+  }
+
+  // Server-side scope marker (diagnostics only): present once the shared
+  // database runs the V85 state loader for Trainee/Probationary sessions.
+  function serverScope() {
+    try {
+      const scope = window.LSOCloud?.cloneState?.()?.scope;
+      return scope && typeof scope === 'object' ? scope : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function serverFeedReady() {
+    return serverScope()?.model === SERVER_SCOPE_MODEL;
+  }
+
+  // --------------------------------------------------------------------------
+  // Presentation helpers
+  // --------------------------------------------------------------------------
   function dateLabel(value) {
     const iso = text(value);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || '—';
@@ -113,6 +192,15 @@
     }
   }
 
+  function timeLabel(value) {
+    const date = value ? new Date(value) : new Date();
+    try {
+      return new Intl.DateTimeFormat('en-PH', { timeZone: PH_TIME_ZONE, hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(Number.isNaN(date.getTime()) ? new Date() : date);
+    } catch {
+      return date.toISOString().slice(11, 19);
+    }
+  }
+
   function normalizeStatus(value) {
     const status = text(value);
     return status || 'Not Recorded';
@@ -133,14 +221,14 @@
   function buildRows() {
     const memberId = linkedMemberId();
     if (!memberId) return [];
-    const events = new Map((window.LSOOperations?.getEvents?.() || []).map((event) => [String(event?.id ?? ''), event]));
-    return (window.LSOOperations?.getAttendance?.() || [])
+    const events = new Map(activityRecords().map((event) => [String(event?.id ?? '').trim(), event]));
+    return attendanceRecords()
       .filter((record) => sameId(record?.memberId, memberId))
       .map((record) => {
-        const event = events.get(String(record?.eventId ?? '')) || null;
+        const event = events.get(String(record?.eventId ?? '').trim()) || null;
         const date = text(event?.date);
         return {
-          eventId: String(record?.eventId ?? ''),
+          eventId: String(record?.eventId ?? '').trim(),
           date,
           monthKey: monthKeyOf(date),
           title: text(event?.title) || 'Activity no longer listed',
@@ -149,7 +237,8 @@
           group: text(record?.attendanceGroup),
           status: normalizeStatus(record?.status),
           remarks: text(record?.remarks),
-          loa: record?.loaAutoExcused === true
+          loa: record?.loaAutoExcused === true,
+          updatedAt: text(record?.updatedAt)
         };
       })
       .sort((left, right) => (right.date || '').localeCompare(left.date || '') || left.title.localeCompare(right.title));
@@ -206,7 +295,7 @@
     if (!select) return;
     const months = monthsIn(rows);
     if (selectedMonth && !months.includes(selectedMonth)) selectedMonth = '';
-    const signature = `${months.join('|')}#${selectedMonth}`;
+    const signature = `${months.join('|')}#${selectedMonth}#${rows.length}`;
     if (select.dataset.signature !== signature) {
       select.dataset.signature = signature;
       select.innerHTML = [`<option value="">All recorded months (${rows.length} session${rows.length === 1 ? '' : 's'})</option>`]
@@ -242,7 +331,7 @@
     if (body) {
       body.innerHTML = rows.map((row) => `<tr>
         <td>${safe(dateLabel(row.date))}</td>
-        <td><strong>${safe(row.title)}</strong>${row.venue ? `<br><small>${safe(row.venue)}</small>` : ''}</td>
+        <td><strong>${safe(row.title)}</strong>${row.venue ? `<br><small>${safe(row.venue)}</small>` : ''}${row.group ? `<br><small>${safe(row.group)}</small>` : ''}</td>
         <td>${safe(row.type)}</td>
         <td><span class="${statusClass(row.status)}">${safe(row.status)}</span></td>
         <td>${safe(row.remarks) || '—'}${row.loa ? ' <small>(Approved LOA)</small>' : ''}</td>
@@ -252,18 +341,58 @@
     if (wrapper) wrapper.classList.toggle('hidden', rows.length === 0);
   }
 
+  // Feed state drives both the status sentence and the "Live" badge.
+  function feedState(rows) {
+    if (!linkedMemberId()) return 'unlinked';
+    if (cloudConfigured() && !cloudLoaded()) return 'connecting';
+    if (cloudConfigured() && cloudLoaded() && !rows.length && !serverFeedReady()) return 'server-outdated';
+    if (cloudConfigured() && cloudLoaded() && !cloudOnline()) return 'offline';
+    return rows.length ? 'live' : 'live-empty';
+  }
+
+  function renderBadge(state) {
+    const badge = el('ownAttendanceLiveBadge');
+    if (!badge) return;
+    const map = {
+      unlinked: ['Not linked', 'badge badge-gray'],
+      connecting: ['Connecting…', 'badge badge-gold'],
+      'server-outdated': ['Database update required', 'badge badge-red'],
+      offline: ['Offline — last copy', 'badge badge-red'],
+      live: ['Live', 'badge badge-green'],
+      'live-empty': ['Live', 'badge badge-green']
+    };
+    const [label, className] = map[state] || map.live;
+    badge.textContent = label;
+    badge.className = `${className} own-attendance-live-badge`;
+    badge.dataset.state = state;
+  }
+
   function renderStatus(rows) {
     const node = el('ownAttendanceStatus');
+    const state = feedState(rows);
+    renderBadge(state);
     if (!node) return;
-    if (!linkedMemberId()) {
-      node.textContent = 'This account is not linked to a member record yet. Ask the Administrator to link the account before attendance can be shown.';
-      return;
+    node.dataset.feedState = state;
+    const checked = lastHeartbeatAt ? timeLabel(lastHeartbeatAt) : timeLabel();
+    switch (state) {
+      case 'unlinked':
+        node.textContent = 'This account is not linked to a member record yet. Ask the Administrator to link the account before attendance can be shown.';
+        return;
+      case 'connecting':
+        node.textContent = 'Connecting to the shared database… your attendance record appears here as soon as the first synchronization completes.';
+        return;
+      case 'server-outdated':
+        node.textContent = `The shared database is not sending attendance rows to Trainee/Probationary accounts yet, so your record cannot be shown. Ask the Administrator to run ${DATABASE_PATCH} in Supabase (SQL Editor); this section fills in automatically afterwards — no website change is needed.`;
+        return;
+      case 'offline':
+        node.textContent = `The shared database is not reachable right now; this is the last synchronized copy of your attendance (${rows.length} session${rows.length === 1 ? '' : 's'}). It refreshes automatically once the connection returns.`;
+        return;
+      case 'live-empty':
+        node.textContent = `No attendance record has been filed for this member yet. Live — checked ${nowLabel()} (Philippine time); new records filed by the Attendance officers appear here automatically.`;
+        return;
+      default:
+        node.textContent = `Live — your own attendance, synchronized with the shared database at ${checked} (Philippine time). New records filed by the Attendance officers appear here automatically; only records linked to this account's member are shown and editing is not available in this section.`;
     }
-    if (!rows.length) {
-      node.textContent = `No attendance record has been filed for this member yet. Checked ${nowLabel()} (Philippine time).`;
-      return;
-    }
-    node.textContent = `Read-only copy of your own attendance, checked ${nowLabel()} (Philippine time). Only records linked to this account's member are shown — editing is not available in this section.`;
   }
 
   function render({ force = false } = {}) {
@@ -275,17 +404,21 @@
     // permission can never leave the surface reachable.
     if (!canOpenView()) {
       renderSignature = '';
+      lastRows = [];
       view.classList.add('hidden');
       return;
     }
     view.classList.remove('hidden');
     const member = linkedMember();
     const allRows = buildRows();
+    lastRows = allRows;
     const rows = visibleRows(allRows);
     const signature = JSON.stringify({
       month: selectedMonth,
       member: linkedMemberId(),
-      rows: allRows.map((row) => [row.eventId, row.status, row.remarks, row.date, row.title])
+      memberName: member?.fullName || '',
+      feed: feedState(allRows),
+      rows: allRows.map((row) => [row.eventId, row.status, row.remarks, row.date, row.title, row.group, row.updatedAt])
     });
     if (!force && signature === renderSignature) return;
     renderSignature = signature;
@@ -305,7 +438,7 @@
   }
 
   function isViewActive() {
-    return document.querySelector(`.view.active:not(.hidden)`)?.id === VIEW_ID;
+    return document.querySelector('.view.active:not(.hidden)')?.id === VIEW_ID;
   }
 
   // --------------------------------------------------------------------------
@@ -358,7 +491,7 @@
         <div><span>Rated sessions</span><strong>${summary.rated}</strong></div>
       </div>
       <table><thead><tr><th>Date</th><th>Activity</th><th>Type</th><th>Status</th><th>Remarks</th></tr></thead><tbody>
-      ${rows.length ? rows.map((row) => `<tr><td>${safe(dateLabel(row.date))}</td><td>${safe(row.title)}</td><td>${safe(row.type)}</td><td>${safe(row.status)}</td><td>${safe(row.remarks) || '—'}</td></tr>`).join('') : '<tr><td colspan="5">No attendance record has been filed for this member yet.</td></tr>'}
+      ${rows.length ? rows.map((row) => `<tr><td>${safe(dateLabel(row.date))}</td><td>${safe(row.title)}${row.group ? ` <small>(${safe(row.group)})</small>` : ''}</td><td>${safe(row.type)}</td><td>${safe(row.status)}</td><td>${safe(row.remarks) || '—'}</td></tr>`).join('') : '<tr><td colspan="5">No attendance record has been filed for this member yet.</td></tr>'}
       </tbody></table>
       <div class="notice">Read-only copy generated from the shared LSO database. Attendance rating counts Present and Late over rated Present/Late/Absent sessions; Excused, Not Required, and approved LOA records are excluded from the rating.</div>
       <div class="footer">Lasallian Symphony Orchestra • Orchestra Management System</div>
@@ -375,25 +508,63 @@
   // --------------------------------------------------------------------------
   // Wiring
   // --------------------------------------------------------------------------
+  function observeViewActivation() {
+    const view = el(VIEW_ID);
+    if (!view || viewObserver || typeof MutationObserver !== 'function') return;
+    let wasActive = view.classList.contains('active');
+    viewObserver = new MutationObserver(() => {
+      const active = view.classList.contains('active');
+      if (active && !wasActive) scheduleRender();
+      wasActive = active;
+    });
+    viewObserver.observe(view, { attributes: true, attributeFilter: ['class'] });
+  }
+
   function wire() {
     el('ownAttendanceMonthFilter')?.addEventListener('change', (event) => {
       selectedMonth = text(event.target.value);
       render({ force: true });
     });
     el('ownAttendancePrintButton')?.addEventListener('click', printReport);
-    el('ownAttendanceRefreshButton')?.addEventListener('click', () => render({ force: true }));
+    el('ownAttendanceRefreshButton')?.addEventListener('click', () => {
+      render({ force: true });
+      // Ask the cloud layer for the newest copy as well; the resulting change
+      // event re-renders the section if anything differs.
+      try { window.LSOCloud?.pollNow?.()?.catch?.(() => undefined); } catch { /* read-only refresh is best effort */ }
+    });
 
     // The shell reveals views on navigation click; render on the next frame so
     // the section always reflects the shared database when it becomes visible.
     document.addEventListener('click', (event) => {
       if (event.target?.closest?.(`.nav-item[data-view="${VIEW_ID}"]`)) window.setTimeout(scheduleRender, 0);
     });
+    observeViewActivation();
 
-    ['lso:cloud-state-changed', 'lso:attendance-changed', 'lso:attendance-governance-changed', 'lso:permissions-changed', 'lso:auth-changed']
+    // Shared-database changes. The cloud layer has already written the
+    // synchronized cache when these fire, and this module reads that cache
+    // directly, so the section is never one synchronization behind.
+    ['lso:cloud-state-changed', 'lso:cloud-loaded', 'lso:attendance-changed', 'lso:attendance-governance-changed', 'lso:members-changed', 'lso:permissions-changed', 'lso:auth-changed']
       .forEach((name) => window.addEventListener(name, () => {
-        if (name === 'lso:auth-changed') { renderSignature = ''; selectedMonth = ''; }
+        if (name === 'lso:auth-changed') { renderSignature = ''; selectedMonth = ''; lastHeartbeatAt = ''; }
         if (isViewActive() || name === 'lso:auth-changed') scheduleRender();
       }));
+    window.addEventListener('lso:operations-changed', (event) => {
+      const key = event?.detail?.key;
+      if (key && !REFRESH_KEYS.has(key)) return;
+      if (isViewActive()) scheduleRender();
+    });
+
+    // Every synchronization heartbeat refreshes the live indicator (and the
+    // rows, if the heartbeat reported a change) while the section is open.
+    window.addEventListener('lso:sync-heartbeat', (event) => {
+      lastHeartbeatAt = new Date().toISOString();
+      if (!isViewActive()) return;
+      if (event?.detail?.changed) { scheduleRender(); return; }
+      renderStatus(lastRows);
+    });
+    window.addEventListener('lso:cloud-status', () => {
+      if (isViewActive()) renderStatus(lastRows);
+    });
   }
 
   function initialize() {
@@ -409,7 +580,11 @@
     refresh: () => render({ force: true }),
     // Diagnostics only — returns the linked member id resolved from the session.
     getScope: () => linkedMemberId(),
-    getRows: () => visibleRows(buildRows())
+    getRows: () => visibleRows(buildRows()),
+    // Diagnostics only — the feed state ('live', 'live-empty', 'connecting',
+    // 'offline', 'server-outdated', 'unlinked') and the server scope marker.
+    getFeedState: () => feedState(buildRows()),
+    getServerScope: () => serverScope()
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize, { once: true });

@@ -14715,6 +14715,16 @@ body[data-theme="night"] .interview-form-panel,body[data-theme="night"] .intervi
 .own-attendance-status.is-not-required { background: #eef3f1; color: #4f625b; }
 .own-attendance-status.is-not-recorded { background: #f3f3f3; color: #666; }
 .own-attendance-empty { margin-top: 4px; }
+/* V85 live feed indicator (read-only status, no control) */
+.own-attendance-badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.own-attendance-live-badge { gap: 6px; }
+.own-attendance-live-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.own-attendance-live-badge[data-state="live"]::before,
+.own-attendance-live-badge[data-state="live-empty"]::before { animation: own-attendance-pulse 1.6s ease-in-out infinite; }
+@keyframes own-attendance-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .own-attendance-live-badge::before { animation: none !important; } }
+.own-attendance-status-note[data-feed-state="server-outdated"] { color: #9f2d39; font-weight: 600; }
+.own-attendance-status-note[data-feed-state="offline"] { color: #8a5b06; }
 @media (max-width: 720px) {
   .own-attendance-summary { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
   .own-attendance-filter { min-width: 0; width: 100%; }

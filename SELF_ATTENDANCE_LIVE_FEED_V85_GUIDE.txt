@@ -1,0 +1,161 @@
+LASALLIAN SYMPHONY ORCHESTRA — ORCHESTRA MANAGEMENT SYSTEM
+MY ATTENDANCE LIVE FEED (V85) — ROOT CAUSE, INSTALLATION & VERIFICATION GUIDE
+Build: 2026.09.19-self-attendance-live-v85.1     Website version 8.3.1
+Database patch: LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql   (REQUIRED)
+==============================================================================
+
+1. THE PROBLEM
+------------------------------------------------------------------------------
+Duty Hours > My Attendance (Trainee/Probationary accounts) stayed blank: the
+linked-member panel, the summary cards (Recorded sessions, Present, Late,
+Absent, Excused, Not required, Attendance rate) and the "Attendance per
+Activity" table never filled in, even for members whose attendance the
+officers had already recorded and finalized in the Attendance module.
+
+2. ROOT CAUSE (TWO PARTS)
+------------------------------------------------------------------------------
+A. Supabase never sends attendance to a Trainee/Probationary account.
+   The website builds every blank in My Attendance from the shared-state
+   `attendance` and `events` collections returned by the database function
+   public.lso_get_state(p_token). The Trainee/Probationary branch of that
+   function (installed by supabase-setup.sql / LSO_DUTY_HOURS_COMPLETE_INSTALL.sql
+   and never revised by the V84 patch) hard-codes:
+
+       'events',     '[]'::jsonb,
+       'attendance', '[]'::jsonb,
+
+   so the account receives its own member record and its own Duty Hours, but
+   not one attendance row — not even its own. The V84 module had nothing to
+   render. (The V84 harness did not catch this because its Supabase mock
+   returned the full state to every account; the mock now mirrors the real
+   role-scoped loader.)
+
+B. The website module could lag one synchronization behind.
+   own-attendance-member-info-v1.js read the rows through the operations
+   module (LSOOperations.getAttendance/getEvents). That module refreshes its
+   own copy on a 140 ms debounce after the cloud change event, while My
+   Attendance re-rendered on the very next animation frame — so a record filed
+   by an officer could arrive in the browser and still not be shown until the
+   next change. The module now reads the synchronized cache directly (the
+   cloud layer writes it BEFORE emitting the change event), so it is live.
+
+3. WHAT THIS RELEASE CHANGES
+------------------------------------------------------------------------------
+DATABASE (LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql)
+  * public.lso_get_state — Trainee/Probationary sessions now receive:
+      - members     : own member record only            (unchanged)
+      - attendance  : ONLY rows whose memberId is the account's linked member id
+      - events      : ONLY the activities those rows reference (date, title,
+                      type, venue for the table)
+      - duty_hours  : own entries + own commitment        (unchanged)
+      - settings, monthly_reports, instruments, activity_log : still withheld
+    Every other role receives exactly the payload it received before.
+  * public.lso_trainee_scoped_state_v85 — internal helper (not an API endpoint;
+    execute revoked from anon/authenticated) that builds the scoped payload.
+    The SQL Editor verification calls the same helper, so what is verified is
+    exactly what the website receives.
+  * public.lso_get_collection_page_v69 (only if installed) — the same own-record
+    boundary for attendance / members / events; instruments and activity_log
+    pages are empty for Trainee/Probationary. The replacement also repairs the
+    page query itself: the shipped V69 body failed on every call ("column t.idx
+    must appear in the GROUP BY clause"); the website had silently fallen back
+    to browser-side paging.
+  * Migration marker 016_self_attendance_live_feed_v85 (version number derived
+    from the table, because the repository already ships two markers numbered
+    14 and one numbered 15 and version_number is UNIQUE).
+  * No permission, role default, write path, or operational data is changed.
+    The permission model stays V82 (schemaVersion 13); Trainee/Probationary
+    still holds zero write columns.
+
+WEBSITE
+  * own-attendance-member-info-v1.js (behaviour level V85, file name kept)
+      - reads own rows from the synchronized cache (lso_attendance_v2 /
+        lso_events_v2) the moment the cloud layer announces a change;
+      - re-renders on every relevant event (cloud state, operations, members,
+        heartbeat with changes) and whenever the view becomes active, however
+        it was opened (click, shell fallback, programmatic setView);
+      - "Live" badge + status line refreshed on every synchronization heartbeat
+        (Connecting… / Live / Offline — last copy / Database update required /
+        Not linked);
+      - if the shared database still runs the pre-V85 loader, the section says
+        so and names LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql instead of a
+        misleading "no attendance record yet";
+      - Refresh button also asks the cloud layer for the newest copy (pollNow);
+      - the attendance calendar of each record (Trainee / Probationary /
+        Official Members) is shown under the activity;
+      - still read-only by construction: no input, no write API, LSOStorage is
+        used through getItem only (the harness scans the source for any write).
+  * index.html — Live badge markup, copy, cache strings (-live-v85)
+  * lso-ui-bundle-v73.css — badge/status styling (reduced-motion safe)
+  * lso-system-core-v4.js — version block 8.3.1 / build ...-live-v85.1 /
+    databaseInstaller LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql (schemaTarget
+    deliberately unchanged: 013_role_sync_interview_v82)
+  * service-worker-enterprise-v41.js, service-worker.js — CACHE_VERSION
+    lso-website-v20260919-self-attendance-live-v85
+  * pwa-enterprise-v41.js — ACTIVE_CACHE_MARKER self-attendance-live-v85
+  * self-attendance-audit/harness.js — mock now mirrors the real role-scoped
+    loader; new scenarios: live feed (officer files/corrects a record while the
+    section is open) and legacy server (reproduces the production blank).
+
+4. INSTALL ORDER
+------------------------------------------------------------------------------
+  STEP 1 — Supabase > SQL Editor > New query > paste and run:
+           LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql
+           The script prints one verification row. Confirm:
+             result              = PASS
+             stateLoaderScoped   = true
+             pagingScoped        = true
+             migrationInstalled  = true
+             traineeSample       = { username, memberId, memberRecordFound: true,
+                                     attendanceRowsReturned = attendanceRowsStoredForMember,
+                                     activitiesReturned, onlyOwnRowsReturned: true,
+                                     settingsWithheld: true, activityLogWithheld: true }
+           traineeSample is null only when no approved Trainee/Probationary
+           account is linked to a member yet (see step 4).
+           Re-running the script is safe.
+
+  STEP 2 — Upload every file listed in FILE_MANIFEST_SELF_ATTENDANCE_LIVE_V85.txt
+           to the GitHub Pages repository. Keep the exact file names.
+
+  STEP 3 — Commit, wait for the GitHub Pages deployment, open the website and
+           press Ctrl+F5 once (installed PWA copies update through the new cache
+           version automatically).
+
+  STEP 4 — Make sure each Trainee/Probationary account is linked to its member:
+           System Administration > Accounts > (account) > Linked member.
+           An unlinked account shows "Not linked" in My Attendance.
+
+  STEP 5 — Sign in with a linked Trainee/Probationary account and open
+           My Attendance. The badge reads "Live", the linked member, the summary
+           cards and the table show that member's own records. Keep the page
+           open, have an Attendance officer save a record for that member in
+           Attendance: the row appears on the next synchronization (about
+           9–12 s on desktop, up to 30 s when the page has been idle) without a
+           reload. Press "Refresh My Attendance" to pull immediately.
+
+5. WHAT THE TRAINEE CAN AND CANNOT SEE (UNCHANGED GUARANTEES)
+------------------------------------------------------------------------------
+  Sees   : own member record, own attendance rows (every semester, calendar and
+           roster mode), the activities those rows belong to, own Duty Hours.
+  Never  : another member's row or name, settings, monthly reports, instruments,
+           the activity log, activities without an own record.
+  Writes : nothing. The role holds zero write columns; the module has no input
+           and calls no write API.
+
+6. HOW TO UNDO
+------------------------------------------------------------------------------
+Website : restore the previous files from the backup package.
+Database: see section 6 of LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql. Rolling back
+          returns My Attendance to its previous blank state; it never deletes
+          attendance records.
+
+7. VERIFICATION EVIDENCE
+------------------------------------------------------------------------------
+See TEST_RESULTS_SELF_ATTENDANCE_LIVE_V85.txt:
+  * 23/23 database checks on a real PostgreSQL 16 server (before/after the
+    patch, four database shapes, idempotent re-run);
+  * 51/51 interface checks on the real page (six scenarios, including the live
+    feed and the pre-V85 server reproduction);
+  * the same live scenario run against the previous module fails 5 checks,
+    which is why the website part of the fix is required as well.
+Reproduce: node self-attendance-audit/harness.js        (repository root)

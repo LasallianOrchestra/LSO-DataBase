@@ -1,0 +1,55 @@
+LSO MY ATTENDANCE LIVE FEED (V85)
+Build: 2026.09.19-self-attendance-live-v85.1
+Website version: 8.3.1
+Base: V84 Self-Attendance Monitoring (permission model unchanged: V82,
+      schema 013_role_sync_interview_v82)
+
+Scope:
+- Fixes the blank "My Attendance" section for Trainee/Probationary accounts.
+  Root cause: public.lso_get_state returned events: [] and attendance: [] to
+  Trainee/Probationary sessions, so the account never received its own rows.
+- Makes the section live: the module now reads the synchronized cache the
+  moment the cloud layer announces a change (the previous module could lag one
+  synchronization behind), refreshes a "Live" indicator on every heartbeat, and
+  re-renders whenever the view becomes active.
+- Names the required Supabase patch on screen if the database is still on the
+  pre-V85 loader.
+
+Database migration: REQUIRED
+- LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql (run it before uploading the website)
+- Replaces public.lso_get_state (Trainee/Probationary branch only), adds the
+  internal helper public.lso_trainee_scoped_state_v85, hardens/repairs
+  public.lso_get_collection_page_v69 when installed, and records the marker
+  016_self_attendance_live_feed_v85. Safe to re-run.
+- No permission, role default, write path, or operational data is changed.
+
+Security guarantees (unchanged from V84, now with data to show):
+- Identity-bound on the SERVER: the database sends a Trainee/Probationary
+  session only the rows whose memberId equals the account's linked member id,
+  plus the activities those rows reference. Nothing in the request can widen it.
+- Read-only by construction: no input, no write API, LSOStorage getItem only.
+- Role-locked and fail-closed exactly as in V84.
+
+Active unique website assets:
+- own-attendance-member-info-v1.js      (behaviour level V85; file name kept)
+
+Updated website assets:
+- index.html                            (Live badge, copy, cache strings)
+- lso-ui-bundle-v73.css                 (badge/status styling)
+- lso-system-core-v4.js                 (version block, databaseInstaller)
+- service-worker-enterprise-v41.js      (cache version)
+- service-worker.js                     (mirrored cache version)
+- pwa-enterprise-v41.js                 (active cache marker)
+
+Documentation:
+- SELF_ATTENDANCE_LIVE_FEED_V85_GUIDE.txt
+- TEST_RESULTS_SELF_ATTENDANCE_LIVE_V85.txt
+- FILE_MANIFEST_SELF_ATTENDANCE_LIVE_V85.txt
+
+Verification:
+- 23/23 database checks (real PostgreSQL 16.2; before/after; four database
+  shapes; idempotent re-run).
+- 51/51 interface checks (real page, headless DOM, six scenarios incl. the live
+  feed and the pre-V85 server reproduction).
+- The previous module fails 5 of the 11 live-feed checks; the website change is
+  therefore required together with the SQL patch.

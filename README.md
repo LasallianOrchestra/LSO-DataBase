@@ -1,3 +1,20 @@
+# LSO Orchestra Management System — V85 My Attendance Live Feed
+
+This release fixes the blank **Duty Hours > My Attendance** section for Trainee/Probationary accounts and makes it live. It requires one Supabase patch: `LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql` (run it in the SQL Editor before uploading the website files).
+
+## Root cause corrected
+
+- `public.lso_get_state` returned `events: []` and `attendance: []` to every Trainee/Probationary session, so the account never received its own attendance rows and the V84 section had nothing to render. The patch scopes the payload to the linked member instead: own member record, own attendance rows (every semester, calendar and roster mode) and only the activities those rows reference. Every other role receives exactly the payload it received before; settings, monthly reports, instruments and the activity log are still withheld from Trainees.
+- The website module read the rows through the operations module, whose copy refreshes on a later debounce, so a record filed by an officer could arrive in the browser and still not be shown until the next change. The module now reads the synchronized cache directly, refreshes a "Live" indicator on every heartbeat, re-renders whenever the view becomes active, and names the Supabase patch on screen if the database is still on the pre-V85 loader.
+- The same patch repairs `public.lso_get_collection_page_v69` (when installed), whose shipped page query failed on every call, and applies the own-record boundary to it.
+
+## Verification
+
+- 23/23 database checks on a real PostgreSQL 16 server (before/after the patch, four database shapes, idempotent re-run).
+- 51/51 interface checks on the real page (`node self-attendance-audit/harness.js`), including a live-feed scenario in which an officer files and corrects a record while the section is open, and a reproduction of the production blank against the pre-V85 loader.
+
+See `SELF_ATTENDANCE_LIVE_FEED_V85_GUIDE.txt`, `TEST_RESULTS_SELF_ATTENDANCE_LIVE_V85.txt` and `FILE_MANIFEST_SELF_ATTENDANCE_LIVE_V85.txt`.
+
 # LSO Orchestra Management System — V72 Authentication Input Stability Fix
 
 This release repairs Administrator Maintenance Mode with shared-database verification, a hard application gate for non-Administrator accounts, cross-tab synchronization, and a status refresh/preview workflow. All V61 governance features remain included.

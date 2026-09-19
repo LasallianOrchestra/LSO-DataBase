@@ -1,0 +1,171 @@
+LSO MY ATTENDANCE LIVE FEED (V85)
+VALIDATION RESULTS
+Date: 2026-09-19
+
+RESULT: 23/23 DATABASE CHECKS PASSED (real PostgreSQL 16.2)
+RESULT: 51/51 INTERFACE CHECKS PASSED (real page, headless DOM, six scenarios)
+RESULT: PREVIOUS MODULE FAILS THE LIVE SCENARIO (5 of 11) — website fix required
+
+Method (database): the real LSO tables (lso_accounts, lso_sessions,
+system_state incl. column_versions, lso_schema_migrations with the shipped
+markers 13/14/15), the CURRENT production lso_get_state (supabase-setup.sql
+lines 737-842) and the shipped V69 paging RPC were installed on a real
+PostgreSQL 16.2 server and seeded with three members, four activities and five
+attendance rows (two clean rows for the linked Trainee, one archived row for the
+same member whose memberId carries surrounding whitespace, one row for another
+Trainee, one row for an Official Member in a different calendar). The session
+helper was stubbed only in that pgcrypto's digest() is not bundled with the test
+server; every function under test is the real one.
+
+Method (interface): the real production page (index.html) with the real scripts
+in a headless DOM, signed in through the real login form against the Supabase
+RPC shim. The shim's lso_get_state now behaves like the real loader: a
+Trainee/Probationary token receives the role-scoped payload (port of
+lso_trainee_scoped_state_v85) or, in "legacy" mode, the pre-V85 production
+payload (events: [], attendance: []). Harness: self-attendance-audit/harness.js
+
+---------------------------------------------------------------------
+BEFORE THE CHANGE — REPRODUCTION
+---------------------------------------------------------------------
+Database (production lso_get_state, Trainee session):
+  { "members": 1, "events": [], "attendance": [], "duty_entries": 1 }
+  -> the account never receives an attendance row; the section has nothing to
+     render. This is the reported blank.
+Interface (legacy server mode, previous module): 0 rows, "No attendance record
+  has been filed for this member yet." although the member has three records.
+Shipped V69 paging RPC, any caller:
+  ERROR: column "t.idx" must appear in the GROUP BY clause or be used in an
+  aggregate function  -> pre-existing defect, repaired by the same replacement.
+
+---------------------------------------------------------------------
+DATABASE CHECKS (after LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql)
+---------------------------------------------------------------------
+[PASS] Trainee receives exactly its own 3 attendance rows (incl. whitespace-padded id, archive mode, other calendar)
+[PASS] Trainee receives no other member attendance row
+[PASS] Trainee receives only referenced activities ev-1, ev-2 (not ev-3 officials, not ev-4 unfiled)
+[PASS] Trainee still receives only its own member record
+[PASS] Trainee still receives only its own duty entries + commitment
+[PASS] Trainee still receives no settings / instruments / activity log / monthly reports
+[PASS] Trainee payload keeps shared updated_at (poll change detection)
+[PASS] Trainee payload carries scope marker v85-own-record
+[PASS] Unlinked Trainee receives empty members/attendance/events (nothing leaks)
+[PASS] Administrator payload unchanged: full members/events/attendance/settings
+[PASS] Administrator payload has no scope key (byte-compatible with previous shape)
+[PASS] General Secretary payload unchanged: full collections
+[PASS] Paging RPC: Trainee attendance page scoped to own rows
+[PASS] Paging RPC: Trainee members page scoped to own record
+[PASS] Paging RPC: Trainee events page scoped to referenced activities
+[PASS] Paging RPC: Trainee instruments / activity_log pages are empty
+[PASS] Paging RPC: Trainee duty_entries page still own-only
+[PASS] Paging RPC: Administrator attendance page unchanged (all rows)
+[PASS] Paging RPC: search filter still applies after scoping
+[PASS] Invalid session is still rejected by the state loader
+[PASS] Migration marker installed with a non-colliding version number (16)
+[PASS] Helper is not executable by anon/authenticated (not an API endpoint)
+[PASS] lso_get_state stays executable by anon/authenticated (website RPC)
+
+Additional database runs:
+[PASS] Live: a row appended by an officer (updated_at bumped) is in the very
+       next Trainee read together with its newly referenced activity (4 rows,
+       events ev-1, ev-2, ev-4).
+[PASS] Paging repair: offset/limit page returns the expected slice
+       (total 5, offset 3, limit 2).
+[PASS] Re-run on the patched database: PASS, no error, marker unchanged.
+[PASS] V84-shaped database without the V69 paging RPC: PASS with the notice
+       "paging hardening skipped".
+[PASS] Database with an approved but unlinked Trainee only: PASS with
+       traineeSample = null.
+[PASS] Database without lso_schema_migrations: refused in pre-flight with a
+       clear message; nothing applied.
+[PASS] SQL Editor verification row: result = PASS, traineeSample reports
+       attendanceRowsReturned = attendanceRowsStoredForMember = 3,
+       activitiesReturned = 2, onlyOwnRowsReturned = true.
+
+---------------------------------------------------------------------
+SCENARIO 1 — TRAINEE/PROBATIONARY, MY ATTENDANCE GRANTED (V85 server)
+---------------------------------------------------------------------
+[PASS] Trainee signs in through the real login form.
+[PASS] Navigation exposes exactly Duty Hours and My Attendance.
+[PASS] Landing page remains Duty Hours.
+[PASS] My Attendance opens as the active view.
+[PASS] Exactly the signed-in member's attendance rows are rendered (3 of 5).
+[PASS] Own name shown; no other member name anywhere in the section.
+[PASS] Row statuses match the stored records (Present / Late / Excused).
+[PASS] The approved LOA session is displayed as Excused.
+[PASS] Attendance rate equals Present+Late over rated sessions (100% over 2).
+[PASS] The section contains no editable field.
+[PASS] The only controls are Refresh and Print.
+[PASS] The module source calls no write API (scan now also covers
+       LSOStorage/localStorage setItem/removeItem, .rpc(, lso_update_state,
+       lso_replace_state).
+[PASS] Live badge reports "Live" once synchronized.
+[PASS] Status line states the record is live/synchronized.
+[PASS] Server scope marker (v85-own-record) visible to diagnostics; feed state = live.
+[PASS] Month filter lists only the months the member has records in.
+[PASS] Month filter narrows the rows to the selected month only.
+[PASS] The printable report renders the same own rows and no other member.
+[PASS] No uncaught browser errors.
+
+---------------------------------------------------------------------
+SCENARIO 1b — V85 LIVE FEED
+---------------------------------------------------------------------
+[PASS] Section shows the seeded own rows first (3).
+[PASS] Browser cache holds only the own rows sent by the scoped loader (3).
+[PASS] Browser cache holds only the activities referenced by the own rows.
+[PASS] An officer files a new record (server side) and the regular
+       synchronization runs: the new own row appears with no click and no
+       reload (rows 3 -> 4).
+[PASS] The new row shows the officer's status, remarks and the activity.
+[PASS] A row filed for another member at the same moment never appears.
+[PASS] Summary cards recount live (Absent = 1, Recorded sessions = 4).
+[PASS] Live badge remains "Live".
+[PASS] The officer corrects the record: the correction is reflected on the
+       next synchronization (Absent -> Excused, remarks updated).
+[PASS] No uncaught browser errors.
+
+Same scenario against the PREVIOUS module (own-attendance-member-info-v1.js
+from V84) — 6/11:
+[FAIL] New own record appears without any user action
+[FAIL] The new row shows the officer status, remarks, and the activity
+[FAIL] Summary cards recount live
+[FAIL] Live badge remains "Live"           (badge did not exist)
+[FAIL] A corrected record is reflected on the next synchronization
+-> the previous module rendered before the operations module refreshed its
+   copy (140 ms debounce) and then suppressed the re-render as "unchanged".
+
+---------------------------------------------------------------------
+SCENARIO 1c — SHARED DATABASE STILL ON THE PRE-V85 LOADER
+---------------------------------------------------------------------
+[PASS] Pre-V85 loader sends no attendance rows (reproduces the blank).
+[PASS] The section explains the cause and names
+       LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql for the Administrator.
+[PASS] Live badge reports "Database update required".
+[PASS] Diagnostics report feed state server-outdated, server scope null.
+
+---------------------------------------------------------------------
+SCENARIO 2 — TRAINEE/PROBATIONARY, PERMISSION REVOKED
+---------------------------------------------------------------------
+[PASS] Revoked Trainee keeps Duty Hours only in navigation.
+[PASS] Opening the revoked section falls back to Duty Hours.
+[PASS] The section is hidden in the DOM.
+
+---------------------------------------------------------------------
+SCENARIO 3 — ADMINISTRATOR
+---------------------------------------------------------------------
+[PASS] Administrator navigation does not include My Attendance.
+[PASS] Administrator cannot open the Trainee self section.
+[PASS] Role & Permission Center lists "My Attendance" as a module with the
+       read-only, own-record description.
+[PASS] No uncaught browser errors.
+
+---------------------------------------------------------------------
+SCENARIO 4 — PERMISSION CENTER ROLE LOCKING
+---------------------------------------------------------------------
+[PASS] Trainee/Probationary: selectable and granted in the working copy.
+[PASS] Membership, General Secretary, Staff Account: locked.
+
+---------------------------------------------------------------------
+OTHER
+---------------------------------------------------------------------
+[PASS] node predeploy-integrity-v69.js — no new failure; the two remaining
+       legacy "V72" string checks were already failing on main.

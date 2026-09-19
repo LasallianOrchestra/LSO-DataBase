@@ -1,0 +1,57 @@
+LSO MY ATTENDANCE LIVE FEED V85
+FILE MANIFEST — UPLOAD LIST
+
+NEW FILES — SHIPPED
+- LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql
+    the required Supabase patch (run in the SQL Editor BEFORE uploading)
+- SELF_ATTENDANCE_LIVE_FEED_V85_GUIDE.txt
+- BUILD_INFO_SELF_ATTENDANCE_LIVE_V85.txt
+- TEST_RESULTS_SELF_ATTENDANCE_LIVE_V85.txt
+- FILE_MANIFEST_SELF_ATTENDANCE_LIVE_V85.txt
+
+UPDATED FILES — SHIPPED
+- own-attendance-member-info-v1.js
+    V85 live feed: reads own rows from the synchronized cache, Live badge and
+    status refreshed on every heartbeat, re-render on view activation, server
+    patch diagnostic, Refresh pulls the newest copy; still read-only
+- index.html
+    Live badge (#ownAttendanceLiveBadge) next to the Read-only badge, updated
+    copy, cache-busting -> ?v=20260919-self-attendance-live-v85 on:
+    own-attendance-member-info-v1.js, lso-ui-bundle-v73.css,
+    lso-system-core-v4.js, pwa-enterprise-v41.js
+- lso-ui-bundle-v73.css
+    .own-attendance-badges / .own-attendance-live-badge (pulse, reduced-motion
+    safe), status-note colours for server-outdated / offline
+- lso-system-core-v4.js
+    version block: app 8.3.1 / build 2026.09.19-self-attendance-live-v85.1 /
+    cache lso-enterprise-v85-self-attendance-live /
+    databaseInstaller LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql
+    schemaTarget deliberately unchanged (still 013_role_sync_interview_v82)
+- service-worker-enterprise-v41.js
+    CACHE_VERSION -> 'lso-website-v20260919-self-attendance-live-v85'
+- service-worker.js
+    CACHE_VERSION -> 'lso-website-v20260919-self-attendance-live-v85' (mirrored)
+- pwa-enterprise-v41.js
+    ACTIVE_CACHE_MARKER -> 'self-attendance-live-v85'
+
+UPDATED FILES — AUDIT (not served to users)
+- self-attendance-audit/harness.js
+    Supabase mock now mirrors the real role-scoped lso_get_state (v85) and the
+    pre-V85 loader (legacy); new scenarios `live` and `legacy`; stronger
+    no-write-API source scan
+- self-attendance-audit/README.md
+
+NOT CHANGED (deliberately)
+- duty-hours-member-info-v14.js and the Duty Hours workflow.
+- The permission model, role defaults, Role & Permission Center, and every
+  saved role selection.
+- All operational data (accounts, members, attendance, duty hours, monthly
+  reports, settings, activity log, recovery points).
+
+INSTALL ORDER
+1. Run LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql in the Supabase SQL Editor and
+   confirm the verification row reports result = PASS.
+2. Upload every file above (keep the exact names).
+3. Commit, wait for the GitHub Pages deployment, then press Ctrl+F5.
+4. Link each Trainee/Probationary account to its member (Accounts), sign in as
+   one of them and open My Attendance: badge "Live", rows filled.
