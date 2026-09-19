@@ -65,7 +65,7 @@
     },
     trainee: {
       label: 'Trainee / Probationary Self Service', landing: 'dutyHoursView',
-      views: ['dutyHoursView'], actions: ['selfDutyPunch','manageAccessibility'], groups: []
+      views: ['dutyHoursView','ownAttendanceView'], actions: ['selfDutyPunch','manageAccessibility'], groups: []
     }
   });
 

@@ -1,0 +1,120 @@
+LSO SELF-ATTENDANCE MONITORING (V84)
+VALIDATION RESULTS
+Date: 2026-09-19
+
+RESULT: 32/32 INTERFACE CHECKS PASSED
+RESULT: 28/28 DATABASE MIGRATION CHECKS PASSED
+
+Method (interface): the real production page (index.html) was loaded with the
+real scripts in a headless DOM, signed in through the real login form against
+the Supabase RPC shim, and driven as three different accounts. The seeded
+database gave the signed-in Trainee three attendance records (Present, Late,
+Excused/LOA) while two other members held two further records, so any leak of
+another member's row would fail the run. Harness: self-attendance-audit/harness.js
+Reproduce: node self-attendance-audit/harness.js
+
+Method (database): LSO_SELF_ATTENDANCE_MONITORING_V84.sql was executed on a real
+PostgreSQL server through the exact V82 -> V84 sequence, including an
+already-saved Trainee/Probationary configuration, a removed grant, and a re-run
+of the patch. Harness: the embedded-postgres runner documented in the guide.
+
+---------------------------------------------------------------------
+BEFORE THE CHANGE (same interface harness)
+---------------------------------------------------------------------
+[FAIL] Opening My Attendance was refused: the shell's Trainee view pin allowed
+       Duty Hours only, so the view silently fell back to Duty Hours.
+[FAIL] "No write API referenced" matched the module's own explanatory comments.
+The first failure was a real defect in the shell pin (fixed); the second was a
+harness precision issue (comments are now excluded from the scan).
+
+---------------------------------------------------------------------
+SCENARIO 1 — TRAINEE/PROBATIONARY, MY ATTENDANCE GRANTED
+---------------------------------------------------------------------
+[PASS] Trainee signs in through the real login form.
+[PASS] Navigation exposes exactly Duty Hours and My Attendance.
+[PASS] Landing page remains Duty Hours.
+[PASS] My Attendance opens as the active view.
+[PASS] Exactly the signed-in member's attendance rows are rendered (3 of 5).
+[PASS] The member's own name is shown and no other member name appears anywhere
+       in the section.
+[PASS] Row statuses match the stored records (Present / Late / Excused).
+[PASS] The approved LOA session is displayed as Excused.
+[PASS] Attendance rate equals Present+Late over rated sessions (100% over the
+       2 rated sessions; the Excused/LOA session is excluded).
+[PASS] The section contains no editable field.
+[PASS] The only controls are Refresh and Print.
+[PASS] The module source calls no write API.
+[PASS] Month filter lists only the months the member actually has records in.
+[PASS] Month filter narrows the rows to the selected month only.
+[PASS] The printable report renders the same own rows and no other member.
+[PASS] No uncaught browser errors.
+
+---------------------------------------------------------------------
+SCENARIO 2 — TRAINEE/PROBATIONARY, PERMISSION REVOKED
+---------------------------------------------------------------------
+[PASS] Revoked Trainee keeps Duty Hours only in navigation.
+[PASS] Opening the revoked section falls back to Duty Hours.
+[PASS] The section is hidden in the DOM.
+
+---------------------------------------------------------------------
+SCENARIO 3 — ADMINISTRATOR
+---------------------------------------------------------------------
+[PASS] Administrator navigation does not include My Attendance.
+[PASS] Administrator cannot open the Trainee self section.
+[PASS] Role & Permission Center lists "My Attendance" as a module.
+[PASS] The module description states the read-only, own-record scope.
+[PASS] No uncaught browser errors in the Administrator session.
+
+---------------------------------------------------------------------
+SCENARIO 4 — PERMISSION CENTER ROLE LOCKING
+---------------------------------------------------------------------
+[PASS] Trainee/Probationary: the module card is selectable.
+[PASS] Trainee/Probationary: the module card is granted in the working copy.
+[PASS] Membership: the module card is locked.
+[PASS] General Secretary: the module card is locked.
+[PASS] Staff Account: the module card is locked.
+
+---------------------------------------------------------------------
+DATABASE MIGRATION CHECKS (28/28)
+---------------------------------------------------------------------
+[PASS] V82 state: Trainee has Duty Hours only.
+[PASS] Embedded verification query returns PASS.
+[PASS] Verification: migrationInstalled.
+[PASS] Verification: defaultsIncludeMyAttendance.
+[PASS] Verification: readRpcSupportsMyAttendance.
+[PASS] Verification: saveRpcSupportsMyAttendance.
+[PASS] Verification: traineeDefaultHasMyAttendance.
+[PASS] Verification: otherRoleDefaultsExcludeMyAttendance.
+[PASS] Verification: traineeDefaultHasNoWriteColumns.
+[PASS] Verification: unexpectedRoleGrants empty.
+[PASS] Verification: viewGrantsNoWriteColumn.
+[PASS] Existing Trainee configuration gained My Attendance:
+       ["dutyHoursView","ownAttendanceView"].
+[PASS] Trainee still receives zero write columns: [].
+[PASS] Trainee actions unchanged: ["manageAccessibility","selfDutyPunch"].
+[PASS] Membership payload excludes My Attendance.
+[PASS] General Secretary payload excludes My Attendance.
+[PASS] Staff Account payload excludes My Attendance.
+[PASS] Save guard: a Staff Account row carrying My Attendance is rejected.
+[PASS] Read guard: a stray Membership row carrying My Attendance is filtered.
+[PASS] Trainee save round-trip keeps both modules.
+[PASS] Trainee save writes zero write_column rows.
+[PASS] Re-run is idempotent and does not re-grant a removed module.
+[PASS] Re-run keeps a single migration marker.
+[PASS] Reset restores My Attendance in the Trainee default.
+[PASS] Reset keeps the Duty Hours landing page.
+[PASS] Landing validation is still enforced.
+[PASS] Anonymous execute grants are present on the read/save RPCs.
+[PASS] The read RPC rejects an invalid session.
+
+---------------------------------------------------------------------
+LIMITS OF THIS VALIDATION
+---------------------------------------------------------------------
+- No real browser binary was available in the build environment, so the
+  interface checks ran in a headless DOM. Layout is additionally guarded by the
+  shipped CSS contract and the existing responsive audit suite.
+- The database checks ran on a PostgreSQL instance seeded with the LSO base
+  schema mirror (LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql -> V84), not on the live
+  Supabase project. The patch itself is unchanged by that substitution.
+- Appearance should still be confirmed once, on a real device, after upload:
+  Trainee/Probationary login -> My Attendance.

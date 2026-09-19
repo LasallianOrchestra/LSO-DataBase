@@ -1,0 +1,61 @@
+LSO SELF-ATTENDANCE MONITORING (V84)
+Build: 2026.09.19-self-attendance-v84.1
+Website version: 8.3.0
+Base: LSO Role Sync / Interview permission model (V82, schema 013_role_sync_interview_v82)
+
+Scope:
+- New read-only "My Attendance" section for Trainee/Probationary accounts only.
+- New permission module (ownAttendanceView) under System Administration > Access
+  Control > Account Role > Trainee/Probationary Members.
+- Duty Hours self-service (TIME IN / TIME OUT) is unchanged and remains the
+  Trainee/Probationary landing page.
+
+Database migration: REQUIRED
+- LSO_SELF_ATTENDANCE_MONITORING_V84.sql  (run it before uploading the website)
+- The permission model is unchanged: the server keeps reporting schemaVersion 13
+  / permissionModel 'v82'. The patch only extends the supported module list and
+  the packaged Trainee/Probationary default with the new module.
+
+Security guarantees shipped with this build:
+- Identity-bound: every row in the section is filtered by the signed-in account's
+  linked member id (account.memberId). No URL, query string, or control can widen
+  the scope.
+- Read-only by construction: the section renders no editable field, and the
+  module calls no write API. The permission is a module (view) grant with no
+  matching action, so a role holding it receives zero shared-database write
+  columns.
+- Role-locked: only Trainee/Probationary may hold the module. Enforced in the
+  Supabase read/save functions, in role-access-v6.js, and in the Role &
+  Permission Center (the toggle is locked for every other role).
+- Fail-closed: without the grant the navigation item disappears, the shell
+  refuses to open the section, and the section stays hidden in the DOM.
+
+Active unique website assets:
+- own-attendance-member-info-v1.js      (new module)
+
+Updated website assets:
+- index.html                            (navigation item, section markup, cache strings)
+- lso-ui-bundle-v73.css                 (Trainee workspace lock + section styling)
+- lso-system-core-v4.js                 (packaged Trainee default, version block)
+- role-access-v6.js                     (assignable module + role-restricted view guard)
+- role-permission-center-v39.js         (module definition, role locking)
+- system-enterprise-v2.js               (permission matrix labels, both tables)
+- operations-governance-v61.js          (Trainee/Probationary role template)
+- app-member-information-v5.js          (Trainee view pin + page title)
+- auth.js                               (Trainee navigation allow-list + page title)
+- cloud-staff-v8.js                     (deploy-order compatibility module list)
+- service-worker-enterprise-v41.js      (cache version + precache list)
+- service-worker.js                     (mirrored cache version)
+- pwa-enterprise-v41.js                 (active cache marker)
+
+Documentation:
+- SELF_ATTENDANCE_MONITORING_V84_GUIDE.txt
+- TEST_RESULTS_SELF_ATTENDANCE_V84.txt
+- FILE_MANIFEST_SELF_ATTENDANCE_V84.txt
+- ROLE_PERMISSION_MATRIX.csv            (My Attendance row)
+
+Verification:
+- 32/32 interface checks passed (real page, headless DOM, three account roles).
+- 28/28 database checks passed (real PostgreSQL, V82 -> V84 upgrade path,
+  including an already-saved Trainee configuration, a revoked grant, and a
+  re-run).

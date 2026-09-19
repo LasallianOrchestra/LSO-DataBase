@@ -3602,8 +3602,9 @@ body[data-access-mode="duty-entry"] .account-copy #currentAccountRole { color: #
 .account-row-busy select,
 .account-row-busy button { cursor: progress !important; }
 
-/* A Trainee/Probationary account has one workspace only: Duty Hours. */
-body[data-account-role="Trainee/Probationary"] .view:not(#dutyHoursView),
+/* A Trainee/Probationary account has two workspaces only: Duty Hours (self-service
+   punches) and My Attendance (read-only own attendance record). */
+body[data-account-role="Trainee/Probationary"] .view:not(#dutyHoursView):not(#ownAttendanceView),
 body[data-account-role="Trainee/Probationary"] .notification-center,
 body[data-account-role="Trainee/Probationary"] #staffReadOnlyBanner {
   display: none !important;
@@ -3614,7 +3615,13 @@ body[data-account-role="Trainee/Probationary"] #dutyHoursView {
 body[data-account-role="Trainee/Probationary"] #dutyHoursView:not(.active) {
   display: none;
 }
-body[data-account-role="Trainee/Probationary"] .sidebar .nav-item:not([data-view="dutyHoursView"]) {
+body[data-account-role="Trainee/Probationary"] #ownAttendanceView {
+  display: block;
+}
+body[data-account-role="Trainee/Probationary"] #ownAttendanceView:not(.active) {
+  display: none;
+}
+body[data-account-role="Trainee/Probationary"] .sidebar .nav-item:not([data-view="dutyHoursView"]):not([data-view="ownAttendanceView"]) {
   display: none !important;
 }
 
@@ -14622,4 +14629,95 @@ body[data-theme="night"] .interview-form-panel,body[data-theme="night"] .intervi
     min-width: var(--v44-touch-target, 44px);
     min-height: var(--v44-touch-target, 44px);
   }
+}
+
+/* ==========================================================================
+   V84 — MY ATTENDANCE (TRAINEE/PROBATIONARY SELF-SERVICE, READ-ONLY)
+   The section is a viewing surface only: it renders the signed-in member's own
+   attendance records and offers no editing affordance of any kind.
+   ========================================================================== */
+.own-attendance-header { align-items: flex-start; }
+.own-attendance-identity { margin-bottom: 16px; }
+.own-attendance-readonly-note {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px dashed #cbdcd4;
+  border-radius: 14px;
+  background: #f6faf8;
+  color: #3c4f48;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.own-attendance-readonly-note strong { color: #0f3d2e; }
+.own-attendance-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.own-attendance-metric {
+  border: 1px solid #dfe9e4;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(12, 50, 38, .06);
+}
+.own-attendance-metric p {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #5d6c66;
+}
+.own-attendance-metric strong { display: block; font-size: 22px; color: #0f3d2e; }
+.own-attendance-metric small { display: block; margin-top: 4px; color: #6b7a74; font-size: 11px; line-height: 1.4; }
+.own-attendance-filter { min-width: 210px; }
+.own-attendance-filter select { width: 100%; }
+.own-attendance-status-note { margin: 2px 0 12px; font-size: 12px; line-height: 1.55; color: #5d6c66; }
+.own-attendance-table-wrap { max-height: 62vh; overflow: auto; }
+.own-attendance-table { width: 100%; border-collapse: collapse; }
+.own-attendance-table th,
+.own-attendance-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e6efeb;
+  font-size: 13px;
+  text-align: left;
+  vertical-align: top;
+}
+.own-attendance-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f4f9f7;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #5d6c66;
+}
+.own-attendance-table small { color: #6b7a74; }
+.own-attendance-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.own-attendance-status.is-present { background: #e6f6ee; color: #12704f; }
+.own-attendance-status.is-late { background: #fff4dd; color: #8a5b06; }
+.own-attendance-status.is-absent { background: #fdeaea; color: #9d2b2b; }
+.own-attendance-status.is-excused { background: #eef1fb; color: #3b4d9c; }
+.own-attendance-status.is-not-required { background: #eef3f1; color: #4f625b; }
+.own-attendance-status.is-not-recorded { background: #f3f3f3; color: #666; }
+.own-attendance-empty { margin-top: 4px; }
+@media (max-width: 720px) {
+  .own-attendance-summary { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+  .own-attendance-filter { min-width: 0; width: 100%; }
+  .own-attendance-table th,
+  .own-attendance-table td { padding: 9px 10px; font-size: 12px; }
 }

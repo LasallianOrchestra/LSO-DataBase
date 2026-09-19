@@ -1,0 +1,81 @@
+LSO SELF-ATTENDANCE MONITORING V84
+FILE MANIFEST — UPLOAD LIST
+
+NEW FILES — SHIPPED (must be uploaded to the GitHub Pages publishing root)
+- own-attendance-member-info-v1.js
+    the read-only "My Attendance" module (Trainee/Probationary only)
+- LSO_SELF_ATTENDANCE_MONITORING_V84.sql
+    the required Supabase patch (run in the SQL Editor BEFORE uploading)
+- SELF_ATTENDANCE_MONITORING_V84_GUIDE.txt
+- BUILD_INFO_SELF_ATTENDANCE_V84.txt
+- TEST_RESULTS_SELF_ATTENDANCE_V84.txt
+- FILE_MANIFEST_SELF_ATTENDANCE_V84.txt
+
+UPDATED FILES — SHIPPED
+- index.html
+    navigation item "My Attendance" after Duty Hours (data-view=ownAttendanceView)
+    new <section id="ownAttendanceView"> before the Accounts view
+    cache-busting -> ?v=20260919-self-attendance-v84 on: lso-ui-bundle-v73.css,
+    lso-system-core-v4.js, role-access-v6.js, app-member-information-v5.js,
+    auth.js, cloud-staff-v8.js, own-attendance-member-info-v1.js,
+    system-enterprise-v2.js, role-permission-center-v39.js,
+    operations-governance-v61.js, pwa-enterprise-v41.js
+- lso-ui-bundle-v73.css
+    Trainee/Probationary workspace lock now permits #ownAttendanceView and its
+    navigation item; appended .own-attendance-* section styling
+- lso-system-core-v4.js
+    packaged Trainee/Probationary default now includes ownAttendanceView
+    version block: app 8.3.0 / build 2026.09.19-self-attendance-v84.1
+    schemaTarget deliberately unchanged (still 013_role_sync_interview_v82)
+- role-access-v6.js
+    ownAttendanceView added to the assignable modules; new role-restricted view
+    guard (Trainee/Probationary only) applied when server permissions are loaded
+- role-permission-center-v39.js
+    "My Attendance" module definition; the toggle is locked for every role
+    except Trainee/Probationary
+- system-enterprise-v2.js
+    permission matrix labels updated in both tables
+- operations-governance-v61.js
+    Trainee/Probationary role template now lists both modules
+- app-member-information-v5.js
+    Trainee view pin accepts My Attendance; page title map entry
+- auth.js
+    Trainee navigation allow-list accepts My Attendance; trainee page title
+- cloud-staff-v8.js
+    deploy-order compatibility module list now includes ownAttendanceView so a
+    website deployed before the SQL patch still saves the role safely
+- service-worker-enterprise-v41.js
+    CACHE_VERSION -> 'lso-website-v20260919-self-attendance-v84'
+    precache list now includes './own-attendance-member-info-v1.js'
+- service-worker.js
+    CACHE_VERSION -> 'lso-website-v20260919-self-attendance-v84' (mirrored)
+- pwa-enterprise-v41.js
+    ACTIVE_CACHE_MARKER -> 'self-attendance-v84'
+- ROLE_PERMISSION_MATRIX.csv
+    new row: Module,My Attendance,Not allowed,Not allowed,Not allowed,Not allowed,Allowed
+
+NEW FILES — AUDIT (not served to users)
+- self-attendance-audit/harness.js
+    V84 interface harness: 32 checks over four scenarios (granted, revoked,
+    administrator, permission-center locking)
+- self-attendance-audit/README.md
+- self-attendance-audit/package.json / package-lock.json
+    the harness's own jsdom dependency (node_modules is not uploaded)
+
+NOT CHANGED (deliberately)
+- duty-hours-member-info-v14.js and the Duty Hours workflow: untouched, so the
+  Trainee self TIME IN / TIME OUT workspace keeps working exactly as before.
+- The permission model: the server keeps reporting schemaVersion 13 /
+  permissionModel 'v82'; lso_sync_health_v82 and lso_reset_role_permissions are
+  left intact.
+- All operational data (accounts, members, attendance, duty hours, monthly
+  reports, settings, activity log, recovery points) — the patch only extends the
+  supported module lists and the packaged Trainee/Probationary default.
+
+INSTALL ORDER
+1. Run LSO_SELF_ATTENDANCE_MONITORING_V84.sql in the Supabase SQL Editor and
+   confirm the verification row reports result = PASS.
+2. Upload every file above (keep the exact names).
+3. Commit, wait for the GitHub Pages deployment, then press Ctrl+F5.
+4. Confirm the module under System Administration > Access Control > Account
+   Role > Trainee/Probationary Members, then test with a Trainee account.

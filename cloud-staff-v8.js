@@ -25,7 +25,12 @@
   // without losing an Interview grant. Once the server reports permission schema 13+, the
   // overlay is ignored and Supabase is the single source of truth.
   const PERMISSION_OVERLAY_SETTINGS_KEY = '__lso_role_permission_overlay_v79';
-  const EXTENDED_PERMISSION_VIEWS = new Set(['interviewView']);
+  // Modules introduced after the legacy permission model (Interview in V74, My
+  // Attendance in V84). Listing them lets the compatibility retry below still
+  // save the role's remaining modules when the deployed database predates them,
+  // while the synchronized Settings overlay retains the new grant until a
+  // native permission schema is in place.
+  const EXTENDED_PERMISSION_VIEWS = new Set(['interviewView', 'ownAttendanceView']);
   const PERMISSION_ROLES = new Set(['Membership', 'General Secretary', 'Staff Account', 'Trainee/Probationary']);
   const ADMIN_OWNED_SETTINGS_KEYS = [MAINTENANCE_SETTINGS_KEY, PERMISSION_OVERLAY_SETTINGS_KEY];
   const KEY_TO_COLUMN = {
@@ -1543,11 +1548,11 @@
     };
     const nextSettings = { ...settings, [PERMISSION_OVERLAY_SETTINGS_KEY]: nextOverlay };
     if (!storageSetItem('lso_system_settings_v2', JSON.stringify(nextSettings))) {
-      throw new Error('The Interview permission could not be written to synchronized Settings. No permission update was confirmed.');
+      throw new Error('The extended module permission could not be written to synchronized Settings. No permission update was confirmed.');
     }
     await flushDirty();
     if (dirtyVersions.has('settings') || conflicts.has('settings')) {
-      throw new Error('The Interview permission is waiting for Settings synchronization. Resolve the shared-database sync issue, then save the role again.');
+      throw new Error('The extended module permission is waiting for Settings synchronization. Resolve the shared-database sync issue, then save the role again.');
     }
     return nextOverlay;
   }
