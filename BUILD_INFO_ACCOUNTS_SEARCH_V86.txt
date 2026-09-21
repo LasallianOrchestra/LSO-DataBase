@@ -59,7 +59,7 @@ Updated website assets:
 - responsive-audit/README.md               (suite documentation)
 
 New verification asset:
-- responsive-audit/accounts-search-check.js (37 behaviour checks)
+- responsive-audit/accounts-search-check.js (43 behaviour checks)
 
 Not changed (deliberately):
 - management-attendance-member-info-v4.js (owns the table, the actions and the

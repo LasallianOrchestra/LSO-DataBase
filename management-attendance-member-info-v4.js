@@ -1490,6 +1490,37 @@
     account.rejectedBy = '';
   }
 
+  /* A Trainee/Probationary account may still carry a member link whose record
+     no longer exists in the shared member directory (a directory replaced by a
+     restore, or written by an older client). public.lso_save_accounts()
+     validates EVERY Trainee/Probationary row in the payload, so ONE stale link
+     aborts the whole save — the Administrator then sees "The selected linked
+     member record could not be found." while editing an unrelated account, and
+     no role change is saved. Clear orphaned links before saving; because the
+     link changed, the database returns that account to Pending, which is the
+     correct review path. */
+  function sanitizeStaleMemberLinks(accounts) {
+    const directory = window.LSOApp?.getMembers?.() || window.LSOOperations?.getMembers?.() || [];
+    if (!directory.length) return [];
+    const known = new Set(directory.map((member) => String(member.id)));
+    const cleared = [];
+    accounts.forEach((account) => {
+      if (!account || account.isDefault) return;
+      const linked = String(account.memberId || '');
+      if (account.role !== 'Trainee/Probationary' || !linked || known.has(linked)) return;
+      account.memberId = '';
+      if (accountApprovalStatus(account) === 'Approved') returnAccountToPending(account);
+      cleared.push(account);
+    });
+    return cleared;
+  }
+
+  function noteClearedStaleLinks(cleared) {
+    if (!cleared || !cleared.length) return;
+    const names = cleared.map((account) => `@${account.username}`).join(', ');
+    toast(`${names} ${cleared.length === 1 ? 'was' : 'were'} returned to Pending because the linked member record no longer exists in Members. Review and re-link before approving.`, true);
+  }
+
   function setAccountRowBusy(accountId, busy) {
     const row = [...document.querySelectorAll('[data-account-row]')]
       .find((node) => node.dataset.accountRow === accountId);
@@ -1598,6 +1629,7 @@
   async function saveAccountRole(accountId, role) {
     if (!isAdmin()) return;
     const accounts = window.LSOAuth?.loadAccounts?.() || [];
+    const clearedStale = sanitizeStaleMemberLinks(accounts);
     const account = accounts.find((item) => item.id === accountId);
     if (!account || account.isDefault) return;
     const previousRole = normalizeAccountRole(account.role);
@@ -1618,6 +1650,7 @@
     }
     logActivity('Changed account role', 'Accounts', `${account.username} → ${account.role}${wasApproved ? ' • returned to Pending' : ''}`);
     renderAccounts();
+    noteClearedStaleLinks(clearedStale);
     if (wasApproved) {
       toast(`@${account.username} was returned to Pending. Review the new role and approve the account again.`);
     } else if (account.role === 'Trainee/Probationary') {
@@ -1630,6 +1663,7 @@
   async function saveAccountMemberLink(accountId, memberId) {
     if (!isAdmin()) return;
     const accounts = window.LSOAuth?.loadAccounts?.() || [];
+    const clearedStale = sanitizeStaleMemberLinks(accounts);
     const account = accounts.find((item) => item.id === accountId);
     if (!account || account.isDefault || account.role !== 'Trainee/Probationary') return;
     const previousMemberId = String(account.memberId || '');
@@ -1650,6 +1684,7 @@
     }
     logActivity('Linked duty-hours account', 'Accounts', `${account.username} → ${member?.fullName || 'No member linked'}${wasApproved ? ' • returned to Pending' : ''}`);
     renderAccounts();
+    noteClearedStaleLinks(clearedStale);
     if (wasApproved && previousMemberId !== account.memberId) {
       toast(`@${account.username} was returned to Pending because its linked member changed. Approve it again after review.`);
     } else {
@@ -1660,6 +1695,7 @@
   async function accountAction(action, accountId) {
     if (!isAdmin()) return;
     const accounts = window.LSOAuth?.loadAccounts?.() || [];
+    const clearedStale = sanitizeStaleMemberLinks(accounts);
     const index = accounts.findIndex((item) => item.id === accountId);
     const account = accounts[index];
     if (!account || account.isDefault || account.username === currentAccount()?.username) return;
@@ -1702,6 +1738,7 @@
       }
       logActivity('Approved account registration', 'Accounts', `${account.username} • ${account.role}${linkedMember ? ` • ${linkedMember.fullName}` : ''}`);
       renderAccounts();
+      noteClearedStaleLinks(clearedStale);
       toast(account.role === 'Trainee/Probationary'
         ? `@${account.username} is approved. Only Duty Hours will be visible, and submissions will require Administrator or Membership approval.`
         : `@${account.username} is approved as ${account.role}. Access is limited to that role's assigned modules.`);
@@ -1723,6 +1760,7 @@
       }
       logActivity('Rejected account registration', 'Accounts', account.username);
       renderAccounts();
+      noteClearedStaleLinks(clearedStale);
       toast(`@${account.username} was rejected.`);
       return;
     }
@@ -1737,6 +1775,7 @@
       }
       logActivity(account.disabled ? 'Disabled account' : 'Enabled account', 'Accounts', account.username);
       renderAccounts();
+      noteClearedStaleLinks(clearedStale);
       toast(`Account ${account.disabled ? 'disabled' : 'enabled'}.`);
       return;
     }

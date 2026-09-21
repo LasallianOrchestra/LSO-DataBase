@@ -150,7 +150,7 @@ Account Management panel:
   - TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt
   - FILE_MANIFEST_ACCOUNTS_SEARCH_V86.txt
   - responsive-audit/accounts-search-check.js
-      Permanent behaviour suite for the console (37 checks, see §7).
+      Permanent behaviour suite for the console (43 checks, see §8).
 
   UPDATED
   - index.html
