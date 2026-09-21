@@ -55,7 +55,7 @@
 <link href="favicon-32x32.png?v=20260717-logos" rel="icon" sizes="32x32" type="image/png"/>
 <link href="apple-touch-icon.png?v=20260721-pwa-v1" rel="apple-touch-icon"/>
 <link href="manifest.webmanifest?v=20260814-system-refresh-v73" rel="manifest"/>
-<link href="lso-ui-bundle-v73.css?v=20260919-self-attendance-live-v85" rel="stylesheet"/>
+<link href="lso-ui-bundle-v73.css?v=20260921-accounts-search-v86" rel="stylesheet"/>
 <link href="members-directory-print-v1.css?v=20260915-print-directory-v2" rel="stylesheet"/>
 <style id="lso-login-color-critical-v6">
 .auth-card .auth-heading p:not(.eyebrow){color:#42584E!important;opacity:1!important;-webkit-text-fill-color:#42584E!important}.auth-card .auth-heading h2{color:#0B3D2E!important}.auth-card .field>span{color:#2F453B!important}.auth-card input::placeholder{color:#66736D!important;opacity:1!important}.auth-tab{color:#4F6259!important}.auth-tab.active{color:#0B3D2E!important}.auth-submit{color:#fff!important}
@@ -1009,6 +1009,35 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <section class="view" id="accountsView">
 <article class="panel accounts-workspace-panel">
 <div class="panel-header stack-mobile"><div><p class="eyebrow">Administrator Only</p><h3>Account Management</h3><p class="panel-subtitle">Review registrations and choose each account role before approval. The Administrator can customize every non-Administrator role's landing page, visible modules, Attendance calendars, and action permissions in System Administration → Role &amp; Permission Center.</p></div><div class="accounts-refresh-control"><span id="accountsRefreshStatus" role="status">Loaded when this page opens</span><button class="button button-secondary" id="refreshAccountsButton" type="button">Refresh Accounts</button></div></div>
+<div aria-label="Find and filter accounts" class="accounts-search-console" id="accountsSearchConsole" role="search">
+<div class="accounts-search-top">
+<label class="field search-field accounts-search-field"><span>Find an account</span>
+<span class="accounts-search-input-wrap">
+<svg aria-hidden="true" class="accounts-search-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"></circle><path d="m16.2 16.2 4.3 4.3"></path></svg>
+<input aria-controls="accountsTableBody" aria-describedby="accountsSearchHint" autocomplete="off" id="accountSearchInput" placeholder="Name, username, email, role, or linked member…" spellcheck="false" type="search"/>
+<button aria-label="Clear the account search" class="accounts-search-clear hidden" id="accountSearchClear" type="button">✕</button>
+<kbd aria-hidden="true" class="accounts-search-kbd" id="accountsSearchKbd">Ctrl K</kbd>
+</span>
+</label>
+<div class="accounts-search-filters">
+<label class="field"><span>Role</span><select id="accountsRoleFilter"><option value="">All roles</option></select></label>
+<label class="field"><span>Sort by</span><select id="accountsSortSelect"><option value="priority">Priority — needs action</option><option value="name">Account name (A–Z)</option><option value="role">Role (A–Z)</option><option value="requested">Newest request first</option><option value="approved">Recently approved</option><option value="login">Most recent sign-in</option></select></label>
+</div>
+</div>
+<div aria-label="Filter accounts by access status" class="accounts-status-tabs" id="accountsStatusTabs" role="group">
+<button aria-controls="accountsTableBody" aria-pressed="true" class="accounts-filter-tab active" data-account-status="all" type="button">All accounts <span class="accounts-filter-count" data-account-count="all">0</span></button>
+<button aria-controls="accountsTableBody" aria-pressed="false" class="accounts-filter-tab" data-account-status="pending" type="button">Needs approval <span class="accounts-filter-count" data-account-count="pending" data-tone="gold">0</span></button>
+<button aria-controls="accountsTableBody" aria-pressed="false" class="accounts-filter-tab" data-account-status="active" type="button">Active <span class="accounts-filter-count" data-account-count="active">0</span></button>
+<button aria-controls="accountsTableBody" aria-pressed="false" class="accounts-filter-tab" data-account-status="rejected" type="button">Rejected <span class="accounts-filter-count" data-account-count="rejected">0</span></button>
+<button aria-controls="accountsTableBody" aria-pressed="false" class="accounts-filter-tab" data-account-status="disabled" type="button">Disabled <span class="accounts-filter-count" data-account-count="disabled">0</span></button>
+</div>
+<div class="accounts-search-footer">
+<p aria-live="polite" class="accounts-search-status" id="accountsSearchStatus" role="status">Loading the account list…</p>
+<button class="text-button accounts-search-reset hidden" id="accountSearchReset" type="button">Reset filters</button>
+</div>
+<p class="accounts-search-hint" id="accountsSearchHint">Search as you type. Press Enter to jump to the first match, Esc to clear, or Ctrl + K to return to this field.</p>
+<span aria-live="polite" class="sr-only" id="accountsSearchAnnouncement" role="status"></span>
+</div>
 <div class="account-security-note"><strong>Approval workflow:</strong> Choose the account role before clicking Approve. Role access is controlled centrally in <b>System Administration → Role &amp; Permission Center</b>. Trainee/Probationary accounts still require a linked current member before approval.</div>
 <div class="table-wrap"><table><thead><tr><th>Account</th><th>Username / Optional Email</th><th>Role Before Approval</th><th>Linked Trainee/Probationary Member</th><th>Requested</th><th>Access Status</th><th>Approved</th><th class="actions-column">Actions</th></tr></thead><tbody id="accountsTableBody"></tbody></table></div>
 </article>
@@ -1315,7 +1344,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js?v=20260717-1605"></script>
 <script src="branding-print-fullbleed-v31.js?v=20260726-fullbleed-print-v31"></script>
-<script src="lso-system-core-v4.js?v=20260919-self-attendance-live-v85"></script>
+<script src="lso-system-core-v4.js?v=20260921-accounts-search-v86"></script>
 <script src="runtime-stability-v54.js?v=20260805-runtime-stability-v54"></script>
 <script src="role-access-v6.js?v=20260919-self-attendance-v84"></script>
 <script src="cloud-staff-v8.js?v=20260919-self-attendance-v84"></script>
@@ -1325,6 +1354,7 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="auth.js?v=20260919-self-attendance-v84"></script>
 <script src="maintenance-mode-v62.js?v=20260807-maintenance-gate-v62"></script>
 <script src="management-attendance-member-info-v4.js?v=20260916-attendance-input-stability-v83"></script>
+<script src="accounts-search-console-v86.js?v=20260921-accounts-search-v86"></script>
 <script src="ui-enhancements.js?v=20260913-responsive-fixes-v75"></script>
 <script src="dashboard-enhancements.js?v=20260814-system-refresh-v73"></script>
 <script src="renderall-compat-v25.js?v=20260725-mobile-cache-v25"></script>
@@ -1352,6 +1382,6 @@ html[data-lso-theme="night"] .auth-card{background:#101c17!important;color:#edf6
 <script src="role-permission-center-v39.js?v=20260919-self-attendance-v84"></script>
 <script src="operations-governance-v61.js?v=20260919-self-attendance-v84"></script>
 <script src="members-directory-print-v1.js?v=20260915-print-directory-v1"></script>
-<script src="pwa-enterprise-v41.js?v=20260919-self-attendance-live-v85"></script>
+<script src="pwa-enterprise-v41.js?v=20260921-accounts-search-v86"></script>
 </body>
 </html>

@@ -1,0 +1,84 @@
+LSO ACCOUNTS SEARCH CONSOLE (V86)
+Build: 2026.09.21-accounts-search-v86.1
+Website version: 8.3.2
+Base: V85 My Attendance live feed (permission model unchanged: V82,
+      schema 013_role_sync_interview_v82)
+
+Scope:
+- Adds a professional search console to Accounts → Account Management so a
+  specific account can be found and acted on immediately, however many accounts
+  the system holds: instant find-an-account search (name, username, email, role,
+  linked member, approving officer, dates and plain-language status words, all
+  accent-insensitive), status tabs with live counts (All / Needs approval /
+  Active / Rejected / Disabled), a role filter, six sort orders, match
+  highlighting, an explicit empty state with a reset, and full keyboard support
+  (Enter jumps to the first match and focuses its controls when it is the only
+  one, Esc clears, Ctrl/⌘ + K returns to the field).
+- Sorting and filtering only move or hide the rows the existing Accounts module
+  already rendered, so every approval action, role select and linked-member
+  select keeps working exactly as before.
+
+Database migration: NONE REQUIRED
+- V86 is a website-only change. It reads the account list through the existing
+  window.LSOAuth.loadAccounts() (public.lso_list_accounts -> public.lso_account_json,
+  the RPCs the Accounts page already calls) and writes nothing. No SQL file is
+  shipped or needed.
+- Every searched field is already returned by the installed function (id,
+  username, email, displayName, role, memberId, approvalStatus, disabled,
+  isDefault, requestedAt, approvedAt, approvedBy, rejectedAt, rejectedBy,
+  createdAt, updatedAt) plus the shared member record. Console settings live in
+  sessionStorage, not the database.
+- lastLoginAt is the one database-dependent field: the current installer does not
+  record sign-ins, so the console detects it at run time — the "Most recent
+  sign-in" sort option is hidden (never a dead choice) and sign-in keywords match
+  nothing, while everything else works unchanged. An optional future patch could
+  add last_login_at to lso_accounts / lso_login() / lso_account_json(); the
+  website already handles both states.
+
+Security guarantees:
+- Read-only by construction: the console never calls saveAccounts, deleteAccount
+  or any shared-state write, and never mutates an account object.
+- No permission, role default, landing page, or write path is touched.
+- Fail closed: the console is only rendered when the Accounts table actually
+  contains account rows (i.e. an authorised Administrator). Every other role
+  sees the existing "Administrator access required" state and no console.
+- Deep-links from the Action Center clear the console filters before the routing
+  handler runs, so a filtered view can never hide the account being reviewed.
+
+Active unique website assets:
+- accounts-search-console-v86.js          (new; precached by the service worker)
+
+Updated website assets:
+- index.html                               (console markup + cache strings)
+- lso-ui-bundle-v73.css                    (V86 layer appended)
+- lso-system-core-v4.js                    (version block)
+- service-worker-enterprise-v41.js         (precache + cache version)
+- service-worker.js                        (mirrored cache version)
+- pwa-enterprise-v41.js                    (active cache marker)
+- responsive-audit/package.json            (npm run check-accounts)
+- responsive-audit/README.md               (suite documentation)
+
+New verification asset:
+- responsive-audit/accounts-search-check.js (37 behaviour checks)
+
+Not changed (deliberately):
+- management-attendance-member-info-v4.js (owns the table, the actions and the
+  delegated listeners), every other module, the permission model, the Role &
+  Permission Center, and all operational data.
+
+Documentation:
+- ACCOUNTS_SEARCH_CONSOLE_V86_GUIDE.txt
+- TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt
+- FILE_MANIFEST_ACCOUNTS_SEARCH_V86.txt
+
+Verification:
+- 43/43 behaviour checks passed: rendering and counts; name, username,
+  multi-term and status-word search; highlighting; clear; status tabs; role
+  filter; empty state and reset; all six sort orders; Enter jump + focus
+  hand-off; Esc; Ctrl + K; Action Center deep-link reset; row controls
+  preserved; zero console errors; night appearance; 390px layout (0 overflow,
+  every control >= 44px, 16px input floor, snap-scrolling tabs); non-
+  Administrator lock-out.
+- Five defects found and fixed during validation (observer feedback loop,
+  sort/base-order confusion, sub-44px tablet touch target, phone clear-button
+  overlap, night !important conflict) — see TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt.

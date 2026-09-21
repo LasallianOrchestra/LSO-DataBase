@@ -1,0 +1,213 @@
+LASALLIAN SYMPHONY ORCHESTRA — ORCHESTRA MANAGEMENT SYSTEM
+ACCOUNTS SEARCH CONSOLE (V86) — GUIDE, BEHAVIOUR & VERIFICATION
+Build: 2026.09.21-accounts-search-v86.1     Website version 8.3.2
+Database patch: NONE REQUIRED (website-only change)
+==============================================================================
+
+1. THE REQUEST
+------------------------------------------------------------------------------
+"Accounts — Account Management. Can you create a search button/tab so that I
+can easily determine the accounts, due to many accounts included in the system,
+the search bar or button can make an easy access to the accounts that I need
+to — and actions. Make it professionally made."
+
+Before V86 the Account Management page rendered every registered account in one
+long scrollable table. Finding one person meant scrolling and reading row after
+row, and the approval queue (accounts still waiting for a role + Approve) was
+buried somewhere inside the list.
+
+2. DATABASE — DOES IT NEED A SUPABASE SCRIPT?
+------------------------------------------------------------------------------
+NO. V86 is a website-only change. There is no SQL file to run and none is
+created by this release.
+
+  Why: the console reads the account list through the RPCs the Accounts page
+  already uses — public.lso_list_accounts() -> public.lso_account_json() — and
+  the shared member directory that the signed-in Administrator already has in
+  memory. It makes no RPC call of its own and writes nothing.
+
+  Every field it searches is already returned by the installed function:
+       id, username, email, displayName, role, memberId, approvalStatus,
+       disabled, isDefault, requestedAt, approvedAt, approvedBy, rejectedAt,
+       rejectedBy, createdAt, updatedAt
+  and by the member record: fullName, membershipId, studentNumber, outlook,
+  orchestraSection, primaryInstrument, periodGroup.
+
+  The console's stored settings (status tab, role filter, sort order) live in
+  the browser's sessionStorage — not in the database.
+
+  One field is database-dependent: LAST SIGN-IN. public.lso_account_json()
+  exposes lastLoginAt only where the database has been patched to record it
+  (the current installer does not have a last_login_at column). V86 therefore
+  detects it at run time:
+    - database tracks sign-ins  -> the "Most recent sign-in" sort option is
+      offered and the keywords "never signed in" / "no login yet" work;
+    - database does not         -> that sort option is HIDDEN (not shown as a
+      dead choice), a request for it falls back to Priority, the sign-in
+      keywords simply match nothing, and every other search and sort behaves
+      exactly as documented.
+  Nothing has to be run either way.
+
+  If you later want the sign-in sort to be meaningful, that is a separate,
+  optional database patch (add last_login_at to public.lso_accounts, set it in
+  public.lso_login(), and add 'lastLoginAt' to public.lso_account_json()).
+  Ask and it can be prepared and tested as its own release — the website already
+  handles both states, so the patch would be additive with no website change.
+
+3. WHAT WAS BUILT
+------------------------------------------------------------------------------
+A search console sits directly above the accounts table, inside the existing
+Account Management panel:
+
+  * FIND AN ACCOUNT — instant search as you type. It looks at:
+      - account display name          - username            - optional email
+      - role                          - linked member (name, membership ID,
+                                        student number, Outlook, section,
+                                        instrument, period group)
+      - approving / rejecting officer - request, approval and last sign-in dates
+      - plain-language status words ("pending", "awaiting", "disabled",
+        "deactivated", "never signed in", …)
+    Typing is accent-insensitive ("munoz" finds "Muñoz") and space-separated
+    terms must all match, so "beatriz lacsamana" finds exactly that account.
+    Every match is highlighted in the table.
+
+  * STATUS TABS WITH LIVE COUNTS — All accounts / Needs approval / Active /
+    Rejected / Disabled. The counts are computed from the accounts the page is
+    already showing, so the approval queue is always one click away.
+
+  * ROLE FILTER — every role that exists in the account list plus the roles the
+    system defines ("All roles" by default).
+
+  * SORT — Priority (the same action-first order Account Management already
+    uses: pending accounts first, newest request first), Account name (A–Z),
+    Role (A–Z), Newest request first, Recently approved, Most recent sign-in.
+    Sorting only re-orders the rows that are already rendered; it never hides or
+    rebuilds them.
+
+  * SUMMARY LINE — "7 of 42 accounts shown • Status: Needs approval • Role:
+    Staff Account • Search: "cruz" • Press Enter to jump to the first match", so
+    the officer always knows exactly what the table is showing.
+
+  * EMPTY STATE — when nothing matches, an explicit panel states the active
+    filter, confirms that nothing was changed, and offers "Clear search and
+    filters" instead of leaving a blank table.
+
+  * KEYBOARD — Enter jumps to (and flashes) the first match, and moves focus
+    onto that account's controls when exactly one account matches; Esc clears
+    the search (or the filters); Ctrl + K (⌘ + K on Apple devices) returns to
+    the search field from anywhere on the page; the status tabs support
+    ArrowLeft / ArrowRight / Home / End. The shortcut is printed next to the
+    field, and all of it is announced through polite live regions.
+
+  * RESET FILTERS — a one-click return to the full list; the button only appears
+    while a filter is active.
+
+4. WHY IT IS SAFE
+------------------------------------------------------------------------------
+  * READ ONLY. The console never calls saveAccounts / deleteAccount and never
+    mutates an account object. It reads the list through
+    window.LSOAuth.loadAccounts() (already a defensive copy).
+  * management-attendance-member-info-v4.js is NOT modified. renderAccounts()
+    still owns the markup, the role and linked-member selects, the
+    Approve / Reject / Enable / Delete buttons, and the delegated change/click
+    listeners on #accountsTableBody.
+  * No row is ever rebuilt or removed. Filtering only toggles the
+    .accounts-row-filtered-out class (display: none), so every action keeps its
+    listener, its selected value and its busy state; sorting only moves the same
+    <tr> nodes. Nothing is reordered while a row has focus, so an officer's
+    dropdown can never jump away mid-edit.
+  * Alert deep-links keep working. "Review Account" in the Action Center clears
+    the console filters in the capture phase, before the routing handler starts
+    its 60 ms refresh + scroll-to-row, so the targeted account can never stay
+    hidden behind a stale filter.
+  * Permission model untouched: no role, permission, landing-page or database
+    write path is involved. The console appears only when the Accounts table
+    actually has data rows (i.e. an authorised Administrator) and stays hidden
+    otherwise — including for every other role.
+
+5. HOW TO USE IT
+------------------------------------------------------------------------------
+  1. Open Accounts → Account Management.
+  2. Type any part of a name, username, email, role or linked member in
+     "Find an account". The table narrows as you type (click ✕ to clear).
+  3. To work the approval queue, click the "Needs approval" tab, choose the role
+     and the linked member for each pending account, then press Approve exactly
+     as before.
+  4. Use Role / Sort by to focus a batch, then Reset filters to return to the
+     full, action-first list.
+  5. Press Enter after typing to jump to the first match; press Esc to clear;
+     press Ctrl + K from anywhere on the page to return to the search field.
+
+6. FILES
+------------------------------------------------------------------------------
+  NEW
+  - accounts-search-console-v86.js
+      The console: state, matching, highlighting, keyboard, observers. Loaded
+      right after management-attendance-member-info-v4.js so it can filter what
+      that module renders.
+  - ACCOUNTS_SEARCH_CONSOLE_V86_GUIDE.txt (this file)
+  - BUILD_INFO_ACCOUNTS_SEARCH_V86.txt
+  - TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt
+  - FILE_MANIFEST_ACCOUNTS_SEARCH_V86.txt
+  - responsive-audit/accounts-search-check.js
+      Permanent behaviour suite for the console (37 checks, see §7).
+
+  UPDATED
+  - index.html
+      Search console markup inside #accountsView, and cache-busting
+      ?v=20260921-accounts-search-v86 on the bundle, lso-system-core-v4.js,
+      pwa-enterprise-v41.js plus the new script tag.
+  - lso-ui-bundle-v73.css
+      Appended V86 layer only (source order wins, nothing above it edited):
+      console layout, status tabs, highlight marks, row flash, empty state,
+      night appearance, responsive rules, print rules.
+  - lso-system-core-v4.js
+      version block: app 8.3.2 / build 2026.09.21-accounts-search-v86.1 /
+      cache lso-enterprise-v86-accounts-search /
+      permissions-manifest-v10-accounts-search.
+      schemaTarget deliberately unchanged (still 013_role_sync_interview_v82);
+      databaseInstaller unchanged (no SQL needed for V86).
+  - service-worker-enterprise-v41.js
+      CACHE_VERSION -> 'lso-website-v20260921-accounts-search-v86' and
+      './accounts-search-console-v86.js' added to the precache list.
+  - service-worker.js
+      CACHE_VERSION mirrored (legacy worker kept in sync).
+  - pwa-enterprise-v41.js
+      ACTIVE_CACHE_MARKER -> 'accounts-search-v86', so the stale
+      self-attendance-live-v85 cache is deleted on the next load.
+  - responsive-audit/package.json + README.md
+      New `npm run check-accounts` entry and its documentation.
+
+  NOT CHANGED (deliberately)
+  - management-attendance-member-info-v4.js and every other module.
+  - The permission model, role defaults, Role & Permission Center, and every
+    saved role selection.
+  - All operational data (accounts, members, attendance, duty hours, monthly
+    reports, settings, activity log, recovery points).
+  - The Supabase schema. V86 needs no SQL patch.
+
+7. UPGRADE NOTES
+------------------------------------------------------------------------------
+  * Upload every UPDATED file plus the NEW accounts-search-console-v86.js.
+  * The cache marker changed, so open installations drop the old lso-website-*
+    cache on the next load; a hard refresh is not required but is harmless.
+  * No SQL to run: the account list comes from the existing RPCs.
+
+8. VERIFICATION
+------------------------------------------------------------------------------
+  responsive-audit/accounts-search-check.js — 43/43 PASSED against the real page
+  (Chromium over CDP, the repository's Supabase mock, real login form, 16 seeded
+  accounts): rendering and counts, name / username / multi-term / status-word
+  search, highlight marks, clear, status tabs, role filter, empty state + reset,
+  all six sort orders, Enter-jump and focus hand-off, Esc, Ctrl + K, Action
+  Center deep-link reset, row controls preserved, zero console errors, night
+  appearance, 390px layout (0 overflow, every control >= 44px, 16px input floor,
+  snap-scrolling tabs), the non-Administrator lock-out, and the two data
+  shapes (with sign-in tracking, and with lastLoginAt absent as in an unpatched
+  database).
+  See TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt for the raw output.
+
+  Run it yourself:
+      cd responsive-audit
+      npm install && npm run browser && npm run serve   # terminal 1
+      npm run check-accounts                            # terminal 2

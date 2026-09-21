@@ -14731,3 +14731,285 @@ body[data-theme="night"] .interview-form-panel,body[data-theme="night"] .intervi
   .own-attendance-table th,
   .own-attendance-table td { padding: 9px 10px; font-size: 12px; }
 }
+
+/* ==========================================================================
+   V86 ACCOUNTS SEARCH CONSOLE — 2026-09-21
+   Search + filter surface for Administrator → Account Management
+   (see accounts-search-console-v86.js and ACCOUNTS_SEARCH_CONSOLE_V86_GUIDE.txt).
+
+   Layout contract: the console is a self-contained card above the accounts
+   table. Every grid track uses minmax(0, …) so a long account name, role or
+   status label can never force page-level horizontal overflow (audit guard G1),
+   and the status tabs become a snap-scrolling strip on phones instead of
+   wrapping into an unreadable tower.
+
+   Touch/iOS contract: all controls inherit the V75 44px touch targets and the
+   V74/V75 16px input floor; the search field and the two filter selects set
+   16px themselves so guard G5 (iOS zoom-on-focus) cannot regress even if the
+   pointer-coarse layer is ever reordered.
+
+   Colour contract: light Lasallian emerald by default, full night-appearance
+   overrides under html[data-lso-theme="night"] (the accessible night palette
+   keeps the gold match highlight readable on dark surfaces).
+   ========================================================================== */
+
+/* Announcer region: visually hidden WITHOUT overflow:hidden so the responsive
+   audit's clipped-content probe (G2) is untouched, while clip-path still hides
+   every painted pixel from sighted users. */
+.accounts-search-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#accountsView .accounts-search-console {
+  display: grid;
+  gap: 13px;
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f7fbf9, #eef6f2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75);
+}
+
+.accounts-search-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.accounts-search-field { min-width: 0; }
+.accounts-search-input-wrap { position: relative; display: block; }
+
+.accounts-search-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  width: 19px;
+  height: 19px;
+  transform: translateY(-50%);
+  color: var(--green-700);
+  pointer-events: none;
+}
+
+#accountSearchInput {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 122px 12px 45px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 650;
+}
+#accountSearchInput:focus { border-color: var(--green-500); box-shadow: 0 0 0 4px rgba(32, 166, 111, .12); }
+#accountSearchInput::-webkit-search-cancel-button,
+#accountSearchInput::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; }
+#accountSearchInput::placeholder { color: #8ea49c; font-weight: 500; }
+
+.accounts-search-clear {
+  position: absolute;
+  right: 74px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 36px;
+  min-height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+  transition: .16s ease;
+}
+.accounts-search-clear:hover { color: var(--green-800); border-color: var(--green-500); }
+.accounts-search-clear:focus-visible { color: var(--green-800); border-color: var(--green-500); }
+
+.accounts-search-kbd {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 8px;
+  background: #f4f9f7;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+
+.accounts-search-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.accounts-search-filters .field > span { font-size: 11.5px; }
+.accounts-search-filters select { min-height: 46px; font-weight: 650; }
+
+.accounts-status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 14px;
+  background: #e9f2ed;
+}
+
+.accounts-filter-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: .16s ease;
+}
+.accounts-filter-tab:hover { color: var(--green-800); background: rgba(255, 255, 255, .6); }
+.accounts-filter-tab.active {
+  color: var(--green-800);
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(8, 61, 45, .1);
+}
+.accounts-filter-tab[data-empty="true"]:not(.active) { opacity: .6; }
+
+.accounts-filter-count {
+  min-width: 26px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(22, 112, 85, .1);
+  color: var(--green-800);
+  font-size: 11px;
+  font-weight: 850;
+}
+.accounts-filter-tab.active .accounts-filter-count { background: var(--green-700); color: #fff; }
+.accounts-filter-tab[data-empty="true"] .accounts-filter-count { background: rgba(102, 122, 115, .13); color: var(--muted); }
+.accounts-filter-count[data-tone="gold"] { background: #fff0c2; color: #7a5a08; }
+.accounts-filter-tab.active .accounts-filter-count[data-tone="gold"] { background: var(--gold); color: #33290a; }
+
+.accounts-search-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.accounts-search-status { margin: 0; color: #35544a; font-size: 12.5px; font-weight: 650; line-height: 1.5; }
+.accounts-search-reset { flex: 0 0 auto; white-space: nowrap; }
+.accounts-search-hint { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.accounts-search-hint kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 10.5px;
+  font-weight: 850;
+}
+
+/* Filtering + match highlighting inside the existing accounts table. */
+#accountsView tr.accounts-row-filtered-out { display: none !important; }
+
+mark.accounts-search-hit {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: #ffe9a3;
+  color: #4a3a05;
+  font-weight: 800;
+}
+
+tr.accounts-row-focus-flash > td { animation: accounts-row-flash 1.8s ease-out; }
+@keyframes accounts-row-flash {
+  0%, 20% { box-shadow: inset 0 0 0 2px rgba(199, 165, 71, .92); }
+  100% { box-shadow: inset 0 0 0 2px rgba(199, 165, 71, 0); }
+}
+
+.accounts-search-empty-state { padding: 40px 20px; }
+.accounts-search-empty-state .empty-icon svg { width: 26px; height: 26px; }
+.accounts-search-empty-state .empty-icon { margin-bottom: 12px; }
+.accounts-search-empty-note { margin-top: 6px !important; font-size: 12px; }
+.accounts-search-empty-state .button { margin-top: 15px; }
+
+@media (prefers-reduced-motion: reduce) {
+  tr.accounts-row-focus-flash > td { animation: none; box-shadow: inset 0 0 0 2px rgba(199, 165, 71, .92); }
+  .accounts-filter-tab,
+  .accounts-search-clear { transition: none; }
+}
+
+/* Night appearance — mirrors the shared night tokens. */
+html[data-lso-theme="night"] #accountsView .accounts-search-console {
+  background: linear-gradient(135deg, #0e1d17, #0b1712);
+  border-color: var(--line);
+  box-shadow: none;
+}
+html[data-lso-theme="night"] .accounts-search-icon { color: #79d7b2; }
+html[data-lso-theme="night"] #accountSearchInput { background: #0c1713; color: var(--ink); border-color: #385148; }
+html[data-lso-theme="night"] #accountSearchInput::placeholder { color: #70877e; }
+html[data-lso-theme="night"] .accounts-search-clear { background: #12231c; border-color: var(--line); color: #cde9dd; }
+html[data-lso-theme="night"] .accounts-search-clear:hover { color: #fff; border-color: #3d6455; }
+html[data-lso-theme="night"] .accounts-search-kbd { background: #12231c; border-color: var(--line); color: var(--muted); }
+html[data-lso-theme="night"] .accounts-status-tabs { background: #0b1712; }
+html[data-lso-theme="night"] .accounts-filter-tab { color: var(--muted); }
+html[data-lso-theme="night"] .accounts-filter-tab:hover { color: #cde9dd; background: rgba(255, 255, 255, .05); }
+html[data-lso-theme="night"] .accounts-filter-tab.active { background: #173128; color: #d8f2e7; box-shadow: none; }
+html[data-lso-theme="night"] .accounts-filter-count { background: rgba(255, 255, 255, .09); color: #cde9dd; }
+html[data-lso-theme="night"] .accounts-filter-tab.active .accounts-filter-count { background: #167055; color: #fff; }
+html[data-lso-theme="night"] .accounts-filter-count[data-tone="gold"] { background: rgba(199, 165, 71, .24); color: #f1dca1; }
+html[data-lso-theme="night"] .accounts-filter-tab.active .accounts-filter-count[data-tone="gold"] { background: var(--gold); color: #2c2308; }
+/* The summary line keeps the shared night paragraph colour (var(--muted),
+   ~7.5:1 on the night card). The shared night layer pins p/small with
+   !important at a higher specificity, so the console must not fight it. */
+html[data-lso-theme="night"] .accounts-search-hint kbd { background: #12231c; border-color: var(--line); }
+html[data-lso-theme="night"] mark.accounts-search-hit { background: rgba(199, 165, 71, .34); color: #ffe9b0; }
+
+/* Responsive: one column, then a snap-scrolling tab strip, then stacked filters. */
+@media (max-width: 980px) {
+  .accounts-search-top { grid-template-columns: minmax(0, 1fr); }
+  /* room for the 44px clear button that replaces the hidden shortcut chip */
+  #accountSearchInput { padding-right: 64px; }
+  .accounts-search-kbd { display: none; }
+  .accounts-search-clear { right: 10px; }
+}
+
+@media (max-width: 680px) {
+  .accounts-status-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .accounts-filter-tab { flex: 0 0 auto; scroll-snap-align: start; }
+  .accounts-search-footer { align-items: flex-start; flex-direction: column; }
+  .accounts-search-status { font-size: 12px; }
+}
+
+@media (max-width: 460px) {
+  #accountsView .accounts-search-console { padding: 13px; border-radius: 15px; }
+  .accounts-search-filters { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Touch: the V75 layer already lifts every button/select to 44px; keep the
+   clear button square and easy to hit on phones and tablets. */
+@media (hover: none), (pointer: coarse) {
+  .accounts-search-clear { min-width: 44px; min-height: 44px; right: 8px; }
+  #accountSearchInput { padding-right: 62px; }
+  #accountsView .accounts-filter-tab { min-height: 46px; }
+}
+
+@media print {
+  #accountsView .accounts-search-console { display: none !important; }
+}

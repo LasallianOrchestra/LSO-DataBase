@@ -9,6 +9,7 @@
     "audit": "node harness.js",
     "verify": "node verify-fixes.js",
     "check": "node ci-check.js",
+    "check-accounts": "node accounts-search-check.js",
     "ci": "node harness.js && node verify-fixes.js && node ci-check.js"
   },
   "devDependencies": {
