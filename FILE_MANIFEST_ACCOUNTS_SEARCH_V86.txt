@@ -62,6 +62,14 @@ NOT CHANGED (deliberately)
   reports, settings, activity log, recovery points)
 - The Supabase schema — V86 needs no SQL patch
 
+DATABASE
+- No Supabase script is required. The console reads the account list through the
+  RPCs the Accounts page already calls (public.lso_list_accounts ->
+  public.lso_account_json) plus the shared member directory, and writes nothing.
+- lastLoginAt is database-dependent: where the database does not track sign-ins
+  the console hides the "Most recent sign-in" sort option instead of offering a
+  dead choice. See the guide, section 2.
+
 INSTALL ORDER
 1. Upload the NEW file and every UPDATED file above.
 2. No SQL to run.

@@ -18,6 +18,11 @@
      F. mobile      — no page overflow, 44px touch targets, 16px input floor,
                       snap-scrolling tabs
      G. appearance  — night appearance repaints the console
+     H. data        — the console degrades cleanly when the account list carries
+                      no lastLoginAt (an unpatched database): the sign-in sort
+                      option is hidden, the sort request falls back to Priority,
+                      sign-in keywords match nothing, and every other search and
+                      sort still works
 
    Prerequisites: `npm run serve` (or any static server for the repo) and a
    Chromium reachable over CDP (see README.md §Running locally). Screenshots are
@@ -297,6 +302,57 @@ async function openApp(browser, shimSource, device) {
       rows: document.querySelectorAll('#accountsTableBody tr[data-account-row]').length
     }));
     check('E4 console stays hidden without Administrator access', locked.hidden === true && locked.rows === 0, JSON.stringify(locked));
+    await context.close();
+  }
+
+  /* ------------------- data availability: no sign-in tracking in the DB ----
+     public.lso_account_json() exposes lastLoginAt only where the database is
+     patched to record sign-ins. This group runs the same page against an
+     account list WITHOUT that field and proves the console degrades cleanly:
+     no dead sort option, no sign-in keywords, everything else still works. */
+  {
+    const bare = JSON.parse(JSON.stringify(seed));
+    bare.accounts = bare.accounts.map((account) => {
+      const copy = { ...account };
+      delete copy.lastLoginAt;
+      return copy;
+    });
+    const { context, page, errors } = await openApp(browser, buildShim(bare), { w: 1280, h: 860 });
+
+    const sortState = await page.evaluate(() => {
+      const option = document.querySelector('#accountsSortSelect option[value="login"]');
+      return { hidden: option.hidden, disabled: option.disabled };
+    });
+    check('H1 sign-in sort option is hidden when the database has no sign-in data',
+      sortState.hidden === true && sortState.disabled === true, JSON.stringify(sortState));
+
+    const fallback = await page.evaluate(() => {
+      window.LSOAccountSearch.setSort('login');
+      return { state: window.LSOAccountSearch.getState().sort, select: document.getElementById('accountsSortSelect').value };
+    });
+    check('H2 asking for the sign-in sort falls back to Priority', fallback.state === 'priority' && fallback.select === 'priority', JSON.stringify(fallback));
+
+    await page.fill('#accountSearchInput', 'never signed in');
+    await page.waitForTimeout(350);
+    const keyword = await snapshot(page);
+    check('H3 sign-in keywords match nothing when there is no sign-in data',
+      keyword.visible === 0, `visible=${keyword.visible}`);
+
+    await page.fill('#accountSearchInput', 'lacsamana');
+    await page.waitForTimeout(350);
+    const stillWorks = await snapshot(page);
+    check('H4 every other search still works without sign-in data',
+      stillWorks.visible === 1 && stillWorks.hits > 0 && !stillWorks.placeholder, JSON.stringify({ visible: stillWorks.visible, hits: stillWorks.hits }));
+
+    await page.fill('#accountSearchInput', '');
+    await page.waitForTimeout(250);
+    await page.selectOption('#accountsSortSelect', 'name');
+    await page.waitForTimeout(400);
+    const nameOrder = (await snapshot(page)).order.filter(Boolean);
+    check('H5 the remaining sort orders still work without sign-in data',
+      nameOrder.every((name, index) => index === 0 || nameOrder[index - 1].localeCompare(name) <= 0) && nameOrder.length === 16,
+      nameOrder.slice(0, 3).join(' | '));
+    check('H6 no console or page errors without sign-in data', errors.length === 0, errors.slice(0, 2).join(' || '));
     await context.close();
   }
 

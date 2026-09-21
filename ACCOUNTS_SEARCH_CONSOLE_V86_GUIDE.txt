@@ -16,7 +16,45 @@ long scrollable table. Finding one person meant scrolling and reading row after
 row, and the approval queue (accounts still waiting for a role + Approve) was
 buried somewhere inside the list.
 
-2. WHAT WAS BUILT
+2. DATABASE — DOES IT NEED A SUPABASE SCRIPT?
+------------------------------------------------------------------------------
+NO. V86 is a website-only change. There is no SQL file to run and none is
+created by this release.
+
+  Why: the console reads the account list through the RPCs the Accounts page
+  already uses — public.lso_list_accounts() -> public.lso_account_json() — and
+  the shared member directory that the signed-in Administrator already has in
+  memory. It makes no RPC call of its own and writes nothing.
+
+  Every field it searches is already returned by the installed function:
+       id, username, email, displayName, role, memberId, approvalStatus,
+       disabled, isDefault, requestedAt, approvedAt, approvedBy, rejectedAt,
+       rejectedBy, createdAt, updatedAt
+  and by the member record: fullName, membershipId, studentNumber, outlook,
+  orchestraSection, primaryInstrument, periodGroup.
+
+  The console's stored settings (status tab, role filter, sort order) live in
+  the browser's sessionStorage — not in the database.
+
+  One field is database-dependent: LAST SIGN-IN. public.lso_account_json()
+  exposes lastLoginAt only where the database has been patched to record it
+  (the current installer does not have a last_login_at column). V86 therefore
+  detects it at run time:
+    - database tracks sign-ins  -> the "Most recent sign-in" sort option is
+      offered and the keywords "never signed in" / "no login yet" work;
+    - database does not         -> that sort option is HIDDEN (not shown as a
+      dead choice), a request for it falls back to Priority, the sign-in
+      keywords simply match nothing, and every other search and sort behaves
+      exactly as documented.
+  Nothing has to be run either way.
+
+  If you later want the sign-in sort to be meaningful, that is a separate,
+  optional database patch (add last_login_at to public.lso_accounts, set it in
+  public.lso_login(), and add 'lastLoginAt' to public.lso_account_json()).
+  Ask and it can be prepared and tested as its own release — the website already
+  handles both states, so the patch would be additive with no website change.
+
+3. WHAT WAS BUILT
 ------------------------------------------------------------------------------
 A search console sits directly above the accounts table, inside the existing
 Account Management panel:
@@ -64,7 +102,7 @@ Account Management panel:
   * RESET FILTERS — a one-click return to the full list; the button only appears
     while a filter is active.
 
-3. WHY IT IS SAFE
+4. WHY IT IS SAFE
 ------------------------------------------------------------------------------
   * READ ONLY. The console never calls saveAccounts / deleteAccount and never
     mutates an account object. It reads the list through
@@ -87,7 +125,7 @@ Account Management panel:
     actually has data rows (i.e. an authorised Administrator) and stays hidden
     otherwise — including for every other role.
 
-4. HOW TO USE IT
+5. HOW TO USE IT
 ------------------------------------------------------------------------------
   1. Open Accounts → Account Management.
   2. Type any part of a name, username, email, role or linked member in
@@ -100,7 +138,7 @@ Account Management panel:
   5. Press Enter after typing to jump to the first match; press Esc to clear;
      press Ctrl + K from anywhere on the page to return to the search field.
 
-5. FILES
+6. FILES
 ------------------------------------------------------------------------------
   NEW
   - accounts-search-console-v86.js
@@ -148,23 +186,25 @@ Account Management panel:
     reports, settings, activity log, recovery points).
   - The Supabase schema. V86 needs no SQL patch.
 
-6. UPGRADE NOTES
+7. UPGRADE NOTES
 ------------------------------------------------------------------------------
   * Upload every UPDATED file plus the NEW accounts-search-console-v86.js.
   * The cache marker changed, so open installations drop the old lso-website-*
     cache on the next load; a hard refresh is not required but is harmless.
   * No SQL to run: the account list comes from the existing RPCs.
 
-7. VERIFICATION
+8. VERIFICATION
 ------------------------------------------------------------------------------
-  responsive-audit/accounts-search-check.js — 37/37 PASSED against the real page
+  responsive-audit/accounts-search-check.js — 43/43 PASSED against the real page
   (Chromium over CDP, the repository's Supabase mock, real login form, 16 seeded
   accounts): rendering and counts, name / username / multi-term / status-word
   search, highlight marks, clear, status tabs, role filter, empty state + reset,
   all six sort orders, Enter-jump and focus hand-off, Esc, Ctrl + K, Action
   Center deep-link reset, row controls preserved, zero console errors, night
   appearance, 390px layout (0 overflow, every control >= 44px, 16px input floor,
-  snap-scrolling tabs) and the non-Administrator lock-out.
+  snap-scrolling tabs), the non-Administrator lock-out, and the two data
+  shapes (with sign-in tracking, and with lastLoginAt absent as in an unpatched
+  database).
   See TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt for the raw output.
 
   Run it yourself:

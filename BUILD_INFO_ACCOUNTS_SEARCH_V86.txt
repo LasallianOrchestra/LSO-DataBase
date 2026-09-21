@@ -20,8 +20,20 @@ Scope:
 
 Database migration: NONE REQUIRED
 - V86 is a website-only change. It reads the account list through the existing
-  window.LSOAuth.loadAccounts() (lso_list_accounts / lso_save_accounts) and
-  writes nothing.
+  window.LSOAuth.loadAccounts() (public.lso_list_accounts -> public.lso_account_json,
+  the RPCs the Accounts page already calls) and writes nothing. No SQL file is
+  shipped or needed.
+- Every searched field is already returned by the installed function (id,
+  username, email, displayName, role, memberId, approvalStatus, disabled,
+  isDefault, requestedAt, approvedAt, approvedBy, rejectedAt, rejectedBy,
+  createdAt, updatedAt) plus the shared member record. Console settings live in
+  sessionStorage, not the database.
+- lastLoginAt is the one database-dependent field: the current installer does not
+  record sign-ins, so the console detects it at run time — the "Most recent
+  sign-in" sort option is hidden (never a dead choice) and sign-in keywords match
+  nothing, while everything else works unchanged. An optional future patch could
+  add last_login_at to lso_accounts / lso_login() / lso_account_json(); the
+  website already handles both states.
 
 Security guarantees:
 - Read-only by construction: the console never calls saveAccounts, deleteAccount
@@ -60,7 +72,7 @@ Documentation:
 - FILE_MANIFEST_ACCOUNTS_SEARCH_V86.txt
 
 Verification:
-- 37/37 behaviour checks passed: rendering and counts; name, username,
+- 43/43 behaviour checks passed: rendering and counts; name, username,
   multi-term and status-word search; highlighting; clear; status tabs; role
   filter; empty state and reset; all six sort orders; Enter jump + focus
   hand-off; Esc; Ctrl + K; Action Center deep-link reset; row controls

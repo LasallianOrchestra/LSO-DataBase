@@ -2,9 +2,11 @@ LSO ACCOUNTS SEARCH CONSOLE (V86)
 VALIDATION RESULTS
 Date: 2026-09-21
 
-RESULT: 37/37 BEHAVIOUR CHECKS PASSED (real page, real login, 16 seeded accounts)
+RESULT: 43/43 BEHAVIOUR CHECKS PASSED (real page, real login, 16 seeded accounts)
 RESULT: 0 CONSOLE/PAGE ERRORS on desktop and on a 390px phone profile
 RESULT: THE CONSOLE STAYS HIDDEN FOR NON-ADMINISTRATOR SESSIONS (fail closed)
+RESULT: NO SUPABASE SCRIPT REQUIRED — verified in both data shapes (with and
+        without sign-in tracking)
 
 Method: the real production page (index.html) served from the repository, driven
 in headless Chromium over the Chrome DevTools Protocol through the
@@ -54,8 +56,14 @@ Raw output:
   PASS  F5 mobile: searching filters and highlights
   PASS  F6 mobile: no console or page errors
   PASS  E4 console stays hidden without Administrator access — {"hidden":true,"rows":0}
+  PASS  H1 sign-in sort option is hidden when the database has no sign-in data — {"hidden":true,"disabled":true}
+  PASS  H2 asking for the sign-in sort falls back to Priority — {"state":"priority","select":"priority"}
+  PASS  H3 sign-in keywords match nothing when there is no sign-in data — visible=0
+  PASS  H4 every other search still works without sign-in data — {"visible":1,"hits":2}
+  PASS  H5 the remaining sort orders still work without sign-in data — Amadeus Testado | Beatriz Lacsamana | Carlo Ocampo
+  PASS  H6 no console or page errors without sign-in data
   
-  37/37 checks passed — results/accounts-search-results.json
+  43/43 checks passed — results/accounts-search-results.json
 
 ---------------------------------------------------------------------
 WHAT EACH GROUP PROVES
@@ -87,6 +95,15 @@ F. Mobile      — at 390x844 the console produces 0px of page overflow, every
                  snap points instead of wrapping.
 G. Appearance  — night appearance repaints the console card and field with the
                  shared night palette.
+H. Data shape  — the page is re-opened against an account list WITHOUT
+                 lastLoginAt (the unpatched-database shape produced by the
+                 installed public.lso_account_json()): the "Most recent sign-in"
+                 sort option is hidden and disabled, a programmatic request for
+                 that sort falls back to Priority, the sign-in keywords match
+                 nothing, the name search and every remaining sort order still
+                 work, and no console/page errors appear. This proves the
+                 console needs NO database patch and cannot offer a sort that
+                 silently does nothing.
 
 ---------------------------------------------------------------------
 DEFECTS FOUND AND FIXED DURING VALIDATION

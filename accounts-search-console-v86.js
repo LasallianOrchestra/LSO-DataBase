@@ -74,6 +74,15 @@
      - window.LSOOperations.getMembers()      -> member fallback
      - sessionStorage 'lso_accounts_search_v86' -> status / role / sort only
        (the free-text query is never persisted)
+
+   No database change is required. Every field the console searches is already
+   returned by the installed public.lso_list_accounts()/lso_account_json()
+   (id, username, email, displayName, role, memberId, approvalStatus, disabled,
+   isDefault, requestedAt, approvedAt, approvedBy, rejectedAt, rejectedBy,
+   createdAt, updatedAt) and by the shared member directory. The only
+   data-dependent feature is the sign-in sort: it is offered only when the
+   account list actually carries lastLoginAt (see signInTracked below), so an
+   unpatched database can never show a sort that silently does nothing.
    ============================================================================ */
 (() => {
   'use strict';
@@ -203,7 +212,17 @@
     return 'active';
   }
 
-  function haystackOf(account, memberMap) {
+  /* Sign-in tracking is OPTIONAL in this deployment: public.lso_account_json()
+     exposes lastLoginAt only where the database is patched to record it. When no
+     account in the list carries a timestamp the console says nothing about
+     sign-ins at all — the keyword block and the date values are dropped and the
+     "Most recent sign-in" sort option is hidden instead of silently doing
+     nothing. */
+  function signInTracked() {
+    return (window.LSOAuth?.loadAccounts?.() || []).some((account) => Boolean(stamp(account?.lastLoginAt)));
+  }
+
+  function haystackOf(account, memberMap, trackSignIn) {
     const status = statusOf(account) || 'active';
     const member = account.memberId ? memberMap.get(String(account.memberId)) : null;
     const requested = account.requestedAt || account.createdAt;
@@ -215,9 +234,12 @@
       member?.orchestraSection, member?.primaryInstrument, member?.periodGroup,
       account.approvedAt ? 'approved approval decided' : '',
       status === 'pending' ? 'requested registered awaiting' : 'requested registered',
-      account.lastLoginAt ? 'signed in last login activity' : 'never signed in no login yet',
-      dateWords(requested), dateWords(account.approvedAt), dateWords(account.lastLoginAt),
-      requested, account.approvedAt, account.lastLoginAt
+      trackSignIn
+        ? (account.lastLoginAt ? 'signed in last login active sign-in' : 'never signed in no login yet')
+        : '',
+      dateWords(requested), dateWords(account.approvedAt),
+      trackSignIn ? dateWords(account.lastLoginAt) : '',
+      requested, account.approvedAt, trackSignIn ? account.lastLoginAt : ''
     ];
     return accentFold(parts.filter(Boolean).join(' '));
   }
@@ -234,7 +256,7 @@
     }).join(' '));
   }
 
-  function buildEntries(rows) {
+  function buildEntries(rows, trackSignIn) {
     const accounts = new Map();
     (window.LSOAuth?.loadAccounts?.() || []).forEach((account) => accounts.set(String(account.id), account));
     const memberMap = memberIndex();
@@ -249,10 +271,10 @@
         status: account ? statusOf(account) : '',
         role: String(account?.role || ''),
         name: accentFold(account?.displayName || account?.username || fallback),
-        haystack: account ? haystackOf(account, memberMap) : fallback,
+        haystack: account ? haystackOf(account, memberMap, trackSignIn) : fallback,
         requested: stamp(account?.requestedAt || account?.createdAt),
         approved: stamp(account?.approvedAt),
-        login: stamp(account?.lastLoginAt)
+        login: trackSignIn ? stamp(account?.lastLoginAt) : ''
       };
     });
   }
@@ -502,6 +524,17 @@
     });
   }
 
+  /* The sign-in sort option is only offered when the account list actually
+     carries sign-in timestamps (see signInTracked). */
+  function syncSortOptions(trackSignIn) {
+    if (!refs.sort) return;
+    const option = refs.sort.querySelector('option[value="login"]');
+    if (!option) return;
+    option.hidden = !trackSignIn;
+    option.disabled = !trackSignIn;
+    option.setAttribute('aria-hidden', String(!trackSignIn));
+  }
+
   function syncRoleOptions() {
     if (!refs.role) return;
     const roles = new Set();
@@ -532,7 +565,10 @@
 
     syncSequence(rows);
     syncRoleOptions();
-    const entries = buildEntries(rows);
+    const trackSignIn = signInTracked();
+    syncSortOptions(trackSignIn);
+    if (!trackSignIn && state.sort === 'login') state.sort = 'priority';
+    const entries = buildEntries(rows, trackSignIn);
     const terms = searchTerms();
     const matched = [];
     entries.forEach((entry) => {
