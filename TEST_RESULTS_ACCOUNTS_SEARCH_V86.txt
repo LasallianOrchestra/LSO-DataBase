@@ -1,0 +1,130 @@
+LSO ACCOUNTS SEARCH CONSOLE (V86)
+VALIDATION RESULTS
+Date: 2026-09-21
+
+RESULT: 37/37 BEHAVIOUR CHECKS PASSED (real page, real login, 16 seeded accounts)
+RESULT: 0 CONSOLE/PAGE ERRORS on desktop and on a 390px phone profile
+RESULT: THE CONSOLE STAYS HIDDEN FOR NON-ADMINISTRATOR SESSIONS (fail closed)
+
+Method: the real production page (index.html) served from the repository, driven
+in headless Chromium over the Chrome DevTools Protocol through the
+responsive-audit suite's faithful Supabase mock (lso_login, lso_get_state,
+lso_list_accounts, lso_save_accounts, ...). The 16 synthetic accounts come from
+responsive-audit/seed.js (13 active, 2 pending, 1 disabled, 3 administrator,
+4 membership, 1 general secretary, ...). Sign-in is performed through the real
+login form; every assertion is made against the rendered DOM.
+
+Suite: responsive-audit/accounts-search-check.js   (npm run check-accounts)
+Raw output:
+
+  PASS  A1 console visible for the Administrator
+  PASS  A2 every seeded account is rendered — rows=16
+  PASS  A3 status counts match the seeded accounts — {"all":16,"pending":2,"active":13,"rejected":0,"disabled":1}
+  PASS  A4 summary line reports the account total — 16 accounts
+  PASS  A5 no page-level overflow with the console open — 0px
+  PASS  B1 name search narrows the table — visible=1
+  PASS  B2 matched text is highlighted — marks=2
+  PASS  B3 summary reports the match count — 1 of 16 accounts shown • Search: “lacsamana”
+  PASS  B4 multi-term search works — ["acc-2"]
+  PASS  B5 username search finds the account — ["acc-4"]
+  PASS  B6 plain-language status keywords match — visible=2
+  PASS  B7 clear restores every row and drops the highlights — {"visible":16,"hits":0}
+  PASS  B8 clear button hides itself when the query is empty
+  PASS  C1 Needs approval tab isolates the queue — {"visible":2,"tab":"pending"}
+  PASS  C2 tab exposes aria-pressed for assistive tech
+  PASS  C3 role filter combines with the status tab — visible=0
+  PASS  C4 empty state offers a reset
+  PASS  C5 reset from the empty state restores every row — {"visible":16,"tab":"all"}
+  PASS  C6 name sort orders the rows A–Z — Amadeus Testado | Beatriz Lacsamana | Carlo Ocampo
+  PASS  C7 priority restores the action-first order — Rizalino, Timothy B. | Ilagan, Kirk C. | Ilagan, Wilfredo C.
+  PASS  C8 no-match search shows the empty state
+  PASS  D1 Enter highlights the matched row
+  PASS  D2 Enter moves focus onto the account controls — select
+  PASS  D3 Escape clears the search
+  PASS  D4 Escape left every row visible
+  PASS  D5 Ctrl + K returns to the search field
+  PASS  E1 Action Center deep-link clears the console filters — {"before":0,"after":16,"tab":"all"}
+  PASS  E2 filtered rows keep their role, member and action controls — {"role":true,"member":true,"action":true}
+  PASS  E3 no console or page errors while exercising the console
+  PASS  G1 night appearance repaints the console — {"consoleBg":"linear-gradient(135deg, rgb(14, 29, 23), rgb(11, 23, 18))","inputBg":"rgb(12, 23, 19)"}
+  PASS  F1 mobile: no page overflow from the console — 0px
+  PASS  F2 mobile: every console control is at least 44px — []
+  PASS  F3 mobile: search field honours the 16px iOS floor — 16px
+  PASS  F4 mobile: status tabs scroll instead of wrapping
+  PASS  F5 mobile: searching filters and highlights
+  PASS  F6 mobile: no console or page errors
+  PASS  E4 console stays hidden without Administrator access — {"hidden":true,"rows":0}
+  
+  37/37 checks passed — results/accounts-search-results.json
+
+---------------------------------------------------------------------
+WHAT EACH GROUP PROVES
+---------------------------------------------------------------------
+A. Rendering   — the console is rendered only for the Administrator, the counts
+                 are computed from the live account list, the summary line is
+                 correct and the console adds no page-level horizontal overflow
+                 at 1440px.
+B. Search      — name, username, multi-term and plain-language status queries
+                 narrow the table, matched text is wrapped in highlight marks,
+                 the summary reports "x of y accounts shown", and clearing
+                 restores every row with no leftover markup.
+C. Filters     — the Needs approval tab isolates the two pending accounts (with
+                 aria-pressed), the role filter combines with it, the empty
+                 state appears with a working reset, the six sort orders behave
+                 (including returning to the original action-first order), and a
+                 no-match search shows the empty state.
+D. Keyboard    — Enter flashes the matched row and hands focus to that account's
+                 first control when exactly one account matches; Esc clears the
+                 search; Ctrl + K refocuses the search field.
+E. Safety      — an Action Center deep-link ("Review Account") clears the
+                 filters before the routing handler scrolls to the row, filtered
+                 rows keep their role select, member select and action buttons,
+                 no console errors are produced, and a non-Administrator session
+                 sees neither the console nor any account row.
+F. Mobile      — at 390x844 the console produces 0px of page overflow, every
+                 control is at least 44px in both axes, the search field honours
+                 the 16px iOS no-zoom floor, and the status tabs scroll with
+                 snap points instead of wrapping.
+G. Appearance  — night appearance repaints the console card and field with the
+                 shared night palette.
+
+---------------------------------------------------------------------
+DEFECTS FOUND AND FIXED DURING VALIDATION
+---------------------------------------------------------------------
+1. Observer feedback loop. The empty-state row was rewritten on every apply,
+   which re-triggered the table MutationObserver and detached the reset button
+   while it was being clicked. Fixed by writing the empty state only when it is
+   created or when its wording changes, and by having the observer react only to
+   real account-row changes. Re-measured: 1 DOM mutation instead of 303, 0
+   self-triggered applies.
+2. Sort could mistake its own re-ordering for a new base order, so "Priority"
+   no longer restored the action-first sequence after another sort. Fixed by
+   capturing the base order from the row ELEMENTS (a real re-render always
+   replaces the <tr> nodes, the console's sorting only moves them).
+3. Touch targets below 44px on tablets (the search field's 36px clear button).
+   Fixed in the V86 CSS layer; the audit's guard G7 measurement is clean.
+4. The 44px clear button overlapped the field's right padding on phones; the
+   input now reserves 62px for it below 980px.
+5. The status label was pinned by the shared night layer's !important
+   paragraph rule; the console no longer fights it (the shared night colour is
+   kept, ~7.5:1 contrast on the night card).
+
+---------------------------------------------------------------------
+CROSS-DEVICE REGRESSION (repository suite, 3 profiles)
+---------------------------------------------------------------------
+responsive-audit/harness.js re-run over galaxy-fold-cover (280px),
+ipad-pro-11-land (1194px) and desktop-1920 with the console present:
+  #accountsView — pageOverflowX 0, tap targets below 44px 0, clipped content 0,
+  overflowing elements 0, console errors 0, page errors 0 on every profile.
+  desktop-1920 reports the usual sub-16px / sub-44px rows for the pre-existing
+  table selects and action buttons, which the touch-adaptive guards exclude by
+  design (d.touch only); those are measured clean on the touch profiles.
+
+The two remaining ci-check.js G9 lines ("drawer toggle inside viewport") are
+PRE-EXISTING and unrelated to V86: the same two failures reproduce byte-for-byte
+on the base commit fa599bf in a separate worktree of the same repository
+(harness.js with ONLY_DEVICE=galaxy-fold-cover,ipad-pro-11-land against the
+untouched base build). The harness measures the toggle after
+window.scrollTo(0, 400); the 2026-09-13 V76 fix that pins the drawer toggle
+open/close behaviour is not present in this repository state, so the guard fails
+on both builds identically. V86 neither causes nor worsens it.

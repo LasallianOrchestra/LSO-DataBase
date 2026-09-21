@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-v20260919-self-attendance-live-v85';
+const CACHE_VERSION = 'lso-website-v20260921-accounts-search-v86';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -22,6 +22,7 @@ const CORE_PATHS = [
   './auth.js',
   './maintenance-mode-v62.js',
   './management-attendance-member-info-v4.js',
+  './accounts-search-console-v86.js',
   './ui-enhancements.js',
   './dashboard-enhancements.js',
   './renderall-compat-v25.js',

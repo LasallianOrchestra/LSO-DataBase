@@ -1,0 +1,70 @@
+LSO ACCOUNTS SEARCH CONSOLE V86
+FILE MANIFEST — UPLOAD LIST
+
+NEW FILES — SHIPPED
+- accounts-search-console-v86.js
+    The console itself: search, status tabs, role filter, sorting, highlighting,
+    empty state, keyboard support, observers. Read-only; loaded directly after
+    management-attendance-member-info-v4.js so it can filter the rows that
+    module renders. Precached by service-worker-enterprise-v41.js.
+- ACCOUNTS_SEARCH_CONSOLE_V86_GUIDE.txt
+- BUILD_INFO_ACCOUNTS_SEARCH_V86.txt
+- TEST_RESULTS_ACCOUNTS_SEARCH_V86.txt
+- FILE_MANIFEST_ACCOUNTS_SEARCH_V86.txt
+
+UPDATED FILES — SHIPPED
+- index.html
+    Search console markup inside #accountsView (Find an account, Role, Sort by,
+    five status tabs with counts, summary line, reset, hint, live announcer);
+    new <script src="accounts-search-console-v86.js?v=20260921-accounts-search-v86"></script>
+    after management-attendance-member-info-v4.js; cache-busting ->
+    ?v=20260921-accounts-search-v86 on lso-ui-bundle-v73.css,
+    lso-system-core-v4.js and pwa-enterprise-v41.js
+- lso-ui-bundle-v73.css
+    V86 layer appended at the end of the bundle (nothing above it edited):
+    console layout, search field with icon / clear / shortcut chip, status tabs
+    and counts, filter selects, summary + hint, match highlight marks, row flash,
+    empty state, night appearance, responsive layers (980 / 680 / 460px),
+    coarse-pointer touch rules, reduced-motion and print rules
+- lso-system-core-v4.js
+    version block: app 8.3.2 / build 2026.09.21-accounts-search-v86.1 /
+    cache lso-enterprise-v86-accounts-search /
+    permissions-manifest-v10-accounts-search.
+    schemaTarget deliberately unchanged (still 013_role_sync_interview_v82),
+    databaseInstaller unchanged (V86 ships no SQL)
+- service-worker-enterprise-v41.js
+    CACHE_VERSION -> 'lso-website-v20260921-accounts-search-v86';
+    './accounts-search-console-v86.js' added to CORE_PATHS
+- service-worker.js
+    CACHE_VERSION mirrored (legacy worker kept in sync)
+- pwa-enterprise-v41.js
+    ACTIVE_CACHE_MARKER -> 'accounts-search-v86' so the superseded
+    self-attendance-live-v85 cache is removed on the next load
+
+UPDATED FILES — AUDIT (not served to users)
+- responsive-audit/accounts-search-check.js
+    New behaviour suite: 37 checks across rendering, search, filters, keyboard,
+    safety, mobile and appearance. Writes
+    results/accounts-search-results.json + results/shots/accounts-search-*.png
+- responsive-audit/package.json
+    New script: npm run check-accounts
+- responsive-audit/README.md
+    Documents the new suite and how to run it
+
+NOT CHANGED (deliberately)
+- management-attendance-member-info-v4.js — renderAccounts() keeps owning the
+  table markup, the role / linked-member selects and the approve / reject /
+  enable / delete actions, plus its delegated listeners on #accountsTableBody
+- Every other website module
+- The permission model, role defaults, Role & Permission Center, and every saved
+  role selection
+- All operational data (accounts, members, attendance, duty hours, monthly
+  reports, settings, activity log, recovery points)
+- The Supabase schema — V86 needs no SQL patch
+
+INSTALL ORDER
+1. Upload the NEW file and every UPDATED file above.
+2. No SQL to run.
+3. Reload the site. The cache marker changed, so the previous lso-website-*
+   cache is deleted automatically; the console then appears at
+   Accounts → Account Management for the Administrator.

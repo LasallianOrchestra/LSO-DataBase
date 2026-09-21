@@ -2,7 +2,7 @@
   'use strict';
 
   const ACTIVE_WORKER = 'service-worker-enterprise-v41.js';
-  const ACTIVE_CACHE_MARKER = 'self-attendance-live-v85';
+  const ACTIVE_CACHE_MARKER = 'accounts-search-v86';
   const installButton = document.getElementById('installAppButton');
   const connectionBanner = document.getElementById('connectionBanner');
   let deferredPrompt = null;
