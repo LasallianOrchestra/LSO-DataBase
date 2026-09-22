@@ -3316,22 +3316,22 @@ begin
     end loop;
   end if;
 
-  -- Membership attendance editing is limited to Trainee and Probationary rows.
-  if v_role = 'Membership' and p_column = 'attendance' then
-    for v_old in
-      select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb))
-      where coalesce(value ->> 'attendanceGroup', '') not in ('Trainee Members', 'Probationary Members')
-    loop
+  -- Attendance calendar access: non-administrator roles may only modify rows belonging
+  -- to attendance calendars assigned to their role in Role & Permission Center
+  -- (e.g. Official Members, Trainee Members, Probationary Members).
+  if v_role <> 'Administrator' and p_column = 'attendance' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
       if not exists (select 1 from jsonb_array_elements(p_value) as item where item = v_old) then
-        raise exception 'Membership attendance access is limited to Trainee and Probationary rosters.' using errcode = '42501';
+        if not public.lso_role_can(v_role, 'attendance_group', coalesce(nullif(v_old ->> 'attendanceGroup', ''), 'Official Members')) then
+          raise exception 'This account role is not assigned to the selected Attendance calendar.' using errcode = '42501';
+        end if;
       end if;
     end loop;
-    for v_new in
-      select value from jsonb_array_elements(p_value)
-      where coalesce(value ->> 'attendanceGroup', '') not in ('Trainee Members', 'Probationary Members')
-    loop
+    for v_new in select value from jsonb_array_elements(p_value) loop
       if not exists (select 1 from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) as item where item = v_new) then
-        raise exception 'Membership attendance access is limited to Trainee and Probationary rosters.' using errcode = '42501';
+        if not public.lso_role_can(v_role, 'attendance_group', coalesce(nullif(v_new ->> 'attendanceGroup', ''), 'Official Members')) then
+          raise exception 'This account role is not assigned to the selected Attendance calendar.' using errcode = '42501';
+        end if;
       end if;
     end loop;
   end if;
@@ -4070,6 +4070,9 @@ values
   ('Administrator','manage','monthlyFinalization',true),
   ('Administrator','manage','attendanceFinalization',true),
   ('Membership','manage','dutyReview',true),
+  ('Membership','attendance_group','Official Members',true),
+  ('Membership','attendance_group','Trainee Members',true),
+  ('Membership','attendance_group','Probationary Members',true),
   ('Staff Account','manage','dutyReview',true),
   ('Administrator','manage','dutyReview',true),
   ('Trainee/Probationary','self','dutyPunch',true)
@@ -4083,8 +4086,11 @@ stable
 security definer
 set search_path = public, extensions, pg_temp
 as $$
-  select coalesce((select allowed from public.lso_role_permissions
-    where role_name=p_role and permission_key=p_permission_key and resource=coalesce(p_resource,'')), false);
+  select case
+    when p_role = 'Administrator' then true
+    else coalesce((select allowed from public.lso_role_permissions
+      where role_name=p_role and permission_key=p_permission_key and resource=coalesce(p_resource,'')), false)
+  end;
 $$;
 
 -- Server-side recovery points preserve complete system_state snapshots before
@@ -4524,22 +4530,22 @@ begin
     end loop;
   end if;
 
-  -- Membership attendance editing is limited to Trainee and Probationary rows.
-  if v_role = 'Membership' and p_column = 'attendance' then
-    for v_old in
-      select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb))
-      where coalesce(value ->> 'attendanceGroup', '') not in ('Trainee Members', 'Probationary Members')
-    loop
+  -- Attendance calendar access: non-administrator roles may only modify rows belonging
+  -- to attendance calendars assigned to their role in Role & Permission Center
+  -- (e.g. Official Members, Trainee Members, Probationary Members).
+  if v_role <> 'Administrator' and p_column = 'attendance' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
       if not exists (select 1 from jsonb_array_elements(p_value) as item where item = v_old) then
-        raise exception 'Membership attendance access is limited to Trainee and Probationary rosters.' using errcode = '42501';
+        if not public.lso_role_can(v_role, 'attendance_group', coalesce(nullif(v_old ->> 'attendanceGroup', ''), 'Official Members')) then
+          raise exception 'This account role is not assigned to the selected Attendance calendar.' using errcode = '42501';
+        end if;
       end if;
     end loop;
-    for v_new in
-      select value from jsonb_array_elements(p_value)
-      where coalesce(value ->> 'attendanceGroup', '') not in ('Trainee Members', 'Probationary Members')
-    loop
+    for v_new in select value from jsonb_array_elements(p_value) loop
       if not exists (select 1 from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) as item where item = v_new) then
-        raise exception 'Membership attendance access is limited to Trainee and Probationary rosters.' using errcode = '42501';
+        if not public.lso_role_can(v_role, 'attendance_group', coalesce(nullif(v_new ->> 'attendanceGroup', ''), 'Official Members')) then
+          raise exception 'This account role is not assigned to the selected Attendance calendar.' using errcode = '42501';
+        end if;
       end if;
     end loop;
   end if;
@@ -5130,7 +5136,7 @@ begin
       'landingView','dashboardView',
       'views',jsonb_build_array('dashboardView','membersView','lookupView','contractView','monthlyReportView','attendanceView','dutyHoursView'),
       'actions',jsonb_build_array('manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'),
-      'attendanceGroups',jsonb_build_array('Trainee Members','Probationary Members'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
       'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log')
     )
     when 'General Secretary' then jsonb_build_object(
