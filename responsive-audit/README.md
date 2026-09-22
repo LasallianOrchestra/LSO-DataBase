@@ -40,7 +40,7 @@ status tabs, role filter, the empty state and its reset, all six sort orders,
 Enter-jump and focus hand-off, Esc, Ctrl + K, Action Center deep-link reset, row
 controls preserved after filtering, night appearance, the 390 px layout (0
 overflow, every control ≥ 44 px, 16 px input floor, snap-scrolling tabs) and the
-non-Administrator lock-out. 37 checks; writes
+non-Administrator lock-out. 43 checks; writes
 `results/accounts-search-results.json` and `results/shots/accounts-search-*.png`.
 It exits non-zero on violation, so it can be added to CI the same way.
 

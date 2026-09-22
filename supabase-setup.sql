@@ -3495,7 +3495,14 @@ begin
       v_disabled := false;
     end;
 
-    if v_role = 'Trainee/Probationary' and v_member_id is not null then
+    -- A link that is unchanged from the stored row is not re-validated: a
+    -- stale or period-expired link on ONE account must never abort saves of
+    -- unrelated accounts ("The selected linked member record could not be
+    -- found." while changing another account's role). New or changed links
+    -- are still fully validated below.
+    if v_role = 'Trainee/Probationary' and v_member_id is not null
+       and (v_old_role is distinct from v_role
+            or coalesce(v_old_member_id, '') <> coalesce(v_member_id, '')) then
       select member
       into v_member
       from public.system_state as state,

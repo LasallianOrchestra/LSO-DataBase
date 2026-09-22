@@ -43,7 +43,7 @@ UPDATED FILES — SHIPPED
 
 UPDATED FILES — AUDIT (not served to users)
 - responsive-audit/accounts-search-check.js
-    New behaviour suite: 37 checks across rendering, search, filters, keyboard,
+    New behaviour suite: 43 checks across rendering, search, filters, keyboard,
     safety, mobile and appearance. Writes
     results/accounts-search-results.json + results/shots/accounts-search-*.png
 - responsive-audit/package.json

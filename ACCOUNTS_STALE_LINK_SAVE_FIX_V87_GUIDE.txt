@@ -1,0 +1,98 @@
+LASALLIAN SYMPHONY ORCHESTRA — ORCHESTRA MANAGEMENT SYSTEM
+ACCOUNTS STALE LINK SAVE FIX (V87) — GUIDE, BEHAVIOUR & VERIFICATION
+Build: 2026.09.22-accounts-stale-link-fix-v87.1     Website version 8.3.3
+Database patch: LSO_ACCOUNTS_STALE_LINK_SAVE_FIX.sql (existing projects)
+==============================================================================
+
+1. THE PROBLEM
+------------------------------------------------------------------------------
+In Accounts → Account Management, changing the role of an account could fail
+with the system notice:
+
+    Shared Database needs attention
+    The selected linked member record could not be found.
+    ERROR CODE SYS-UNEXPECTED-999
+
+…and the role change was NOT saved.
+
+Root cause: public.lso_save_accounts() validates EVERY Trainee/Probationary
+account in the save payload, and the website sends the full account list on
+every edit. If ONE approved Trainee/Probationary account still carried a link
+to a member record that no longer exists in the shared member directory (for
+example after the directory was replaced by a restore, or written by an older
+client), the member lookup for that untouched account aborted the entire save.
+The Administrator saw the error while editing a completely unrelated account,
+and no role change, approval, or enable/disable could be saved.
+
+2. THE FIX
+------------------------------------------------------------------------------
+Website (management-attendance-member-info-v4.js):
+  * Before any account save (role change, member link, approve, reject,
+    enable/disable), sanitizeStaleMemberLinks() clears orphaned links in the
+    payload: a Trainee/Probationary account whose memberId is not in the
+    shared member directory is treated as unlinked. Because its link changed,
+    the database returns that account to Pending — the correct review path.
+  * A one-time toast names the account(s) returned to Pending so the
+    Administrator knows what happened and can re-link and re-approve.
+  * If the member directory has not loaded yet (empty list), nothing is
+    touched — the sanitizer never guesses.
+
+Database (LSO_ACCOUNTS_STALE_LINK_SAVE_FIX.sql):
+  * public.lso_save_accounts() no longer re-validates a link that is UNCHANGED
+    from the stored row (same role and same member_id). A stale or
+    period-expired link on one account therefore can never abort saves of
+    unrelated accounts again.
+  * New or CHANGED links keep the full validation: the member must exist in
+    the directory, must currently be in the Trainee or Probationary Period,
+    and must not already be linked to another active approved account.
+
+Either side alone unblocks role changes; both together are defence in depth
+(the website fix also protects devices still serving an older cached build,
+the database fix also protects other/older clients).
+
+3. INSTALL ORDER
+------------------------------------------------------------------------------
+  1. Supabase → SQL Editor → run LSO_ACCOUNTS_STALE_LINK_SAVE_FIX.sql.
+     (Fresh installations: supabase-setup.sql already contains the patched
+     function; nothing extra to run.)
+  2. Upload the updated website files:
+       - management-attendance-member-info-v4.js
+       - lso-system-core-v4.js
+       - index.html
+  3. Open the website and press Ctrl+F5. The error dialog now reports
+     Build 2026.09.22-accounts-stale-link-fix-v87.1 once the new files load.
+  4. In Accounts → Account Management, change a role again: it saves. If an
+     orphaned link existed, a toast names the account returned to Pending;
+     open its row, link the correct current member, and approve.
+
+4. VERIFICATION
+------------------------------------------------------------------------------
+Reproduced and fixed against a real PostgreSQL server running the repository's
+own SQL, verbatim (tables + lso_session_account_id + lso_local_date +
+lso_member_period_on_date + lso_account_json + lso_list_accounts +
+lso_save_accounts), with an approved Trainee/Probationary account linked to a
+member removed from system_state.members:
+
+  1. CURRENT website payload + CURRENT function  -> raises exactly
+     "The selected linked member record could not be found." and the role
+     change is not written (the reported bug).
+  2. Sanitized payload (website fix) + UNPATCHED function -> save succeeds;
+     the role change is written; the orphaned account returns to Pending with
+     its link cleared.
+  3. Raw payload (old cached website) + PATCHED function -> save succeeds;
+     the role change is written; the untouched stale link passes through.
+  4. PATCHED function + a NEW link to a non-existent member -> still rejected
+     with the same message (validation of new/changed links is intact).
+
+The V86 Accounts Search Console behaviour suite still passes 20/20 of its
+documented checks against the real page markup (rendering, search, tabs,
+sorts, empty state, unpatched-database degradation).
+
+5. FILES
+------------------------------------------------------------------------------
+  NEW   LSO_ACCOUNTS_STALE_LINK_SAVE_FIX.sql      patched lso_save_accounts()
+  NEW   ACCOUNTS_STALE_LINK_SAVE_FIX_V87_GUIDE.txt (this file)
+  UPD   management-attendance-member-info-v4.js   payload sanitizer + toast
+  UPD   lso-system-core-v4.js                     version block 8.3.3 / v87
+  UPD   supabase-setup.sql                        patched function for fresh installs
+  UPD   index.html                                cache-busting for the two JS files
