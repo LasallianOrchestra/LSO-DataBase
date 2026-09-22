@@ -95,7 +95,7 @@ declare
 begin
   -- The session is validated here too, so an invalid token is still rejected
   -- instead of silently succeeding on an identical payload.
-  perform public.lso_session_account_id(p_token, true);
+  perform public.lso_session_account_id(p_token, false);
 
   -- Read the stored column through the row image so this wrapper never depends
   -- on a hard-coded column list. An unknown column simply yields null, which

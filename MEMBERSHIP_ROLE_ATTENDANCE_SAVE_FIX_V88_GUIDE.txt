@@ -1,0 +1,121 @@
+LASALLIAN SYMPHONY ORCHESTRA — ORCHESTRA MANAGEMENT SYSTEM
+MEMBERSHIP ROLE ATTENDANCE SAVE FIX (V88) — ROOT CAUSE & SUPABASE REPAIR
+==============================================================================
+
+1. THE PROBLEM & SCREEN
+------------------------------------------------------------------------------
+When an account configured with the "Membership" role in
+Accounts → Account Management logs in and attempts to record, update, or save
+attendance for Official Members (such as the String section roster shown in
+the statement problem screenshot), the save fails and a red banner notification
+is presented:
+
+    "This account’s role is not permitted to change this system area.
+     The change was reverted to the value in the shared database."
+
+All attendance status selections, notes, and changes are reverted to their
+prior values in the shared database, preventing Membership officers from
+managing official attendance.
+
+2. ROOT CAUSE ANALYSIS
+------------------------------------------------------------------------------
+The error was caused by three compounding issues in the database layer:
+
+(A) V83 Wrapper Session Guard Bug (LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql):
+    In public.lso_update_state(), the session was validated with:
+        perform public.lso_session_account_id(p_token, true);
+    Passing true forces p_require_admin = true. When ANY non-administrator
+    account (such as Membership or General Secretary) attempted to write to the
+    shared database, lso_session_account_id raised:
+        ERROR 42501: Invalid or expired session.
+    Because lso_update_state_v69 delegates non-noop writes to lso_update_state(),
+    this blocked all saves originating from non-administrator roles.
+
+(B) Obsolete Hardcoded Attendance Calendar Restriction:
+    In public.lso_update_state() and public.lso_update_state_core(), a legacy
+    guard remained from before the Dynamic Role & Permission Center (V38/V82):
+        if v_role = 'Membership' and p_column = 'attendance' then
+          where coalesce(value ->> 'attendanceGroup', '') not in
+                ('Trainee Members', 'Probationary Members')
+          raise exception 'Membership attendance access is limited to
+                           Trainee and Probationary rosters.' using errcode = '42501';
+    Under V82 (LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql), the Membership role was
+    officially granted access to all three attendance calendars:
+    Official Members, Trainee Members, and Probationary Members. The web UI
+    permits Membership users to select and edit Official Members. However, whenever
+    a Membership user edited an Official Member (e.g. Violin/Cello in the String
+    section), the hardcoded check aborted the save with error 42501.
+
+(C) Stale Permission Seed on Existing Databases:
+    Databases initialized prior to V82 were seeded under migration 009 with only
+    'Trainee Members' and 'Probationary Members' for the Membership role in
+    public.lso_role_permissions. The V82 repair script preserved existing
+    permission records without backfilling ('Membership', 'attendance_group',
+    'Official Members'), causing public.lso_role_can() to evaluate to false.
+
+When the server raised error 42501, the client synchronization layer
+(cloud-staff-v8.js) recognized the authorization failure, called
+revertColumnToServer('attendance'), restored the database snapshot, and emitted
+lso:permission-denied, displaying the red toast notification shown on screen.
+
+3. THE FIX
+------------------------------------------------------------------------------
+Database Patch: LSO_MEMBERSHIP_ROLE_ATTENDANCE_PERMISSION_FIX.sql
+(also folded into supabase-setup.sql for fresh installations)
+
+1. Correct Session Authentication:
+   public.lso_update_state() now invokes:
+       perform public.lso_session_account_id(p_token, false);
+   allowing approved non-administrator roles to save authorized data collections.
+
+2. Dynamic Attendance Calendar Permissions:
+   Replaced the obsolete hardcoded "limited to Trainee and Probationary" check in
+   public.lso_update_state_core() with dynamic calendar permission validation:
+       if v_role <> 'Administrator' and p_column = 'attendance' then
+         -- Validates against public.lso_role_can(v_role, 'attendance_group', group)
+   Non-administrators can edit any attendance calendar granted to their role
+   in System Administration → Role & Permission Center.
+
+3. Complete Membership Role Permissions Seed:
+   Ensures public.lso_role_permissions contains:
+       ('Membership', 'attendance_group', 'Official Members')
+       ('Membership', 'attendance_group', 'Trainee Members')
+       ('Membership', 'attendance_group', 'Probationary Members')
+   along with all required write columns (members, events, attendance, duty_hours,
+   monthly_reports, monthly_reports_compat, settings, activity_log).
+
+4. Canonical Optimistic Concurrency RPC:
+   Ensures a single, conflict-free public.lso_update_state_v69() overload
+   exists, eliminating PostgREST PGRST202 function signature ambiguity.
+
+4. INSTALLATION INSTRUCTIONS
+------------------------------------------------------------------------------
+1. Open your Supabase Dashboard:
+   https://supabase.com/dashboard/project/<your-project-id>
+2. Navigate to SQL Editor → New query.
+3. Open and copy the entire content of:
+   LSO_MEMBERSHIP_ROLE_ATTENDANCE_PERMISSION_FIX.sql
+4. Paste into the SQL Editor and click RUN.
+5. The verification query at the bottom will return:
+   {
+     "membership_official_attendance_allowed": true,
+     "membership_attendance_write_allowed": true,
+     "membership_events_write_allowed": true,
+     "membership_members_write_allowed": true,
+     "membership_duty_hours_write_allowed": true,
+     "lso_update_state_installed": true,
+     "lso_update_state_core_installed": true,
+     "lso_update_state_v69_installed": true
+   }
+6. In the website, log in with an approved Membership role account.
+7. Open Attendance, select Official Members, and modify or record attendance
+   (e.g., String section). The records will save immediately with the status
+   "All changes saved to the shared database" and no permission errors.
+
+5. FILES MODIFIED / CREATED
+------------------------------------------------------------------------------
+  NEW  LSO_MEMBERSHIP_ROLE_ATTENDANCE_PERMISSION_FIX.sql
+  NEW  MEMBERSHIP_ROLE_ATTENDANCE_SAVE_FIX_V88_GUIDE.txt
+  UPD  LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql (corrected p_require_admin)
+  UPD  supabase-setup.sql (synchronized with patched functions & seeds)
+==============================================================================
