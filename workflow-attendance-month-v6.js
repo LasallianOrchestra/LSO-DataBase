@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v9-print-live-feed-fix';
+  window.__LSO_ATTENDANCE_WORKFLOW_VERSION__ = 'v10-semestral-verified-month-count';
 
   const el = (id) => document.getElementById(id);
   const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -705,6 +705,24 @@
     popup.document.close();
   }
 
+  // Semester snapshots are frozen when a semester is finalized. Older snapshots
+  // predate `monthCount`, but still contain the authoritative `months` array.
+  // Always derive the displayed count from that array first so legacy finalized
+  // reports do not print a blank/zero verified-month count.
+  function verifiedMonthCount(snapshot) {
+    if (Array.isArray(snapshot?.months)) return snapshot.months.length;
+    const storedCount = Number(snapshot?.monthCount);
+    return Number.isFinite(storedCount) && storedCount >= 0 ? storedCount : 0;
+  }
+
+  function memberVerifiedMonthCount(item) {
+    if (Array.isArray(item?.monthlyRates)) {
+      return item.monthlyRates.filter((entry) => Number.isFinite(entry?.rate)).length;
+    }
+    const storedCount = Number(item?.monthsCounted);
+    return Number.isFinite(storedCount) && storedCount >= 0 ? storedCount : 0;
+  }
+
   function printIndividualAttendance() {
     const member = getMembers().find((item) => item.id === selectedAttendanceMemberId);
     if (!member) {
@@ -716,7 +734,7 @@
     const item = snapshot.members?.[member.id] || { monthlyRates: [], rate: null, monthsCounted: 0 };
     const rows = (item.monthlyRates || []).map((entry) => `<tr><td>${safeText(entry.month)}</td><td>${entry.rate == null ? '—' : `${entry.rate}%`}</td><td>Finalized monthly rating</td></tr>`).join('');
     const summaryHtml = `<div class="summary">${[
-      ['Member', member.fullName], ['Attendance Group', attendanceGroupShortLabel()], ['Semester', activeSemester()], ['Months Counted', item.monthsCounted || 0], ['Semester Rate', item.rate == null ? '—' : `${item.rate}%`], ['Completion Date', snapshot.endDate ? dateLabel(snapshot.endDate) : 'Not set']
+      ['Member', member.fullName], ['Attendance Group', attendanceGroupShortLabel()], ['Semester', activeSemester()], ['Verified Months', memberVerifiedMonthCount(item)], ['Semester Rate', item.rate == null ? '—' : `${item.rate}%`], ['Completion Date', snapshot.endDate ? dateLabel(snapshot.endDate) : 'Not set']
     ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>`;
     openPrintDocument(printableDocument({
       title: `${member.fullName} — ${attendanceGroupShortLabel()} Semestral Attendance`,
@@ -778,17 +796,17 @@
     const memberRows = Object.entries(snapshot.members || {}).map(([memberId, item]) => {
       const member = membersById.get(memberId) || { fullName: item.memberName || memberId, membershipId: '' };
       const monthlyRates = (item.monthlyRates || []).map((entry) => `${entry.month}: ${entry.rate == null ? '—' : `${entry.rate}%`}`).join(' • ');
-      return `<tr><td>${safeText(member.fullName)}</td><td>${safeText(member.membershipId || '—')}</td><td>${safeText(item.monthsCounted || 0)}</td><td>${item.rate == null ? '—' : `${item.rate}%`}</td><td>${safeText(monthlyRates || 'No finalized monthly rating')}</td></tr>`;
+      return `<tr><td>${safeText(member.fullName)}</td><td>${safeText(member.membershipId || '—')}</td><td>${safeText(memberVerifiedMonthCount(item))}</td><td>${item.rate == null ? '—' : `${item.rate}%`}</td><td>${safeText(monthlyRates || 'No finalized monthly rating')}</td></tr>`;
     }).join('');
     const monthRows = (snapshot.months || []).map((item) => `<tr><td>${safeText(item.month)}</td><td>${safeText(item.eventCount || 0)}</td><td>${item.groupRate == null ? '—' : `${item.groupRate}%`}</td><td>Finalized</td></tr>`).join('');
     const summaryHtml = `<div class="summary">${[
-      ['Attendance Group', attendanceGroupShortLabel()], ['Semester', activeSemester()], ['Completion Date', snapshot.endDate ? dateLabel(snapshot.endDate) : 'Not set'], ['Finalized Months', snapshot.monthCount || 0], ['Semester Rate', snapshot.groupRate == null ? '—' : `${snapshot.groupRate}%`], ['Method', 'Average of monthly ratings']
+      ['Attendance Group', attendanceGroupShortLabel()], ['Semester', activeSemester()], ['Completion Date', snapshot.endDate ? dateLabel(snapshot.endDate) : 'Not set'], ['Verified Months', verifiedMonthCount(snapshot)], ['Semester Rate', snapshot.groupRate == null ? '—' : `${snapshot.groupRate}%`], ['Method', 'Average of monthly ratings']
     ].map(([label, value]) => `<div><span>${safeText(label)}</span><strong>${safeText(value)}</strong></div>`).join('')}</div>`;
     openPrintDocument(printableDocument({
       title: `${attendanceRosterModeLabel()} — ${attendanceGroupShortLabel()} — ${activeSemester()} Semestral Attendance`,
       subtitle: `The semester rating is the arithmetic mean of finalized monthly attendance ratings.`,
       summaryHtml,
-      tableHtml: `<h2 class="report-section">Finalized Monthly Ratings</h2><table><thead><tr><th>Month</th><th>Activities</th><th>Final Rating</th><th>Status</th></tr></thead><tbody>${monthRows || '<tr><td colspan="4">No finalized monthly ratings.</td></tr>'}</tbody></table><h2 class="report-section">Member Semestral Ratings</h2><table><thead><tr><th>Member</th><th>Membership ID</th><th>Months Counted</th><th>Semester Rate</th><th>Monthly Ratings</th></tr></thead><tbody>${memberRows || '<tr><td colspan="5">No finalized member ratings.</td></tr>'}</tbody></table>`,
+      tableHtml: `<h2 class="report-section">Finalized Monthly Ratings</h2><table><thead><tr><th>Month</th><th>Activities</th><th>Final Rating</th><th>Status</th></tr></thead><tbody>${monthRows || '<tr><td colspan="4">No finalized monthly ratings.</td></tr>'}</tbody></table><h2 class="report-section">Member Semestral Ratings</h2><table><thead><tr><th>Member</th><th>Membership ID</th><th>Verified Months</th><th>Semester Rate</th><th>Monthly Ratings</th></tr></thead><tbody>${memberRows || '<tr><td colspan="5">No finalized member ratings.</td></tr>'}</tbody></table>`,
       footer: `${attendanceGroupShortLabel()} semestral report • ${activeSemester()} • monthly ratings are not pooled across calendar months.`
     }));
   }
