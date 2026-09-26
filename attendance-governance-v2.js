@@ -303,11 +303,22 @@
   function finalizedMonthsForSemester(semester = activeSemester(), group = activeGroup(), mode = activeMode(), endDate = '') {
     const data = loadPeriodGovernance();
     const prefix = `${periodScopeKey(semester, group, mode)}::`;
-    const endMonth = String(endDate || data.semesterEndDates[semester] || '9999-12-31').slice(0, 7);
+    // A finalized monthly rating is part of the semestral calculation even
+    // when the previously saved semester-end date is older than that month.
+    // The old upper-bound filter silently dropped every finalized month after
+    // the date saved during an earlier semester review (for example, August).
+    // Keep the date for display metadata, but never hide finalized monthly
+    // ratings from the live semestral computation.
     return Object.entries(data.monthFinalizations)
-      .filter(([key, value]) => key.startsWith(prefix) && value?.state === 'Finalized' && key.slice(prefix.length) <= endMonth && value.snapshot)
+      .filter(([key, value]) => key.startsWith(prefix) && value?.state === 'Finalized' && value.snapshot)
       .map(([key, value]) => ({ month: key.slice(prefix.length), ...value.snapshot }))
-      .sort((a, b) => a.month.localeCompare(b.month));
+      .sort((a, b) => {
+        // Month keys are stored as YYYY-MM. Compare numerically so the
+        // semestral report always prints in true chronological order.
+        const left = String(a.month || '').split('-').map(Number);
+        const right = String(b.month || '').split('-').map(Number);
+        return (left[0] - right[0]) || (left[1] - right[1]);
+      });
   }
 
   function calculateSemesterSnapshot(semester = activeSemester(), group = activeGroup(), mode = activeMode(), endDate = '') {

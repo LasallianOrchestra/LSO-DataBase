@@ -730,7 +730,11 @@
       return;
     }
     const semesterLifecycle = resolveSemesterLifecycle();
-    const snapshot = window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || { members: {}, months: [], groupRate: null, endDate: '' };
+    // Rebuild from the current finalized monthly records at print time. The
+    // persisted semester snapshot is a historical checkpoint and can lag when
+    // a monthly rating is finalized or corrected afterward; it must not make
+    // the individual printout display a stale dash for a now-rated month.
+    const snapshot = window.LSOAttendanceGovernance?.calculateSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || { members: {}, months: [], groupRate: null, endDate: '' };
     const item = snapshot.members?.[member.id] || { monthlyRates: [], rate: null, monthsCounted: 0 };
     const rows = (item.monthlyRates || []).map((entry) => `<tr><td>${safeText(entry.month)}</td><td>${entry.rate == null ? '—' : `${entry.rate}%`}</td><td>Finalized monthly rating</td></tr>`).join('');
     const summaryHtml = `<div class="summary">${[
@@ -791,7 +795,10 @@
     if (semesterLifecycle.state.state !== 'Finalized') {
       return window.LSOApp?.showToast?.('Finalize the semestral attendance rating before printing the official semester report.', true);
     }
-    const snapshot = window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || { monthCount: 0, months: [], members: {}, groupRate: null, endDate: '' };
+    // Use the latest finalized monthly ratings for every print operation. A
+    // stored semester snapshot may be older than a subsequent monthly
+    // finalization/correction, which previously produced blank or stale rows.
+    const snapshot = window.LSOAttendanceGovernance?.calculateSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || window.LSOAttendanceGovernance?.getSemesterSnapshot?.(activeSemester(), activeAttendanceGroup(), semesterLifecycle.mode) || { monthCount: 0, months: [], members: {}, groupRate: null, endDate: '' };
     const membersById = new Map(getMembers().map((member) => [member.id, member]));
     const memberRows = Object.entries(snapshot.members || {}).map(([memberId, item]) => {
       const member = membersById.get(memberId) || { fullName: item.memberName || memberId, membershipId: '' };
