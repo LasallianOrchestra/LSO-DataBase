@@ -1,0 +1,71 @@
+LASALLIAN SYMPHONY ORCHESTRA — ONE-FILE SUPABASE INSTALLER (V89)
+================================================================
+
+FILE TO RUN
+-----------
+LSO_SUPABASE_COMPLETE_INSTALL_V89.sql
+
+This is the single Supabase SQL file to paste into Dashboard -> SQL Editor ->
+New query -> Run. Use it for a NEW project or to rebuild/repair an EXISTING one.
+Do not run the individual LSO_*PATCH/REPAIR/*.sql files separately when using
+this file; everything is already merged in dependency order.
+
+WHAT IT CONTAINS
+----------------
+1. Base shared database (accounts, sessions, members, events, attendance,
+   duty hours, monthly reports, instruments, settings, activity log, recovery).
+2. Dynamic Role & Permission Center (009).
+3. Membership / General Secretary account roles.
+4. Monthly Report native column.
+5. Duty Hours complete install, staff review, mobile required approver.
+6. V35 attendance/duty revision and separate Time In/Time Out approval.
+7. Philippines timezone date validation and V69 writer repair.
+8. V82 all-role Supabase permission sync.
+9. V83 attendance roster refresh stability.
+10. V84 / V85 My Attendance monitoring and live own-record feed.
+11. V87 stale account-link save fix.
+12. V88 Membership Official-Members attendance save repair.
+13. V89 realtime access control: native permission center with identity and
+    change fingerprint, Membership and General Secretary attendance grants,
+    all-role write-column reconciliation, and non-admin state writer.
+
+WHY THERE IS NO DUPLICATE VERSION ERROR
+---------------------------------------
+Individual patches inserted migration rows with hard-coded version numbers
+(14 was used by both V84 and the old V89 marker). Because
+lso_schema_migrations.version_number is UNIQUE, running them together could
+raise:
+
+    ERROR 23505: duplicate key value violates unique constraint
+    "lso_schema_migrations_version_unique"
+    DETAIL: Key (version_number)=(14) already exists.
+
+In this consolidated file, all patch-level migration INSERTs are removed.
+Exactly one conflict-safe marker is registered at the very end:
+key = 999_complete_supabase_install_v89, version_number = next free value
+(at least 17). Re-running the file updates that row's metadata and never
+attempts a second insert.
+
+INSTALLATION
+------------
+1. Back up the current project (Data & Recovery -> Recovery Point).
+2. Open LSO_SUPABASE_COMPLETE_INSTALL_V89.sql, copy the ENTIRE content.
+3. Supabase SQL Editor -> New query -> paste -> Run.
+4. Wait for Success. The final verification row should show:
+     complete_install_registered              = true
+     permission_center                         = true
+     realtime_permission_fingerprint           = true
+     membership_official_attendance             = true
+     gensec_new_month_attendance                = true
+5. Run LSO_SECURE_ADMIN_SETUP.sql privately ONCE to create/rotate the
+   Administrator credentials (it returns one-time credentials).
+6. Deploy the website files and open refresh-access-control-v89.html once
+   on each device/PWA.
+
+NOTES
+-----
+* The script is idempotent: existing accounts, members, attendance, duty
+  records, reports, activity logs, and recovery points are preserved.
+* Do not add a service_role key to the browser; the site only uses the
+  publishable anon key. All permission checks are SECURITY DEFINER RPCs.
+* For the website-side test matrix, see ACCESS_CONTROL_REALTIME_SYNC_V89_GUIDE.txt.

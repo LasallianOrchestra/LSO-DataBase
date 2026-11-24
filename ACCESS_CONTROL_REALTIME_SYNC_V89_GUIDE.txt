@@ -99,16 +99,18 @@ WEBSITE — role-access-sync-v89.js (loaded in index.html)
   * Cache-busting: PWA cache marker and service worker precache updated to V89.
 
 FRESH INSTALLATIONS
-  * supabase-setup.sql now appends the complete V89 patch, so a new project is
-    born with the corrected permission center and writer.
+  * LSO_SUPABASE_COMPLETE_INSTALL_V89.sql is now the ONE-FILE installer: it
+    merges the base database, every non-obsolete patch, and V89 in the correct
+    order. See SUPABASE_COMPLETE_INSTALL_V89_GUIDE.txt.
 
 4. INSTALLATION (IMPORTANT — SQL FIRST)
 ------------------------------------------------------------------------------
 1. Back up the current Supabase database (Data & Recovery -> Recovery Point).
 2. Supabase Dashboard -> SQL Editor -> New query.
-3. Paste the ENTIRE content of LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql and Run.
-   (If this is a brand-new installation, running the updated
-    supabase-setup.sql is sufficient; it already includes V89.)
+3. Paste the ENTIRE content of LSO_SUPABASE_COMPLETE_INSTALL_V89.sql and Run.
+   (Use LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql only when you intentionally
+    want to apply just the access-control repair to an already complete
+    database.)
 4. Confirm the verification result is TRUE for every item. Key checks:
      membership_official_attendance_allowed : true
      membership_events_write_allowed        : true
