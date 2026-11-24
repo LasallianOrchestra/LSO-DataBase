@@ -1,0 +1,33 @@
+LSO ACCESS CONTROL V89 — FILE MANIFEST
+======================================
+
+NEW FILES
+---------
+LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql   Database repair / canonical RPCs
+role-access-sync-v89.js                    Realtime role & permission bridge
+ACCESS_CONTROL_REALTIME_SYNC_V89_GUIDE.txt Installation and test instructions
+BUILD_INFO_ACCESS_CONTROL_V89.txt          Build / verification summary
+FILE_MANIFEST_ACCESS_CONTROL_V89.txt       This file
+refresh-access-control-v89.html            Browser/PWA cache reset page
+
+MODIFIED FILES
+--------------
+index.html                      Load role-access-sync-v89.js after the center
+supabase-setup.sql              Appended V89 SQL for fresh installations
+lso-system-core-v4.js           Build 2026.11.24-v89 / permissions manifest v11
+pwa-enterprise-v41.js           Cache marker access-control-v89
+service-worker-enterprise-v41.js Cache version v20261124 + new module precache
+
+UNCHANGED ACTIVE MODULES (verified compatible)
+----------------------------------------------
+role-access-v6.js               applyServerPayload() event contract
+role-permission-center-v39.js   save() verifies returned payload
+permissions-dynamic-v38.js      lso:permissions-changed / auth-changed listeners
+cloud-staff-v8.js               getRolePermissionCenter()/session token APIs
+
+DEPLOY ORDER
+------------
+1. Run LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql in Supabase.
+2. Upload all website files (do not rename).
+3. Open refresh-access-control-v89.html once per device/PWA.
+4. Test the matrix in ACCESS_CONTROL_REALTIME_SYNC_V89_GUIDE.txt section 5.

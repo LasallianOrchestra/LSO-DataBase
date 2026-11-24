@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_VERSION = 'lso-website-v20260921-accounts-search-v86';
+const CACHE_VERSION = 'lso-website-v20261124-access-control-v89';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SCOPE = new URL('./', self.location.href);
@@ -16,6 +16,7 @@ const CORE_PATHS = [
   './lso-system-core-v4.js',
   './runtime-stability-v54.js',
   './role-access-v6.js',
+  './role-access-sync-v89.js',
   './cloud-staff-v8.js',
   './app-member-information-v5.js',
   './auth-view-controller-v18.js',

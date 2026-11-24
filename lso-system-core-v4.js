@@ -72,14 +72,14 @@ window.renderAll = renderAll;
   });
 
   const VERSION = Object.freeze({
-    app: '8.3.3',
-    build: '2026.09.22-accounts-stale-link-fix-v87.1',
+    app: '8.3.4',
+    build: '2026.11.24-access-control-realtime-sync-v89',
     // The permission MODEL is unchanged (the V82 resource model is extended), so
     // the schema target stays on the V82 migration the server reports.
     schemaTarget: '013_role_sync_interview_v82',
-    cache: 'lso-enterprise-v87-stale-link-fix',
-    permissions: 'permissions-manifest-v10-accounts-search',
-    databaseInstaller: 'LSO_ACCOUNTS_STALE_LINK_SAVE_FIX.sql'
+    cache: 'lso-enterprise-v89-access-control',
+    permissions: 'permissions-manifest-v11-realtime-sync',
+    databaseInstaller: 'LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql'
   });
 
 
