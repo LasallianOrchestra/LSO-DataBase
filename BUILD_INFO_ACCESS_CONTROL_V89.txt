@@ -17,6 +17,7 @@ Active role/access files:
 
 Database:
 - LSO_SUPABASE_COMPLETE_INSTALL_V89.sql (ONE-FILE installer: base + all non-obsolete patches + V89; use this for new or existing projects)
+  Compatibility: Monthly Report migration uses jsonb_typeof/<>'{}' instead of the non-existent jsonb_object_length() (avoids PostgreSQL 42883).
 - LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (stand-alone repair only)
 - supabase-setup.sql (V89 appended for clean installations)
 

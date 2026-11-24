@@ -64,6 +64,10 @@ INSTALLATION
 
 NOTES
 -----
+* The compatibility migration no longer calls `jsonb_object_length()` (which
+  does not exist in PostgreSQL). It now checks the Monthly Report settings
+  object with `jsonb_typeof(...) = 'object'` and `<> '{}'::jsonb`, so the
+  installer runs on current Supabase/PostgreSQL without a 42883 error.
 * The script is idempotent: existing accounts, members, attendance, duty
   records, reports, activity logs, and recovery points are preserved.
 * Do not add a service_role key to the browser; the site only uses the
