@@ -1,0 +1,32 @@
+LSO ACCESS CONTROL — V89 REALTIME ROLE/PERMISSION SYNC
+=======================================================
+Build: 2026-11-24 access-control-v89
+Database migration: 014_access_control_realtime_sync_v89 (schemaVersion 14)
+Application version: 8.3.4
+
+Active role/access files:
+- role-access-v6.js                 (permission manifest + runtime policy)
+- role-permission-center-v39.js     (Administrator editor and matrix)
+- permissions-dynamic-v38.js        (live UI enforcement)
+- role-access-sync-v89.js           (NEW: fingerprint poll, cross-tab sync,
+                                     live account-role change detection)
+- cloud-staff-v8.js                 (Supabase RPC connector)
+- lso-system-core-v4.js             (V89 build metadata)
+
+Database:
+- LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (stand-alone repair: run in Supabase)
+- supabase-setup.sql (V89 appended for clean installations)
+
+Cache/PWA:
+- pwa-enterprise-v41.js: ACTIVE_CACHE_MARKER = access-control-v89
+- service-worker-enterprise-v41.js: lso-website-v20261124-access-control-v89
+  (precache includes role-access-sync-v89.js)
+- refresh-access-control-v89.html (one-time cache reset page)
+
+Verification targets after running the SQL:
+- Membership: all three attendance calendars; events + attendance +
+  members + duty_hours write columns.
+- General Secretary: manageEvents + saveDraftAttendance; all three calendars;
+  events + attendance + activity_log write columns.
+- Administrator: protected controls remain immutable.
+- All roles: write columns derived from the saved actions, never from role names.

@@ -1,0 +1,171 @@
+LASALLIAN SYMPHONY ORCHESTRA — ORCHESTRA MANAGEMENT SYSTEM
+ACCESS CONTROL / ROLES & PERMISSIONS — V89 REALTIME SYNC REPAIR
+==============================================================================
+Date: 2026-11-24
+Applies to: Administrator Access Control — Role & Permission Center,
+            Membership attendance, General Secretary attendance,
+            account role switching for every linked account.
+
+1. REPORTED PROBLEMS
+------------------------------------------------------------------------------
+A. Membership role changes / permissions were not reflected in real time in
+   other open accounts or role sessions. An Administrator change in the Role &
+   Permission Center could require sign-out/sign-in before it took effect.
+B. Membership attendance saves in the Official Members calendar could be
+   rejected by Supabase and reverted with the message:
+   "This account’s role is not permitted to change this system area."
+C. General Secretary could be blocked when creating activities / recording
+   attendance in a NEW month, because the operational actions or the derived
+   events/attendance write columns were stale on an older database.
+D. The complete Role & Permission Center must still be able to switch and
+   assign every role for all accounts without breaking protected controls.
+
+2. ROOT CAUSES CONFIRMED IN THE CODEBASE
+------------------------------------------------------------------------------
+1) The browser only refreshed permissions every 60 seconds (role-access-v6.js)
+   and only listened for a legacy Settings overlay change. There was no
+   fingerprint watcher, no cross-tab notification, and no way for a signed-in
+   account to notice that an Administrator had changed ITS OWN account role.
+2) Existing databases initialized before V82 kept stale permission rows:
+   - Membership could be missing ('attendance_group','Official Members').
+   - General Secretary could be missing 'manageEvents' /
+     'saveDraftAttendance', or the matching 'events' / 'attendance'
+     write_column rows.
+   V82 only repaired write columns from the actions it found; it did not
+   restore missing baseline actions.
+3) The V88 repair existed as a separate SQL patch, but the complete
+   supabase-setup.sql still installed the OLD V38-era permission center
+   functions (no native Interview/ownAttendance support, no identity or
+   change fingerprint, and an obsolete save whitelist).
+4) The V82 action->column helper omitted 'generateContract', so a role with
+   only contract access did not receive the 'members' write column that the
+   browser manifest expects.
+5) Pre-V88 lso_update_state() called lso_session_account_id(token, true),
+   forcing Administrator for every write, and older core writers contained a
+   hardcoded "Membership only Trainee/Probationary" attendance guard.
+
+3. WHAT WAS FIXED
+------------------------------------------------------------------------------
+DATABASE — LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (idempotent, safe to rerun)
+  * Installs the canonical V89 permission center RPCs:
+      lso_get_permission_center, lso_get_permission_revision,
+      lso_save_role_permissions, lso_reset_role_permissions,
+      lso_v89_write_role_configuration, lso_v89_columns_for_actions,
+      lso_role_can, lso_default_role_configuration.
+  * The permission payload now returns:
+      schemaVersion 14 / permissionModel 'v89', one updatedAt fingerprint,
+      the signed-in account identity (role, updatedAt, disabled, approval),
+      and (for Administrators) all role rows; non-administrators receive only
+      their own role configuration.
+  * Server-side dependency and security validation is enforced when saving:
+      protected security-owner modules/actions stay Administrator-only;
+      ownAttendanceView and selfDutyPunch are identity-bound to
+      Trainee/Probationary only; landing page must be an assigned module;
+      Attendance requires at least one attendance calendar.
+  * Repairs existing configurations without resetting custom Administrator
+    selections:
+      - Membership: Dashboard, Members, Contract, Monthly Report, Attendance,
+        Duty Hours; all three attendance calendars; manageEvents,
+        saveDraftAttendance and every write column needed by those actions.
+      - General Secretary: Dashboard, Members, Attendance, Duty Hours;
+        all three attendance calendars; manageEvents + saveDraftAttendance
+        + events/attendance/activity_log write columns, so a new month's
+        activities and roster can be created and saved.
+      - Staff Account and Trainee/Probationary baselines are restored too.
+      - All roles: write columns are recalculated from their CURRENT saved
+        actions (including generateContract -> members).
+  * Carries forward the V88 writer repair: non-admin sessions can save, and
+    calendar access is validated dynamically via lso_role_can() instead of the
+    obsolete hardcoded calendar restriction.
+  * Adds migration marker 014_access_control_realtime_sync_v89 and a
+    verification query with all Membership / General Secretary grants.
+
+WEBSITE — role-access-sync-v89.js (loaded in index.html)
+  * Polls the permission-center fingerprint every 7 seconds while active
+    (25 seconds hidden), and refreshes immediately on focus, tab visibility,
+    reconnection, login, and Settings overlay changes.
+  * BroadcastChannel instantly notifies other tabs of the same browser after
+    an Administrator save; signature checks prevent broadcast loops.
+  * Detects an account's own role change from the server identity in the
+    permission payload, updates LSOCurrentAccount/session storage, re-emits
+    lso:auth-changed, applies the new manifest, and redirects to the new role's
+    landing page. Older databases fall back to a 30-second resumeSession check.
+  * Supabase remains authoritative: every change is pulled from the server,
+    never inferred from a stale local role name.
+  * Cache-busting: PWA cache marker and service worker precache updated to V89.
+
+FRESH INSTALLATIONS
+  * supabase-setup.sql now appends the complete V89 patch, so a new project is
+    born with the corrected permission center and writer.
+
+4. INSTALLATION (IMPORTANT — SQL FIRST)
+------------------------------------------------------------------------------
+1. Back up the current Supabase database (Data & Recovery -> Recovery Point).
+2. Supabase Dashboard -> SQL Editor -> New query.
+3. Paste the ENTIRE content of LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql and Run.
+   (If this is a brand-new installation, running the updated
+    supabase-setup.sql is sufficient; it already includes V89.)
+4. Confirm the verification result is TRUE for every item. Key checks:
+     membership_official_attendance_allowed : true
+     membership_events_write_allowed        : true
+     membership_attendance_write_allowed    : true
+     gensec_manage_events_allowed           : true
+     gensec_record_attendance_allowed       : true
+     gensec_events_write_allowed            : true
+     gensec_attendance_write_allowed        : true
+     lso_update_state_installed             : true
+5. Upload the website files to the GitHub Pages root (keep the filenames).
+6. On each device / installed PWA open refresh-access-control-v89.html once.
+   It clears the old permission modules from the browser and service worker
+   cache, then opens index.html.
+7. Sign in again with each test account so the fresh V89 session is loaded.
+
+5. TEST MATRIX
+------------------------------------------------------------------------------
+A. Open the system in TWO tabs/devices.
+   Administrator -> System Administration -> Role & Permission Center.
+   Change Membership (or General Secretary) modules/actions/calendars, Save.
+   Expected: "saved and verified" toast; the other tab's navigation, matrix,
+   and action buttons update within ~7 seconds without a reload.
+B. Administrator -> Account Management: switch a test account from Membership
+   to General Secretary (or any other role).
+   Expected: the signed-in user's role label/menu/landing page change in the
+   same session within ~7 seconds; no "Invalid session" error.
+C. Membership account -> Attendance -> Official Members -> edit a status and
+   save. Expected: "All changes saved to the shared database".
+D. General Secretary -> Attendance -> select a NEW month -> Create Event ->
+   mark attendance -> save. Expected: event and roster save immediately, no
+   permission toast, no revert.
+E. Confirm Administrator-only areas (Accounts, System Administration, Data &
+   Recovery, Finalize/Unlock, account role selectors) remain hidden/blocked for
+   every non-administrator role after a permission save.
+F. Reset Role Permissions for a role: the official V89 defaults are restored
+   (Membership and General Secretary receive the grants listed in section 3).
+
+6. TROUBLESHOOTING
+------------------------------------------------------------------------------
+* "Permissions loaded ... Last updated" still shows an old timestamp:
+  re-run the SQL patch and confirm lso_schema_migrations contains key
+  '014_access_control_realtime_sync_v89'.
+* A custom role selection was intentionally changed after the patch and must
+  stay that way: use Role & Permission Center to change it. Re-running the
+  baseline repair on a later patch only restores the MINIMUM core grants.
+* Writes still report permission denied on an old PWA: open
+  refresh-access-control-v89.html and fully close/reopen the installed app.
+* Do not expose a service_role key. The browser only uses the publishable
+  anon key; all permission checks run in SECURITY DEFINER RPCs.
+
+7. FILES
+------------------------------------------------------------------------------
+NEW  LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql
+NEW  ACCESS_CONTROL_REALTIME_SYNC_V89_GUIDE.txt
+NEW  BUILD_INFO_ACCESS_CONTROL_V89.txt
+NEW  FILE_MANIFEST_ACCESS_CONTROL_V89.txt
+NEW  refresh-access-control-v89.html
+NEW  role-access-sync-v89.js
+UPD  index.html (loads role-access-sync-v89.js)
+UPD  supabase-setup.sql (V89 appended for fresh installs)
+UPD  lso-system-core-v4.js (version/build/cache metadata)
+UPD  pwa-enterprise-v41.js (cache marker V89)
+UPD  service-worker-enterprise-v41.js (cache version + precache new module)
+==============================================================================
