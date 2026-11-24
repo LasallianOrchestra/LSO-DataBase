@@ -1,7 +1,9 @@
 LSO ACCESS CONTROL — V89 REALTIME ROLE/PERMISSION SYNC
 =======================================================
 Build: 2026-11-24 access-control-v89
-Database migration: 014_access_control_realtime_sync_v89 (schemaVersion 14)
+Database migration: key 014_access_control_realtime_sync_v89; version_number is
+                    assigned to the next free slot (>= 17) because V69/V84/V85
+                    already own 14-16. Permission payload schemaVersion = 14.
 Application version: 8.3.4
 
 Active role/access files:
@@ -14,7 +16,8 @@ Active role/access files:
 - lso-system-core-v4.js             (V89 build metadata)
 
 Database:
-- LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (stand-alone repair: run in Supabase)
+- LSO_SUPABASE_COMPLETE_INSTALL_V89.sql (ONE-FILE installer: base + all non-obsolete patches + V89; use this for new or existing projects)
+- LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (stand-alone repair only)
 - supabase-setup.sql (V89 appended for clean installations)
 
 Cache/PWA:

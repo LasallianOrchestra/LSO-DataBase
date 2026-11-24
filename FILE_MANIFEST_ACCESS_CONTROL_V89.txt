@@ -3,6 +3,8 @@ LSO ACCESS CONTROL V89 — FILE MANIFEST
 
 NEW FILES
 ---------
+LSO_SUPABASE_COMPLETE_INSTALL_V89.sql      ONE-FILE complete Supabase installer
+SUPABASE_COMPLETE_INSTALL_V89_GUIDE.txt    Instructions for the one-file install
 LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql   Database repair / canonical RPCs
 role-access-sync-v89.js                    Realtime role & permission bridge
 ACCESS_CONTROL_REALTIME_SYNC_V89_GUIDE.txt Installation and test instructions

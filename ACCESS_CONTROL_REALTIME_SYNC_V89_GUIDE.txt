@@ -77,8 +77,12 @@ DATABASE — LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (idempotent, safe to rerun
   * Carries forward the V88 writer repair: non-admin sessions can save, and
     calendar access is validated dynamically via lso_role_can() instead of the
     obsolete hardcoded calendar restriction.
-  * Adds migration marker 014_access_control_realtime_sync_v89 and a
+  * Adds migration marker key 014_access_control_realtime_sync_v89 and a
     verification query with all Membership / General Secretary grants.
+    The marker's version_number is assigned from the next FREE number in
+    lso_schema_migrations (at least 17), because versions 14-16 are already
+    owned by the V69/V84/V85 patches. Re-running the script reuses the version
+    already recorded for this key instead of trying to insert another one.
 
 WEBSITE — role-access-sync-v89.js (loaded in index.html)
   * Polls the permission-center fingerprint every 7 seconds while active
@@ -95,16 +99,18 @@ WEBSITE — role-access-sync-v89.js (loaded in index.html)
   * Cache-busting: PWA cache marker and service worker precache updated to V89.
 
 FRESH INSTALLATIONS
-  * supabase-setup.sql now appends the complete V89 patch, so a new project is
-    born with the corrected permission center and writer.
+  * LSO_SUPABASE_COMPLETE_INSTALL_V89.sql is now the ONE-FILE installer: it
+    merges the base database, every non-obsolete patch, and V89 in the correct
+    order. See SUPABASE_COMPLETE_INSTALL_V89_GUIDE.txt.
 
 4. INSTALLATION (IMPORTANT — SQL FIRST)
 ------------------------------------------------------------------------------
 1. Back up the current Supabase database (Data & Recovery -> Recovery Point).
 2. Supabase Dashboard -> SQL Editor -> New query.
-3. Paste the ENTIRE content of LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql and Run.
-   (If this is a brand-new installation, running the updated
-    supabase-setup.sql is sufficient; it already includes V89.)
+3. Paste the ENTIRE content of LSO_SUPABASE_COMPLETE_INSTALL_V89.sql and Run.
+   (Use LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql only when you intentionally
+    want to apply just the access-control repair to an already complete
+    database.)
 4. Confirm the verification result is TRUE for every item. Key checks:
      membership_official_attendance_allowed : true
      membership_events_write_allowed        : true
@@ -144,6 +150,12 @@ F. Reset Role Permissions for a role: the official V89 defaults are restored
 
 6. TROUBLESHOOTING
 ------------------------------------------------------------------------------
+* "duplicate key value violates unique constraint
+  lso_schema_migrations_version_unique — Key (version_number)=(14) already
+  exists": this came from an older copy of the V89 SQL that hard-coded version
+  14. The corrected script assigns the next free version automatically. Simply
+  re-run the corrected LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql in full; no
+  table cleanup or manual delete is required.
 * "Permissions loaded ... Last updated" still shows an old timestamp:
   re-run the SQL patch and confirm lso_schema_migrations contains key
   '014_access_control_realtime_sync_v89'.

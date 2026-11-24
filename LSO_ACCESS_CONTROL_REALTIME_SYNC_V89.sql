@@ -1015,19 +1015,42 @@ $lso$;
 -- ----------------------------------------------------------------------------
 -- 8. MIGRATION MARKER + SECURITY
 -- ----------------------------------------------------------------------------
-insert into public.lso_schema_migrations(migration_key,version_number,title,checksum,notes)
-values(
-  '014_access_control_realtime_sync_v89',
-  14,
-  'Access Control real-time role sync and attendance permission repair',
-  'access-control-realtime-sync-v89-014',
-  'Native V89 permission center with identity/change fingerprint, baseline Membership and General Secretary attendance grants, all-role column reconciliation, non-admin state writer, and identity-bound My Attendance support.'
-)
-on conflict(migration_key) do update
-set version_number=excluded.version_number,
-    title=excluded.title,
-    checksum=excluded.checksum,
-    notes=excluded.notes;
+-- lso_schema_migrations.version_number is UNIQUE. Earlier patches already own
+-- version 14 (V84 / V69 repair) and 15/16, so never hard-code the number here.
+-- On a re-run, keep the version already assigned to this migration key; only
+-- on a first install take the next free version (at least 17).
+do $v89_marker$
+declare
+  v_version integer;
+begin
+  select version_number
+    into v_version
+  from public.lso_schema_migrations
+  where migration_key = '014_access_control_realtime_sync_v89';
+
+  if v_version is not null then
+    update public.lso_schema_migrations
+       set title = 'Access Control real-time role sync and attendance permission repair',
+           checksum = 'access-control-realtime-sync-v89-014',
+           notes = 'Native V89 permission center with identity/change fingerprint, baseline Membership and General Secretary attendance grants, all-role column reconciliation, non-admin state writer, and identity-bound My Attendance support.'
+     where migration_key = '014_access_control_realtime_sync_v89';
+    return;
+  end if;
+
+  select greatest(coalesce(max(version_number), 0) + 1, 17)
+    into v_version
+  from public.lso_schema_migrations;
+
+  insert into public.lso_schema_migrations (migration_key, version_number, title, checksum, notes)
+  values (
+    '014_access_control_realtime_sync_v89',
+    v_version,
+    'Access Control real-time role sync and attendance permission repair',
+    'access-control-realtime-sync-v89-014',
+    'Native V89 permission center with identity/change fingerprint, baseline Membership and General Secretary attendance grants, all-role column reconciliation, non-admin state writer, and identity-bound My Attendance support.'
+  );
+end;
+$v89_marker$;
 
 revoke all on function public.lso_v89_columns_for_actions(text[]) from public, anon, authenticated;
 revoke all on function public.lso_v82_columns_for_actions(text[]) from public, anon, authenticated;
