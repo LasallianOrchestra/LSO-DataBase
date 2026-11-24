@@ -11,7 +11,7 @@ alter table public.system_state
 update public.system_state
 set monthly_reports = settings -> '__lso_monthly_reports_v1'
 where jsonb_typeof(settings -> '__lso_monthly_reports_v1') = 'object'
-  and coalesce(jsonb_object_length(settings -> '__lso_monthly_reports_v1'), 0) > 0;
+  and settings -> '__lso_monthly_reports_v1' <> '{}'::jsonb;
 
 create or replace function public.lso_get_state(p_token text)
 returns jsonb

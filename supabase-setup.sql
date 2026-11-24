@@ -681,7 +681,7 @@ commit;
 update public.system_state
 set monthly_reports = settings -> '__lso_monthly_reports_v1'
 where jsonb_typeof(settings -> '__lso_monthly_reports_v1') = 'object'
-  and coalesce(jsonb_object_length(settings -> '__lso_monthly_reports_v1'), 0) > 0;
+  and settings -> '__lso_monthly_reports_v1' <> '{}'::jsonb;
 notify pgrst, 'reload schema';
 -- LSO TRAINEE / PROBATIONARY DUTY-HOURS ROLE UPDATE
 -- Run this once in Supabase SQL Editor for an existing installation.

@@ -705,7 +705,7 @@ commit;
 update public.system_state
 set monthly_reports = settings -> '__lso_monthly_reports_v1'
 where jsonb_typeof(settings -> '__lso_monthly_reports_v1') = 'object'
-  and coalesce(jsonb_object_length(settings -> '__lso_monthly_reports_v1'), 0) > 0;
+  and settings -> '__lso_monthly_reports_v1' <> '{}'::jsonb;
 notify pgrst, 'reload schema';
 -- LSO TRAINEE / PROBATIONARY DUTY-HOURS ROLE UPDATE
 -- Run this once in Supabase SQL Editor for an existing installation.
@@ -7139,7 +7139,7 @@ alter table public.system_state
 update public.system_state
 set monthly_reports = settings -> '__lso_monthly_reports_v1'
 where jsonb_typeof(settings -> '__lso_monthly_reports_v1') = 'object'
-  and coalesce(jsonb_object_length(settings -> '__lso_monthly_reports_v1'), 0) > 0;
+  and settings -> '__lso_monthly_reports_v1' <> '{}'::jsonb;
 
 create or replace function public.lso_get_state(p_token text)
 returns jsonb
@@ -11458,6 +11458,459 @@ commit;
 -- RUN IN: Supabase Dashboard > SQL Editor > New query
 -- ============================================================================
 
+do $lso_preflight$
+begin
+  if to_regclass('public.system_state') is null
+     or to_regclass('public.lso_accounts') is null
+     or to_regclass('public.lso_sessions') is null
+     or to_regprocedure('public.lso_session_account_id(text,boolean)') is null
+     or to_regprocedure('public.lso_update_state(text,text,jsonb)') is null
+     or to_regprocedure('public.lso_get_state(text)') is null then
+    raise exception 'LSO base database is not installed. Run supabase-setup.sql (or LSO_MASTER_MIGRATION_INSTALLER.sql) first, then run this repair.';
+  end if;
+end;
+$lso_preflight$;
+
+begin;
+
+-- ----------------------------------------------------------------------------
+-- 1. REMOVE EVERY EXISTING lso_update_state_v69 OVERLOAD
+--    Explicit drops for the two known signatures FIRST, then a dynamic sweep
+--    for any other signature. PostgREST must end up with exactly ONE function.
+-- ----------------------------------------------------------------------------
+drop function if exists public.lso_update_state_v69(text, text, jsonb, integer) cascade;
+drop function if exists public.lso_update_state_v69(text, text, jsonb, bigint) cascade;
+
+do $lso_drop_v69$
+declare
+  r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.proname = 'lso_update_state_v69'
+  loop
+    execute 'drop function public.' || r.sig || ' cascade';
+  end loop;
+end;
+$lso_drop_v69$;
+
+-- ----------------------------------------------------------------------------
+-- 2. PER-COLUMN VERSION STORAGE (bookkeeping only — never used to reject)
+-- ----------------------------------------------------------------------------
+alter table public.system_state
+  add column if not exists column_versions jsonb not null default '{}'::jsonb;
+
+-- ----------------------------------------------------------------------------
+-- 3. lso_update_state_v69 — SINGLE CANONICAL, CONFLICT-FREE (last-write-wins)
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_update_state_v69(
+  p_token text,
+  p_column text,
+  p_value jsonb,
+  p_expected_version integer default 0
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_result jsonb;
+  v_versions jsonb;
+  v_next bigint;
+begin
+  perform public.lso_session_account_id(p_token, false);
+
+  if p_column not in ('members','events','attendance','duty_hours','monthly_reports',
+                      'instruments','settings','activity_log') then
+    raise exception 'Unknown shared-state column.' using errcode = '22023';
+  end if;
+
+  -- p_expected_version is accepted but intentionally IGNORED. Version checks
+  -- were rejecting the append-only audit log (activity_log) on nearly every
+  -- save and breaking cross-role synchronization. The base writer below still
+  -- performs every real permission/attendance/duty validation.
+  v_result := public.lso_update_state(p_token, p_column, p_value);
+
+  -- Advance the column version for diagnostics only. Never used to reject.
+  select coalesce((coalesce(column_versions, '{}'::jsonb) ->> p_column)::bigint, 0) + 1
+    into v_next
+    from public.system_state
+   where id = 1;
+
+  update public.system_state
+     set column_versions = jsonb_set(
+           coalesce(column_versions, '{}'::jsonb),
+           array[p_column],
+           to_jsonb(v_next),
+           true
+         )
+   where id = 1
+   returning column_versions into v_versions;
+
+  return v_result || jsonb_build_object('column_versions', coalesce(v_versions, '{}'::jsonb));
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 4. lso_get_state_meta_v69 — lightweight heartbeat for fast polls
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_get_state_meta_v69(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_versions jsonb;
+  v_updated timestamptz;
+begin
+  perform public.lso_session_account_id(p_token, false);
+
+  select column_versions, updated_at
+    into v_versions, v_updated
+    from public.system_state
+   where id = 1;
+
+  return jsonb_build_object(
+    'ok', true,
+    'columnVersions', coalesce(v_versions, '{}'::jsonb),
+    'updatedAt', v_updated,
+    'serverTime', now()
+  );
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 5. lso_sync_health_v82 — session-aware health check
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_sync_health_v82(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_state_updated timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select role into v_role from public.lso_accounts where id = v_account_id;
+  select updated_at into v_state_updated from public.system_state where id = 1;
+
+  return jsonb_build_object(
+    'ok', true,
+    'role', v_role,
+    'serverTime', now(),
+    'stateUpdatedAt', v_state_updated,
+    'schemaVersion', 13,
+    'permissionModel', 'v82'
+  );
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 6. lso_v69_capabilities — feature probe (reports conflict protection OFF)
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_v69_capabilities(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_version integer := 0;
+begin
+  perform public.lso_session_account_id(p_token, false);
+
+  if to_regclass('public.lso_schema_migrations') is not null then
+    select coalesce(max(version_number), 0) into v_version
+      from public.lso_schema_migrations;
+  end if;
+
+  return jsonb_build_object(
+    'installed', true,
+    'conflictProtection', false,
+    'serverPagination', true,
+    'notificationPreferences', true,
+    'schemaVersion', v_version,
+    'serverTime', now()
+  );
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 7. lso_get_collection_page_v69 — server-side paging + text filter
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_get_collection_page_v69(
+  p_token text,
+  p_collection text,
+  p_offset integer default 0,
+  p_limit integer default 25,
+  p_search text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_member_id text;
+  v_source jsonb := '[]'::jsonb;
+  v_items jsonb := '[]'::jsonb;
+  v_total integer := 0;
+  v_offset integer := greatest(0, coalesce(p_offset, 0));
+  v_limit integer := greatest(1, least(100, coalesce(p_limit, 25)));
+  v_search text := lower(btrim(coalesce(p_search, '')));
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select role, member_id into v_role, v_member_id
+    from public.lso_accounts
+   where id = v_account_id;
+
+  select case p_collection
+    when 'members'      then coalesce(state.members, '[]'::jsonb)
+    when 'events'       then coalesce(state.events, '[]'::jsonb)
+    when 'attendance'   then coalesce(state.attendance, '[]'::jsonb)
+    when 'instruments'  then coalesce(state.instruments, '[]'::jsonb)
+    when 'activity_log' then coalesce(state.activity_log, '[]'::jsonb)
+    when 'duty_entries' then coalesce(state.duty_hours -> 'entries', '[]'::jsonb)
+    else null
+  end
+    into v_source
+    from public.system_state as state
+   where state.id = 1;
+
+  if v_source is null then
+    raise exception 'Unknown or unsupported collection.' using errcode = '22023';
+  end if;
+  if jsonb_typeof(v_source) <> 'array' then
+    v_source := '[]'::jsonb;
+  end if;
+
+  if v_role = 'Trainee/Probationary'
+     and p_collection = 'duty_entries'
+     and nullif(btrim(coalesce(v_member_id, '')), '') is not null then
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_source
+      from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+     where item ->> 'memberId' = v_member_id;
+  end if;
+
+  if v_search <> '' then
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_source
+      from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+     where position(v_search in lower(coalesce(item::text, ''))) > 0;
+  end if;
+
+  v_total := jsonb_array_length(v_source);
+
+  select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+    into v_items
+    from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+   where idx > v_offset
+   order by idx
+   limit v_limit;
+
+  return jsonb_build_object(
+    'items', v_items,
+    'total', v_total,
+    'offset', v_offset,
+    'limit', v_limit
+  );
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 8. NOTIFICATION PREFERENCES (kept out of the protected System Settings)
+-- ----------------------------------------------------------------------------
+create table if not exists public.lso_v69_notification_preferences (
+  scope text not null check (scope in ('account', 'role')),
+  pref_key text not null,
+  preferences jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (scope, pref_key)
+);
+
+alter table public.lso_v69_notification_preferences enable row level security;
+revoke all on table public.lso_v69_notification_preferences from anon, authenticated;
+
+create or replace function public.lso_get_notification_preferences_v69(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_account_id uuid;
+  v_account public.lso_accounts%rowtype;
+  v_account_prefs jsonb := '{}'::jsonb;
+  v_role_prefs jsonb := '{}'::jsonb;
+  v_role_defaults jsonb := '{}'::jsonb;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select * into v_account from public.lso_accounts where id = v_account_id;
+  if not found then
+    raise exception 'Account not found.' using errcode = '42501';
+  end if;
+
+  select preferences into v_account_prefs
+    from public.lso_v69_notification_preferences
+   where scope = 'account' and pref_key = v_account.username;
+
+  select preferences into v_role_prefs
+    from public.lso_v69_notification_preferences
+   where scope = 'role' and pref_key = v_account.role;
+
+  select coalesce(jsonb_object_agg(pref_key, preferences), '{}'::jsonb)
+    into v_role_defaults
+    from public.lso_v69_notification_preferences
+   where scope = 'role';
+
+  return jsonb_build_object(
+    'ok', true,
+    'accountPreferences', coalesce(v_account_prefs, '{}'::jsonb),
+    'rolePreferences', coalesce(v_role_prefs, '{}'::jsonb),
+    'roleDefaults', v_role_defaults,
+    'serverTime', now()
+  );
+end;
+$lso$;
+
+create or replace function public.lso_save_notification_preferences_v69(
+  p_token text,
+  p_preferences jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_account_id uuid;
+  v_username text;
+  v_prefs jsonb := coalesce(p_preferences, '{}'::jsonb);
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select username into v_username from public.lso_accounts where id = v_account_id;
+
+  insert into public.lso_v69_notification_preferences (scope, pref_key, preferences, updated_at)
+  values ('account', v_username, v_prefs, now())
+  on conflict (scope, pref_key) do update
+    set preferences = excluded.preferences,
+        updated_at = now();
+
+  return jsonb_build_object('ok', true, 'accountPreferences', v_prefs);
+end;
+$lso$;
+
+create or replace function public.lso_save_role_notification_preferences_v69(
+  p_token text,
+  p_role text,
+  p_preferences jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_role text := btrim(coalesce(p_role, ''));
+  v_prefs jsonb := coalesce(p_preferences, '{}'::jsonb);
+begin
+  v_admin := public.lso_admin_account(p_token);
+
+  if v_role not in ('Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary') then
+    raise exception 'Unknown account role.' using errcode = '22023';
+  end if;
+
+  insert into public.lso_v69_notification_preferences (scope, pref_key, preferences, updated_at)
+  values ('role', v_role, v_prefs, now())
+  on conflict (scope, pref_key) do update
+    set preferences = excluded.preferences,
+        updated_at = now();
+
+  return jsonb_build_object('ok', true, 'rolePreferences', v_prefs);
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 9. SECURITY: RPC-only access, no direct table access
+-- ----------------------------------------------------------------------------
+revoke all on function public.lso_get_state_meta_v69(text) from public, anon, authenticated;
+revoke all on function public.lso_update_state_v69(text, text, jsonb, integer) from public, anon, authenticated;
+revoke all on function public.lso_v69_capabilities(text) from public, anon, authenticated;
+revoke all on function public.lso_get_collection_page_v69(text, text, integer, integer, text) from public, anon, authenticated;
+revoke all on function public.lso_get_notification_preferences_v69(text) from public, anon, authenticated;
+revoke all on function public.lso_save_notification_preferences_v69(text, jsonb) from public, anon, authenticated;
+revoke all on function public.lso_save_role_notification_preferences_v69(text, text, jsonb) from public, anon, authenticated;
+revoke all on function public.lso_sync_health_v82(text) from public, anon, authenticated;
+
+grant execute on function public.lso_get_state_meta_v69(text) to anon, authenticated;
+grant execute on function public.lso_update_state_v69(text, text, jsonb, integer) to anon, authenticated;
+grant execute on function public.lso_v69_capabilities(text) to anon, authenticated;
+grant execute on function public.lso_get_collection_page_v69(text, text, integer, integer, text) to anon, authenticated;
+grant execute on function public.lso_get_notification_preferences_v69(text) to anon, authenticated;
+grant execute on function public.lso_save_notification_preferences_v69(text, jsonb) to anon, authenticated;
+grant execute on function public.lso_save_role_notification_preferences_v69(text, text, jsonb) to anon, authenticated;
+grant execute on function public.lso_sync_health_v82(text) to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 10. MIGRATION MARKER (guarded for older databases without the table)
+-- ----------------------------------------------------------------------------
+commit;
+
+notify pgrst, 'reload schema';
+
+-- ----------------------------------------------------------------------------
+-- 11. VERIFICATION (read-only). Every value must be true for a 100% result.
+--     The last line lists every remaining overload — it MUST be exactly ONE
+--     entry ending in "integer)".
+-- ----------------------------------------------------------------------------
+select jsonb_build_object(
+  'singleV69Writer',
+    (select count(*) from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'lso_update_state_v69') = 1,
+  'integerSignature',
+    exists (select 1 from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'lso_update_state_v69'
+        and pg_get_function_arguments(p.oid) like '%p_expected_version integer%'),
+  'conflictCheckRemoved',
+    position('LSO_CONFLICT' in pg_get_functiondef('public.lso_update_state_v69(text,text,jsonb,integer)'::regprocedure)) = 0,
+  'metaRpc',
+    to_regprocedure('public.lso_get_state_meta_v69(text)') is not null,
+  'healthRpc',
+    to_regprocedure('public.lso_sync_health_v82(text)') is not null,
+  'collectionPageRpc',
+    to_regprocedure('public.lso_get_collection_page_v69(text,text,integer,integer,text)') is not null,
+  'capabilitiesRpc',
+    to_regprocedure('public.lso_v69_capabilities(text)') is not null,
+  'notificationRpc',
+    to_regprocedure('public.lso_get_notification_preferences_v69(text)') is not null
+    and to_regprocedure('public.lso_save_notification_preferences_v69(text,jsonb)') is not null
+    and to_regprocedure('public.lso_save_role_notification_preferences_v69(text,text,jsonb)') is not null,
+  'columnVersionsColumn',
+    exists (select 1 from information_schema.columns
+             where table_schema = 'public'
+               and table_name = 'system_state'
+               and column_name = 'column_versions'),
+  'remainingOverloads',
+    (select coalesce(jsonb_agg(pg_get_function_arguments(p.oid)), '[]'::jsonb)
+       from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'lso_update_state_v69')
+) as lso_final_fix_verification;
+
 
 -- ########################################################################
 -- PATCH: LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql
@@ -11486,6 +11939,620 @@ begin;
 -- -----------------------------------------------------------------------------
 -- 0. PRE-FLIGHT
 -- -----------------------------------------------------------------------------
+do $v82_preflight$
+begin
+  if to_regclass('public.lso_accounts') is null
+     or to_regclass('public.lso_sessions') is null
+     or to_regclass('public.lso_role_permissions') is null
+     or to_regclass('public.lso_role_profiles') is null
+     or to_regclass('public.system_state') is null
+     or to_regclass('public.lso_schema_migrations') is null then
+    raise exception 'LSO V82 requires the existing LSO management database. Install/repair the base LSO database through V69 before running this patch.';
+  end if;
+  if to_regprocedure('public.lso_session_account_id(text,boolean)') is null
+     or to_regprocedure('public.lso_admin_account(text)') is null then
+    raise exception 'LSO V82 requires the existing authentication/session functions. Install/repair the base LSO database before running this patch.';
+  end if;
+end;
+$v82_preflight$;
+
+-- -----------------------------------------------------------------------------
+-- 1. SINGLE SOURCE OF TRUTH: operational ACTION -> required shared-state columns
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_v82_columns_for_actions(p_actions text[])
+returns text[]
+language plpgsql
+immutable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_actions text[] := coalesce(p_actions, array[]::text[]);
+  v_columns text[] := array[]::text[];
+begin
+  -- Member editing and contract history both persist inside the members document.
+  if 'manageMembers' = any(v_actions) or 'generateContract' = any(v_actions) then
+    v_columns := array_append(v_columns, 'members');
+  end if;
+
+  -- Attendance activity management persists event definitions.
+  if 'manageEvents' = any(v_actions) or 'deleteEvents' = any(v_actions) then
+    v_columns := array_append(v_columns, 'events');
+  end if;
+
+  -- Attendance roster/lifecycle operations persist attendance rows.
+  if 'saveDraftAttendance' = any(v_actions)
+     or 'finalizeAttendance' = any(v_actions)
+     or 'unlockAttendance' = any(v_actions)
+     or 'deleteEvents' = any(v_actions) then
+    v_columns := array_append(v_columns, 'attendance');
+  end if;
+
+  -- Attendance review/finalize/reopen/archive governance is persisted in settings.
+  if 'finalizeAttendance' = any(v_actions) or 'unlockAttendance' = any(v_actions) then
+    v_columns := array_append(v_columns, 'settings');
+  end if;
+
+  -- Manual Duty Hours management and requirement configuration persist duty_hours.
+  if 'manageDutyHours' = any(v_actions) or 'manageDutyRequirements' = any(v_actions) then
+    v_columns := array_append(v_columns, 'duty_hours');
+  end if;
+
+  -- Monthly Report uses the current state plus the compatibility copy inside settings.
+  if 'editMonthlyReport' = any(v_actions)
+     or 'finalizeMonthlyReport' = any(v_actions)
+     or 'reopenMonthlyReport' = any(v_actions) then
+    v_columns := array_cat(v_columns, array['monthly_reports','monthly_reports_compat','settings']);
+  end if;
+
+  if 'writeActivityLog' = any(v_actions) then
+    v_columns := array_append(v_columns, 'activity_log');
+  end if;
+
+  select coalesce(array_agg(distinct item order by item), array[]::text[])
+    into v_columns
+  from unnest(v_columns) as item;
+
+  return coalesce(v_columns, array[]::text[]);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 2. V82 CURRENT DEFAULTS (used only for Administrator and explicit Reset)
+--    Existing configurable-role selections are NOT reset by this migration.
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_default_role_configuration(p_role text)
+returns jsonb
+language plpgsql
+immutable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  return case p_role
+    when 'Administrator' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array(
+        'dashboardView','membersView','contractView','interviewView','monthlyReportView',
+        'attendanceView','dutyHoursView','accountsView','systemHealthView','dataView'
+      ),
+      'actions',jsonb_build_array(
+        'manageAccounts','manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+        'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+        'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+        'manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth',
+        'writeActivityLog','manageAccessibility'
+      ),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','instruments','settings','activity_log')
+    )
+    when 'Membership' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','contractView','monthlyReportView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array(
+        'manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance',
+        'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+        'writeActivityLog','manageAccessibility'
+      ),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log')
+    )
+    when 'General Secretary' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('manageEvents','saveDraftAttendance','reviewDutyPunches','writeActivityLog','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('events','attendance','activity_log')
+    )
+    when 'Staff Account' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('reviewDutyPunches','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array()
+    )
+    when 'Trainee/Probationary' then jsonb_build_object(
+      'landingView','dutyHoursView',
+      'views',jsonb_build_array('dutyHoursView'),
+      'actions',jsonb_build_array('selfDutyPunch','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array(),
+      'columns',jsonb_build_array()
+    )
+    else null
+  end;
+end;
+$$;
+
+-- Internal writer used by Save and Reset. Browser roles never receive EXECUTE on it.
+create or replace function public.lso_v82_write_role_configuration(
+  p_role text,
+  p_landing_view text,
+  p_views text[],
+  p_actions text[],
+  p_attendance_groups text[],
+  p_updated_by text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_value text;
+  v_columns text[];
+begin
+  v_columns := public.lso_v82_columns_for_actions(p_actions);
+
+  delete from public.lso_role_permissions
+  where role_name = p_role
+    and permission_key in ('view','action','attendance_group','write_column');
+
+  foreach v_value in array coalesce(p_views, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'view',v_value,true,now())
+    on conflict(role_name,permission_key,resource)
+    do update set allowed=true,updated_at=excluded.updated_at;
+  end loop;
+
+  foreach v_value in array coalesce(p_actions, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'action',v_value,true,now())
+    on conflict(role_name,permission_key,resource)
+    do update set allowed=true,updated_at=excluded.updated_at;
+  end loop;
+
+  foreach v_value in array coalesce(p_attendance_groups, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'attendance_group',v_value,true,now())
+    on conflict(role_name,permission_key,resource)
+    do update set allowed=true,updated_at=excluded.updated_at;
+  end loop;
+
+  foreach v_value in array coalesce(v_columns, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'write_column',v_value,true,now())
+    on conflict(role_name,permission_key,resource)
+    do update set allowed=true,updated_at=excluded.updated_at;
+  end loop;
+
+  insert into public.lso_role_profiles(role_name,landing_view,updated_at,updated_by)
+  values(p_role,p_landing_view,now(),coalesce(nullif(p_updated_by,''),'V82'))
+  on conflict(role_name) do update
+  set landing_view=excluded.landing_view,
+      updated_at=excluded.updated_at,
+      updated_by=excluded.updated_by;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 3. NATIVE PERMISSION CENTER READ -- ALWAYS RETURNS columns + schemaVersion
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_get_permission_center(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_roles jsonb := '[]'::jsonb;
+  v_default jsonb;
+  v_landing text;
+  v_views jsonb;
+  v_actions jsonb;
+  v_groups jsonb;
+  v_columns jsonb;
+  v_has_configuration boolean;
+  v_updated_at timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token,false);
+
+  select greatest(
+    coalesce((select max(updated_at) from public.lso_role_permissions), '-infinity'::timestamptz),
+    coalesce((select max(updated_at) from public.lso_role_profiles), '-infinity'::timestamptz)
+  ) into v_updated_at;
+  if v_updated_at = '-infinity'::timestamptz then v_updated_at := now(); end if;
+
+  foreach v_role in array array['Administrator','Membership','General Secretary','Staff Account','Trainee/Probationary'] loop
+    v_default := public.lso_default_role_configuration(v_role);
+
+    if v_role = 'Administrator' then
+      v_landing := v_default->>'landingView';
+      v_views := v_default->'views';
+      v_actions := v_default->'actions';
+      v_groups := v_default->'attendanceGroups';
+      v_columns := v_default->'columns';
+    else
+      select (
+        exists(select 1 from public.lso_role_profiles where role_name=v_role)
+        or exists(select 1 from public.lso_role_permissions where role_name=v_role)
+      ) into v_has_configuration;
+
+      if not v_has_configuration then
+        v_landing := v_default->>'landingView';
+        v_views := v_default->'views';
+        v_actions := v_default->'actions';
+        v_groups := v_default->'attendanceGroups';
+        v_columns := v_default->'columns';
+      else
+        select coalesce(landing_view, v_default->>'landingView') into v_landing
+        from public.lso_role_profiles where role_name=v_role;
+        v_landing := coalesce(v_landing, v_default->>'landingView');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_views
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='view' and allowed=true
+          and resource in ('dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_actions
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='action' and allowed=true
+          and resource in (
+            'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+            'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+            'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+            'writeActivityLog','manageAccessibility','selfDutyPunch'
+          )
+          and (resource <> 'selfDutyPunch' or v_role='Trainee/Probationary');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_groups
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='attendance_group' and allowed=true
+          and resource in ('Official Members','Trainee Members','Probationary Members');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_columns
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='write_column' and allowed=true
+          and resource in ('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log');
+      end if;
+    end if;
+
+    v_roles := v_roles || jsonb_build_array(jsonb_build_object(
+      'roleName',v_role,
+      'landingView',v_landing,
+      'views',coalesce(v_views,'[]'::jsonb),
+      'actions',coalesce(v_actions,'[]'::jsonb),
+      'attendanceGroups',coalesce(v_groups,'[]'::jsonb),
+      'columns',coalesce(v_columns,'[]'::jsonb)
+    ));
+  end loop;
+
+  return jsonb_build_object(
+    'roles',v_roles,
+    'updatedAt',v_updated_at,
+    'schemaVersion',13,
+    'permissionModel','v82'
+  );
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 4. ADMIN SAVE -- Interview is a native module and columns derive from actions
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_save_role_permissions(
+  p_token text,
+  p_role text,
+  p_landing_view text,
+  p_views jsonb,
+  p_actions jsonb,
+  p_attendance_groups jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_views text[];
+  v_actions text[];
+  v_groups text[];
+begin
+  v_admin := public.lso_admin_account(p_token);
+
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'The selected role is protected or invalid.' using errcode='22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_views
+  from jsonb_array_elements_text(coalesce(p_views,'[]'::jsonb)) as value
+  where value in (
+    'dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView'
+  );
+
+  if coalesce(array_length(v_views,1),0)=0 then
+    raise exception 'Assign at least one visible module.' using errcode='22023';
+  end if;
+  if not (coalesce(p_landing_view,'')=any(v_views)) then
+    raise exception 'The landing page must be one of the assigned modules.' using errcode='22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_actions
+  from jsonb_array_elements_text(coalesce(p_actions,'[]'::jsonb)) as value
+  where value in (
+    'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+    'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+    'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+    'writeActivityLog','manageAccessibility','selfDutyPunch'
+  )
+  and (value <> 'selfDutyPunch' or p_role='Trainee/Probationary');
+
+  if p_role <> 'Trainee/Probationary' then
+    v_actions := array_remove(v_actions,'selfDutyPunch');
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_groups
+  from jsonb_array_elements_text(coalesce(p_attendance_groups,'[]'::jsonb)) as value
+  where value in ('Official Members','Trainee Members','Probationary Members');
+
+  if 'attendanceView'=any(v_views) and coalesce(array_length(v_groups,1),0)=0 then
+    raise exception 'Attendance access requires at least one assigned attendance calendar.' using errcode='22023';
+  end if;
+
+  -- Server-side dependency validation prevents a role from being assigned an action whose UI
+  -- module it cannot open.
+  if 'manageMembers'=any(v_actions) and not ('membersView'=any(v_views)) then raise exception 'Manage member records requires Members.' using errcode='22023'; end if;
+  if 'generateContract'=any(v_actions) and not ('contractView'=any(v_views)) then raise exception 'Generate contracts requires Contract.' using errcode='22023'; end if;
+  if (('editMonthlyReport'=any(v_actions)) or ('finalizeMonthlyReport'=any(v_actions)) or ('reopenMonthlyReport'=any(v_actions))) and not ('monthlyReportView'=any(v_views)) then raise exception 'Monthly Report actions require Monthly Report.' using errcode='22023'; end if;
+  if (('manageEvents'=any(v_actions)) or ('deleteEvents'=any(v_actions)) or ('saveDraftAttendance'=any(v_actions)) or ('finalizeAttendance'=any(v_actions)) or ('unlockAttendance'=any(v_actions))) and not ('attendanceView'=any(v_views)) then raise exception 'Attendance actions require Attendance.' using errcode='22023'; end if;
+  if (('reviewDutyPunches'=any(v_actions)) or ('manageDutyHours'=any(v_actions)) or ('manageDutyRequirements'=any(v_actions)) or ('certifyDutyHours'=any(v_actions)) or ('selfDutyPunch'=any(v_actions))) and not ('dutyHoursView'=any(v_views)) then raise exception 'Duty Hours actions require Duty Hours.' using errcode='22023'; end if;
+
+  perform public.lso_v82_write_role_configuration(
+    p_role,p_landing_view,v_views,v_actions,v_groups,v_admin.username
+  );
+
+  return public.lso_get_permission_center(p_token);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 5. RESET ONE ROLE TO CURRENT OFFICIAL DEFAULTS
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_reset_role_permissions(p_token text,p_role text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_default jsonb;
+  v_views text[];
+  v_actions text[];
+  v_groups text[];
+begin
+  v_admin := public.lso_admin_account(p_token);
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'The selected role is protected or invalid.' using errcode='22023';
+  end if;
+
+  v_default := public.lso_default_role_configuration(p_role);
+  select coalesce(array_agg(value),array[]::text[]) into v_views from jsonb_array_elements_text(v_default->'views') value;
+  select coalesce(array_agg(value),array[]::text[]) into v_actions from jsonb_array_elements_text(v_default->'actions') value;
+  select coalesce(array_agg(value),array[]::text[]) into v_groups from jsonb_array_elements_text(v_default->'attendanceGroups') value;
+
+  perform public.lso_v82_write_role_configuration(
+    p_role,v_default->>'landingView',v_views,v_actions,v_groups,v_admin.username
+  );
+
+  return public.lso_get_permission_center(p_token);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 6. SESSION-AWARE HEALTH CHECK FOR THE SYNCHRONIZATION STATUS
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_sync_health_v82(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_state_updated timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token,false);
+  select role into v_role from public.lso_accounts where id=v_account_id;
+  select updated_at into v_state_updated from public.system_state where id=1;
+
+  return jsonb_build_object(
+    'ok',true,
+    'role',v_role,
+    'serverTime',now(),
+    'stateUpdatedAt',v_state_updated,
+    'schemaVersion',13,
+    'permissionModel','v82'
+  );
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 7. MIGRATE THE V79 INTERVIEW COMPATIBILITY OVERLAY, IF PRESENT
+--    This preserves Interview grants already made before the native server patch.
+-- -----------------------------------------------------------------------------
+do $v82_migrate_overlay$
+declare
+  v_role text;
+  v_overlay jsonb;
+  v_views text[];
+  v_landing text;
+  v_value text;
+begin
+  foreach v_role in array array['Membership','General Secretary','Staff Account','Trainee/Probationary'] loop
+    select settings->'__lso_role_permission_overlay_v79'->'roles'->v_role
+      into v_overlay
+    from public.system_state where id=1;
+
+    if v_overlay is not null and jsonb_typeof(v_overlay)='object' and jsonb_typeof(v_overlay->'views')='array' then
+      select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_views
+      from jsonb_array_elements_text(v_overlay->'views') value
+      where value in ('dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView');
+
+      if coalesce(array_length(v_views,1),0)>0 then
+        delete from public.lso_role_permissions where role_name=v_role and permission_key='view';
+        foreach v_value in array v_views loop
+          insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+          values(v_role,'view',v_value,true,now())
+          on conflict(role_name,permission_key,resource)
+          do update set allowed=true,updated_at=excluded.updated_at;
+        end loop;
+
+        v_landing := nullif(v_overlay->>'landingView','');
+        if v_landing is null or not (v_landing=any(v_views)) then v_landing := v_views[1]; end if;
+        insert into public.lso_role_profiles(role_name,landing_view,updated_at,updated_by)
+        values(v_role,v_landing,now(),'V82 overlay migration')
+        on conflict(role_name) do update
+        set landing_view=excluded.landing_view,updated_at=excluded.updated_at,updated_by=excluded.updated_by;
+      end if;
+    end if;
+  end loop;
+end;
+$v82_migrate_overlay$;
+
+-- -----------------------------------------------------------------------------
+-- 8. PRESERVE CONFIGURATIONS, SEED ONLY MISSING ROLES, THEN REPAIR WRITE COLUMNS
+-- -----------------------------------------------------------------------------
+do $v82_repair_roles$
+declare
+  v_role text;
+  v_default jsonb;
+  v_views text[];
+  v_actions text[];
+  v_groups text[];
+  v_columns text[];
+  v_landing text;
+  v_value text;
+  v_has_any boolean;
+begin
+  foreach v_role in array array['Membership','General Secretary','Staff Account','Trainee/Probationary'] loop
+    select exists(select 1 from public.lso_role_profiles where role_name=v_role)
+        or exists(select 1 from public.lso_role_permissions where role_name=v_role)
+      into v_has_any;
+
+    v_default := public.lso_default_role_configuration(v_role);
+
+    if not v_has_any then
+      select coalesce(array_agg(value),array[]::text[]) into v_views from jsonb_array_elements_text(v_default->'views') value;
+      select coalesce(array_agg(value),array[]::text[]) into v_actions from jsonb_array_elements_text(v_default->'actions') value;
+      select coalesce(array_agg(value),array[]::text[]) into v_groups from jsonb_array_elements_text(v_default->'attendanceGroups') value;
+      perform public.lso_v82_write_role_configuration(v_role,v_default->>'landingView',v_views,v_actions,v_groups,'V82 default seed');
+    else
+      -- If a legacy role has permissions but no profile, preserve its grants and create only
+      -- a valid landing profile.
+      if not exists(select 1 from public.lso_role_profiles where role_name=v_role) then
+        select coalesce(array_agg(resource order by resource),array[]::text[]) into v_views
+        from public.lso_role_permissions where role_name=v_role and permission_key='view' and allowed=true;
+        v_landing := v_default->>'landingView';
+        if not (v_landing=any(v_views)) then v_landing := v_views[1]; end if;
+        if v_landing is not null then
+          insert into public.lso_role_profiles(role_name,landing_view,updated_at,updated_by)
+          values(v_role,v_landing,now(),'V82 profile repair') on conflict(role_name) do nothing;
+        end if;
+      end if;
+
+      -- Recalculate write-column rows from the role's CURRENT saved actions. This is the
+      -- all-role persistence repair: it works for custom grants to Secretary, Staff, or
+      -- Trainee exactly the same way it works for Membership.
+      select coalesce(array_agg(resource order by resource),array[]::text[]) into v_actions
+      from public.lso_role_permissions
+      where role_name=v_role and permission_key='action' and allowed=true
+        and resource in (
+          'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+          'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+          'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+          'writeActivityLog','manageAccessibility','selfDutyPunch'
+        )
+        and (resource <> 'selfDutyPunch' or v_role='Trainee/Probationary');
+      v_columns := public.lso_v82_columns_for_actions(v_actions);
+
+      delete from public.lso_role_permissions where role_name=v_role and permission_key='write_column';
+      foreach v_value in array coalesce(v_columns,array[]::text[]) loop
+        insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+        values(v_role,'write_column',v_value,true,now())
+        on conflict(role_name,permission_key,resource)
+        do update set allowed=true,updated_at=excluded.updated_at;
+      end loop;
+    end if;
+  end loop;
+end;
+$v82_repair_roles$;
+
+-- -----------------------------------------------------------------------------
+-- 9. MIGRATION MARKER + SECURITY
+-- -----------------------------------------------------------------------------
+-- Internal helpers: no browser execution.
+revoke all on function public.lso_v82_columns_for_actions(text[]) from public;
+revoke all on function public.lso_v82_write_role_configuration(text,text,text[],text[],text[],text) from public;
+
+-- Browser-facing RPCs remain RPC-only and session-validated.
+revoke all on function public.lso_get_permission_center(text) from public;
+revoke all on function public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb) from public;
+revoke all on function public.lso_reset_role_permissions(text,text) from public;
+revoke all on function public.lso_sync_health_v82(text) from public;
+
+grant execute on function public.lso_get_permission_center(text) to anon,authenticated;
+grant execute on function public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb) to anon,authenticated;
+grant execute on function public.lso_reset_role_permissions(text,text) to anon,authenticated;
+grant execute on function public.lso_sync_health_v82(text) to anon,authenticated;
+
+commit;
+notify pgrst, 'reload schema';
+
+-- -----------------------------------------------------------------------------
+-- 10. SQL EDITOR VERIFICATION (read-only result)
+--     Expected: migrationInstalled=true, nativeInterview=true, healthRpc=true,
+--     mismatchedRoles=[]
+-- -----------------------------------------------------------------------------
+with configurable_roles(role_name) as (
+  values ('Membership'),('General Secretary'),('Staff Account'),('Trainee/Probationary')
+), role_checks as (
+  select r.role_name,
+         public.lso_v82_columns_for_actions(coalesce((
+           select array_agg(resource order by resource)
+           from public.lso_role_permissions p
+           where p.role_name=r.role_name and p.permission_key='action' and p.allowed=true
+         ),array[]::text[])) as expected_columns,
+         coalesce((
+           select array_agg(resource order by resource)
+           from public.lso_role_permissions p
+           where p.role_name=r.role_name and p.permission_key='write_column' and p.allowed=true
+         ),array[]::text[]) as actual_columns
+  from configurable_roles r
+)
+select jsonb_build_object(
+  'migrationInstalled',exists(select 1 from public.lso_schema_migrations where migration_key='013_role_sync_interview_v82'),
+  'nativeInterview',position('interviewView' in pg_get_functiondef('public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb)'::regprocedure))>0,
+  'permissionPayloadIncludesColumns',position('''columns''' in pg_get_functiondef('public.lso_get_permission_center(text)'::regprocedure))>0,
+  'healthRpc',to_regprocedure('public.lso_sync_health_v82(text)') is not null,
+  'roleColumns',(
+    select jsonb_object_agg(role_name,jsonb_build_object('expected',expected_columns,'actual',actual_columns,'ok',expected_columns=actual_columns))
+    from role_checks
+  ),
+  'mismatchedRoles',coalesce((select jsonb_agg(role_name) from role_checks where expected_columns<>actual_columns),'[]'::jsonb)
+) as v82_role_sync_status;
 
 
 -- ########################################################################
@@ -11776,6 +12843,432 @@ begin;
 -- -----------------------------------------------------------------------------
 -- 0. PRE-FLIGHT — refuse to run against a database that is not the LSO schema.
 -- -----------------------------------------------------------------------------
+do $v84_preflight$
+begin
+  if to_regclass('public.lso_accounts') is null
+     or to_regclass('public.lso_sessions') is null
+     or to_regclass('public.lso_role_permissions') is null
+     or to_regclass('public.lso_role_profiles') is null
+     or to_regclass('public.system_state') is null
+     or to_regclass('public.lso_schema_migrations') is null then
+    raise exception 'LSO V84 requires the existing LSO management database. Install/repair the base LSO database (and LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql) before running this patch.';
+  end if;
+  if to_regprocedure('public.lso_session_account_id(text,boolean)') is null
+     or to_regprocedure('public.lso_admin_account(text)') is null then
+    raise exception 'LSO V84 requires the existing authentication/session functions. Install/repair the base LSO database before running this patch.';
+  end if;
+end;
+$v84_preflight$;
+
+-- -----------------------------------------------------------------------------
+-- 1. OFFICIAL DEFAULTS — Trainee/Probationary gains the read-only module.
+--    Every other role default is byte-for-byte the V82 definition.
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_default_role_configuration(p_role text)
+returns jsonb
+language plpgsql
+immutable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  return case p_role
+    when 'Administrator' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array(
+        'dashboardView','membersView','contractView','interviewView','monthlyReportView',
+        'attendanceView','dutyHoursView','accountsView','systemHealthView','dataView'
+      ),
+      'actions',jsonb_build_array(
+        'manageAccounts','manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+        'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+        'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+        'manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth',
+        'writeActivityLog','manageAccessibility'
+      ),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','instruments','settings','activity_log')
+    )
+    when 'Membership' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','contractView','monthlyReportView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array(
+        'manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance',
+        'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+        'writeActivityLog','manageAccessibility'
+      ),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log')
+    )
+    when 'General Secretary' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('manageEvents','saveDraftAttendance','reviewDutyPunches','writeActivityLog','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('events','attendance','activity_log')
+    )
+    when 'Staff Account' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('reviewDutyPunches','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array()
+    )
+    when 'Trainee/Probationary' then jsonb_build_object(
+      'landingView','dutyHoursView',
+      -- V84: Duty Hours (self-service punches) plus My Attendance (read-only own
+      -- record). No additional ACTION is packaged: viewing is not an editable
+      -- permission, so the Trainee still receives zero write columns.
+      'views',jsonb_build_array('dutyHoursView','ownAttendanceView'),
+      'actions',jsonb_build_array('selfDutyPunch','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array(),
+      'columns',jsonb_build_array()
+    )
+    else null
+  end;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 2. PERMISSION CENTER READ — supports the new module, always returns columns
+--    and the schema model marker. Identical to V82 plus `ownAttendanceView`.
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_get_permission_center(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_roles jsonb := '[]'::jsonb;
+  v_default jsonb;
+  v_landing text;
+  v_views jsonb;
+  v_actions jsonb;
+  v_groups jsonb;
+  v_columns jsonb;
+  v_has_configuration boolean;
+  v_updated_at timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token,false);
+
+  select greatest(
+    coalesce((select max(updated_at) from public.lso_role_permissions), '-infinity'::timestamptz),
+    coalesce((select max(updated_at) from public.lso_role_profiles), '-infinity'::timestamptz)
+  ) into v_updated_at;
+  if v_updated_at = '-infinity'::timestamptz then v_updated_at := now(); end if;
+
+  foreach v_role in array array['Administrator','Membership','General Secretary','Staff Account','Trainee/Probationary'] loop
+    v_default := public.lso_default_role_configuration(v_role);
+
+    if v_role = 'Administrator' then
+      v_landing := v_default->>'landingView';
+      v_views := v_default->'views';
+      v_actions := v_default->'actions';
+      v_groups := v_default->'attendanceGroups';
+      v_columns := v_default->'columns';
+    else
+      select (
+        exists(select 1 from public.lso_role_profiles where role_name=v_role)
+        or exists(select 1 from public.lso_role_permissions where role_name=v_role)
+      ) into v_has_configuration;
+
+      if not v_has_configuration then
+        v_landing := v_default->>'landingView';
+        v_views := v_default->'views';
+        v_actions := v_default->'actions';
+        v_groups := v_default->'attendanceGroups';
+        v_columns := v_default->'columns';
+      else
+        select coalesce(landing_view, v_default->>'landingView') into v_landing
+        from public.lso_role_profiles where role_name=v_role;
+        v_landing := coalesce(v_landing, v_default->>'landingView');
+
+        -- V84: the module whitelist now includes ownAttendanceView, and that
+        -- module is only returned for Trainee/Probationary even if a stray row
+        -- exists for another role.
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_views
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='view' and allowed=true
+          and resource in (
+            'dashboardView','membersView','contractView','interviewView','monthlyReportView',
+            'attendanceView','dutyHoursView','ownAttendanceView'
+          )
+          and (resource <> 'ownAttendanceView' or v_role='Trainee/Probationary');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_actions
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='action' and allowed=true
+          and resource in (
+            'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+            'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+            'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+            'writeActivityLog','manageAccessibility','selfDutyPunch'
+          )
+          and (resource <> 'selfDutyPunch' or v_role='Trainee/Probationary');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_groups
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='attendance_group' and allowed=true
+          and resource in ('Official Members','Trainee Members','Probationary Members');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_columns
+        from public.lso_role_permissions
+        where role_name=v_role and permission_key='write_column' and allowed=true
+          and resource in ('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log');
+      end if;
+    end if;
+
+    v_roles := v_roles || jsonb_build_array(jsonb_build_object(
+      'roleName',v_role,
+      'landingView',v_landing,
+      'views',coalesce(v_views,'[]'::jsonb),
+      'actions',coalesce(v_actions,'[]'::jsonb),
+      'attendanceGroups',coalesce(v_groups,'[]'::jsonb),
+      'columns',coalesce(v_columns,'[]'::jsonb)
+    ));
+  end loop;
+
+  return jsonb_build_object(
+    'roles',v_roles,
+    'updatedAt',v_updated_at,
+    'schemaVersion',13,
+    'permissionModel','v82'
+  );
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 3. ADMIN SAVE — accepts the new module, rejects it for every other role,
+--    and keeps the existing dependency validation intact. The new module is
+--    view-only, so it deliberately has no action dependency and no column.
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_save_role_permissions(
+  p_token text,
+  p_role text,
+  p_landing_view text,
+  p_views jsonb,
+  p_actions jsonb,
+  p_attendance_groups jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_views text[];
+  v_actions text[];
+  v_groups text[];
+begin
+  v_admin := public.lso_admin_account(p_token);
+
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'The selected role is protected or invalid.' using errcode='22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_views
+  from jsonb_array_elements_text(coalesce(p_views,'[]'::jsonb)) as value
+  where value in (
+    'dashboardView','membersView','contractView','interviewView','monthlyReportView',
+    'attendanceView','dutyHoursView','ownAttendanceView'
+  )
+  -- V84: identity-bound module. Only Trainee/Probationary may hold it.
+  and (value <> 'ownAttendanceView' or p_role='Trainee/Probationary');
+
+  if p_role <> 'Trainee/Probationary' then
+    v_views := array_remove(v_views,'ownAttendanceView');
+  end if;
+
+  if coalesce(array_length(v_views,1),0)=0 then
+    raise exception 'Assign at least one visible module.' using errcode='22023';
+  end if;
+  if not (coalesce(p_landing_view,'')=any(v_views)) then
+    raise exception 'The landing page must be one of the assigned modules.' using errcode='22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_actions
+  from jsonb_array_elements_text(coalesce(p_actions,'[]'::jsonb)) as value
+  where value in (
+    'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+    'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+    'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+    'writeActivityLog','manageAccessibility','selfDutyPunch'
+  )
+  and (value <> 'selfDutyPunch' or p_role='Trainee/Probationary');
+
+  if p_role <> 'Trainee/Probationary' then
+    v_actions := array_remove(v_actions,'selfDutyPunch');
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_groups
+  from jsonb_array_elements_text(coalesce(p_attendance_groups,'[]'::jsonb)) as value
+  where value in ('Official Members','Trainee Members','Probationary Members');
+
+  if 'attendanceView'=any(v_views) and coalesce(array_length(v_groups,1),0)=0 then
+    raise exception 'Attendance access requires at least one assigned attendance calendar.' using errcode='22023';
+  end if;
+
+  -- Server-side dependency validation prevents a role from being assigned an action whose UI
+  -- module it cannot open. `ownAttendanceView` is read-only and has no action, so it is
+  -- intentionally absent from this list.
+  if 'manageMembers'=any(v_actions) and not ('membersView'=any(v_views)) then raise exception 'Manage member records requires Members.' using errcode='22023'; end if;
+  if 'generateContract'=any(v_actions) and not ('contractView'=any(v_views)) then raise exception 'Generate contracts requires Contract.' using errcode='22023'; end if;
+  if (('editMonthlyReport'=any(v_actions)) or ('finalizeMonthlyReport'=any(v_actions)) or ('reopenMonthlyReport'=any(v_actions))) and not ('monthlyReportView'=any(v_views)) then raise exception 'Monthly Report actions require Monthly Report.' using errcode='22023'; end if;
+  if (('manageEvents'=any(v_actions)) or ('deleteEvents'=any(v_actions)) or ('saveDraftAttendance'=any(v_actions)) or ('finalizeAttendance'=any(v_actions)) or ('unlockAttendance'=any(v_actions))) and not ('attendanceView'=any(v_views)) then raise exception 'Attendance actions require Attendance.' using errcode='22023'; end if;
+  if (('reviewDutyPunches'=any(v_actions)) or ('manageDutyHours'=any(v_actions)) or ('manageDutyRequirements'=any(v_actions)) or ('certifyDutyHours'=any(v_actions)) or ('selfDutyPunch'=any(v_actions))) and not ('dutyHoursView'=any(v_views)) then raise exception 'Duty Hours actions require Duty Hours.' using errcode='22023'; end if;
+
+  perform public.lso_v82_write_role_configuration(
+    p_role,p_landing_view,v_views,v_actions,v_groups,v_admin.username
+  );
+
+  return public.lso_get_permission_center(p_token);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 4. ONE-TIME GRANT FOR AN EXISTING SAVED CONFIGURATION
+--    A database that already saved the Trainee/Probationary configuration keeps
+--    its stored rows (the V82 model never resets saved roles), so the new module
+--    must be added to that saved configuration once. The migration marker makes
+--    this exactly-once: re-running the script never re-grants a selection that an
+--    Administrator later removed. Roles without a saved configuration already
+--    receive the module from section 1 defaults.
+-- -----------------------------------------------------------------------------
+do $v84_self_attendance_grant$
+declare
+  v_already_installed boolean;
+  v_has_saved_modules boolean;
+begin
+  select exists(
+    select 1 from public.lso_schema_migrations where migration_key = '014_self_attendance_view_v84'
+  ) into v_already_installed;
+
+  if not v_already_installed then
+    select exists(
+      select 1 from public.lso_role_permissions
+      where role_name = 'Trainee/Probationary' and permission_key = 'view' and allowed = true
+    ) into v_has_saved_modules;
+
+    if v_has_saved_modules then
+      insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+      values ('Trainee/Probationary','view','ownAttendanceView',true,now())
+      on conflict (role_name,permission_key,resource)
+      do update set allowed = true, updated_at = excluded.updated_at;
+      raise notice 'LSO V84: My Attendance added to the saved Trainee/Probationary module selection.';
+    else
+      raise notice 'LSO V84: Trainee/Probationary has no saved module selection; the V84 defaults already include My Attendance.';
+    end if;
+  end if;
+end;
+$v84_self_attendance_grant$;
+
+-- -----------------------------------------------------------------------------
+-- 5. MIGRATION MARKER
+-- -----------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------
+-- 6. SECURITY — browser RPCs stay RPC-only and session-validated.
+-- -----------------------------------------------------------------------------
+do $v84_security$
+declare
+  v_signature text;
+begin
+  foreach v_signature in array array[
+    'public.lso_get_permission_center(text)',
+    'public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb)'
+  ] loop
+    execute format('revoke all on function %s from public', v_signature);
+    execute format('grant execute on function %s to anon, authenticated', v_signature);
+  end loop;
+
+  -- Re-affirm the grants owned by the V82 patch when those functions exist.
+  foreach v_signature in array array[
+    'public.lso_reset_role_permissions(text,text)',
+    'public.lso_sync_health_v82(text)'
+  ] loop
+    if to_regprocedure(v_signature) is not null then
+      execute format('grant execute on function %s to anon, authenticated', v_signature);
+    end if;
+  end loop;
+end;
+$v84_security$;
+
+commit;
+notify pgrst, 'reload schema';
+
+-- -----------------------------------------------------------------------------
+-- 7. SQL EDITOR VERIFICATION (read-only result)
+--    Expected: result = PASS and every flag true, unexpectedRoleGrants = [].
+-- -----------------------------------------------------------------------------
+with v84_checks as (
+  select
+    exists(
+      select 1 from public.lso_schema_migrations where migration_key = '014_self_attendance_view_v84'
+    ) as migration_installed,
+    position('ownAttendanceView' in pg_get_functiondef('public.lso_default_role_configuration(text)'::regprocedure)) > 0 as defaults_include_view,
+    position('ownAttendanceView' in pg_get_functiondef('public.lso_get_permission_center(text)'::regprocedure)) > 0 as read_rpc_supports_view,
+    position('ownAttendanceView' in pg_get_functiondef('public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb)'::regprocedure)) > 0 as save_rpc_supports_view,
+    (public.lso_default_role_configuration('Trainee/Probationary') -> 'views') @> '["ownAttendanceView"]'::jsonb as trainee_default_has_view,
+    not ((public.lso_default_role_configuration('Membership') -> 'views') @> '["ownAttendanceView"]'::jsonb)
+      and not ((public.lso_default_role_configuration('General Secretary') -> 'views') @> '["ownAttendanceView"]'::jsonb)
+      and not ((public.lso_default_role_configuration('Staff Account') -> 'views') @> '["ownAttendanceView"]'::jsonb) as other_role_defaults_exclude_view,
+    (public.lso_default_role_configuration('Trainee/Probationary') -> 'columns') = '[]'::jsonb as trainee_default_has_no_write_columns,
+    coalesce((
+      select array_agg(distinct role_name order by role_name)
+      from public.lso_role_permissions
+      where permission_key = 'view' and resource = 'ownAttendanceView' and allowed = true
+        and role_name <> 'Trainee/Probationary'
+    ), array[]::text[]) as unexpected_role_grants,
+    case
+      when to_regprocedure('public.lso_v82_columns_for_actions(text[])') is null then true
+      else coalesce(array_length(public.lso_v82_columns_for_actions(array['ownAttendanceView']),1),0) = 0
+    end as view_grants_no_write_column
+)
+select jsonb_build_object(
+  'migrationInstalled', migration_installed,
+  'defaultsIncludeMyAttendance', defaults_include_view,
+  'readRpcSupportsMyAttendance', read_rpc_supports_view,
+  'saveRpcSupportsMyAttendance', save_rpc_supports_view,
+  'traineeDefaultHasMyAttendance', trainee_default_has_view,
+  'otherRoleDefaultsExcludeMyAttendance', other_role_defaults_exclude_view,
+  'traineeDefaultWriteColumns', (public.lso_default_role_configuration('Trainee/Probationary') -> 'columns'),
+  'traineeDefaultHasNoWriteColumns', trainee_default_has_no_write_columns,
+  'unexpectedRoleGrants', to_jsonb(unexpected_role_grants),
+  'viewGrantsNoWriteColumn', view_grants_no_write_column,
+  'result', case
+    when migration_installed
+      and defaults_include_view
+      and read_rpc_supports_view
+      and save_rpc_supports_view
+      and trainee_default_has_view
+      and other_role_defaults_exclude_view
+      and trainee_default_has_no_write_columns
+      and coalesce(array_length(unexpected_role_grants,1),0) = 0
+      and view_grants_no_write_column
+    then 'PASS'
+    else 'REVIEW'
+  end
+) as v84_self_attendance_status
+from v84_checks;
+
+-- -----------------------------------------------------------------------------
+-- 8. ROLLBACK
+--    This patch only extends the supported resource lists and adds one module
+--    row for Trainee/Probationary. To roll back:
+--      begin;
+--        delete from public.lso_role_permissions
+--         where permission_key = 'view' and resource = 'ownAttendanceView';
+--        delete from public.lso_schema_migrations
+--         where migration_key = '014_self_attendance_view_v84';
+--      commit;
+--      then re-run LSO_V82_ROLE_SYNC_SUPABASE_PATCH.sql to restore the previous
+--      function bodies (it is idempotent and preserves saved role selections).
+--    Rolling back hides the My Attendance section; it never deletes attendance
+--    records, which remain untouched by this patch.
+-- -----------------------------------------------------------------------------
 
 
 -- ########################################################################
@@ -11861,6 +13354,416 @@ begin;
 
 -- -----------------------------------------------------------------------------
 -- 0. PRE-FLIGHT — refuse to run against a database that is not the LSO schema.
+-- -----------------------------------------------------------------------------
+do $v85_preflight$
+begin
+  if to_regclass('public.lso_accounts') is null
+     or to_regclass('public.lso_sessions') is null
+     or to_regclass('public.system_state') is null
+     or to_regclass('public.lso_schema_migrations') is null then
+    raise exception 'LSO V85 requires the existing LSO management database (lso_accounts, lso_sessions, system_state, lso_schema_migrations). Install/repair the base LSO database and run LSO_SELF_ATTENDANCE_MONITORING_V84.sql first.';
+  end if;
+  if to_regprocedure('public.lso_session_account_id(text,boolean)') is null then
+    raise exception 'LSO V85 requires public.lso_session_account_id(text,boolean). Install/repair the base LSO database first.';
+  end if;
+  if to_regprocedure('public.lso_get_state(text)') is null then
+    raise exception 'LSO V85 requires public.lso_get_state(text). Install/repair the base LSO database first.';
+  end if;
+end;
+$v85_preflight$;
+
+-- -----------------------------------------------------------------------------
+-- 1. OWN-RECORD SCOPE — one pure helper builds the Trainee/Probationary payload.
+--    It reads no table: it receives the shared-state row image and the linked
+--    member id, and returns only what belongs to that member. `lso_get_state`
+--    (section 2) and the SQL Editor verification (section 6) both use it, so
+--    what is verified below is exactly what the website receives.
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_trainee_scoped_state_v85(
+  p_state jsonb,
+  p_member_id text
+)
+returns jsonb
+language plpgsql
+stable
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_member_id text := nullif(btrim(coalesce(p_member_id, '')), '');
+  v_members jsonb := '[]'::jsonb;
+  v_attendance jsonb := '[]'::jsonb;
+  v_events jsonb := '[]'::jsonb;
+  v_entries jsonb := '[]'::jsonb;
+  v_commitments jsonb := '{}'::jsonb;
+  v_duty_hours jsonb;
+  v_all_members jsonb;
+  v_all_attendance jsonb;
+  v_all_events jsonb;
+begin
+  if p_state is null or jsonb_typeof(p_state) <> 'object' then
+    raise exception 'The shared system state is missing.' using errcode = 'P0002';
+  end if;
+
+  v_all_members := case when jsonb_typeof(p_state -> 'members') = 'array' then p_state -> 'members' else '[]'::jsonb end;
+  v_all_attendance := case when jsonb_typeof(p_state -> 'attendance') = 'array' then p_state -> 'attendance' else '[]'::jsonb end;
+  v_all_events := case when jsonb_typeof(p_state -> 'events') = 'array' then p_state -> 'events' else '[]'::jsonb end;
+  v_duty_hours := case
+    when jsonb_typeof(p_state -> 'duty_hours') = 'object' then p_state -> 'duty_hours'
+    else '{"version":6,"commitments":{},"entries":[]}'::jsonb
+  end;
+
+  -- An account that is not linked to a member receives nothing but the shell.
+  if v_member_id is not null then
+    -- Own member record (unchanged behaviour).
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_members
+      from jsonb_array_elements(v_all_members) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'id', '')) = v_member_id;
+
+    -- V85: own attendance rows only (every roster mode and attendance calendar).
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_attendance
+      from jsonb_array_elements(v_all_attendance) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'memberId', '')) = v_member_id;
+
+    -- V85: only the activities referenced by those rows (date/title/type/venue
+    -- for the table). Activities without an own record are not disclosed.
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_events
+      from jsonb_array_elements(v_all_events) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'id', '')) <> ''
+       and exists (
+         select 1
+           from jsonb_array_elements(v_attendance) as own_record
+          where btrim(coalesce(own_record ->> 'eventId', '')) = btrim(coalesce(item ->> 'id', ''))
+       );
+
+    -- Own Duty Hours entries and commitment (unchanged behaviour).
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_entries
+      from jsonb_array_elements(
+        case when jsonb_typeof(v_duty_hours -> 'entries') = 'array' then v_duty_hours -> 'entries' else '[]'::jsonb end
+      ) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'memberId', '')) = v_member_id;
+
+    if jsonb_typeof(v_duty_hours -> 'commitments' -> v_member_id) = 'object' then
+      v_commitments := jsonb_build_object(v_member_id, v_duty_hours -> 'commitments' -> v_member_id);
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'id', coalesce(p_state -> 'id', '1'::jsonb),
+    'members', v_members,
+    'events', v_events,
+    'attendance', v_attendance,
+    'duty_hours', jsonb_build_object(
+      'version', coalesce(v_duty_hours -> 'version', '6'::jsonb),
+      'commitments', v_commitments,
+      'entries', v_entries
+    ),
+    'monthly_reports', '{}'::jsonb,
+    'instruments', '[]'::jsonb,
+    'settings', '{}'::jsonb,
+    'activity_log', '[]'::jsonb,
+    'updated_at', coalesce(p_state -> 'updated_at', to_jsonb(now())),
+    'scope', jsonb_build_object('role', 'Trainee/Probationary', 'memberId', coalesce(v_member_id, ''), 'model', 'v85-own-record')
+  );
+end;
+$$;
+
+-- The helper is internal: it is not an API endpoint for the website.
+revoke all on function public.lso_trainee_scoped_state_v85(jsonb, text) from public, anon, authenticated;
+
+-- -----------------------------------------------------------------------------
+-- 2. STATE LOADER — identical for every other role; Trainee/Probationary now
+--    receives its own attendance rows and the activities they belong to.
+--    v_state is JSONB (row image), never %rowtype, so an older database created
+--    before a newer column still loads.
+-- -----------------------------------------------------------------------------
+create or replace function public.lso_get_state(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_member_id text;
+  v_state jsonb;
+  v_duty_hours jsonb;
+  v_monthly_reports jsonb;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+
+  select role, member_id
+    into v_role, v_member_id
+    from public.lso_accounts
+   where id = v_account_id;
+
+  select to_jsonb(state)
+    into v_state
+    from public.system_state as state
+   where state.id = 1;
+
+  if v_state is null then
+    raise exception 'The shared system state is missing.' using errcode = 'P0002';
+  end if;
+
+  -- V85: identity-bound payload for the self-service role. Only the linked
+  -- member's own records leave the database; nothing in the request can widen it.
+  if v_role = 'Trainee/Probationary' then
+    return public.lso_trainee_scoped_state_v85(v_state, v_member_id);
+  end if;
+
+  v_duty_hours := case
+    when jsonb_typeof(v_state -> 'duty_hours') = 'object' then v_state -> 'duty_hours'
+    else '{"version":6,"commitments":{},"entries":[]}'::jsonb
+  end;
+
+  v_monthly_reports := case
+    when jsonb_typeof(v_state -> 'monthly_reports') = 'object' then v_state -> 'monthly_reports'
+    when jsonb_typeof(v_state -> 'settings' -> '__lso_monthly_reports_v1') = 'object' then v_state -> 'settings' -> '__lso_monthly_reports_v1'
+    else '{"version":1,"reports":{},"civilStatusByMember":{},"traineeFiles":{}}'::jsonb
+  end;
+
+  return jsonb_build_object(
+    'id', coalesce(v_state -> 'id', '1'::jsonb),
+    'members', case when jsonb_typeof(v_state -> 'members') = 'array' then v_state -> 'members' else '[]'::jsonb end,
+    'events', case when jsonb_typeof(v_state -> 'events') = 'array' then v_state -> 'events' else '[]'::jsonb end,
+    'attendance', case when jsonb_typeof(v_state -> 'attendance') = 'array' then v_state -> 'attendance' else '[]'::jsonb end,
+    'duty_hours', v_duty_hours,
+    'monthly_reports', v_monthly_reports,
+    'instruments', case when jsonb_typeof(v_state -> 'instruments') = 'array' then v_state -> 'instruments' else '[]'::jsonb end,
+    'settings', case when jsonb_typeof(v_state -> 'settings') = 'object' then v_state -> 'settings' else '{}'::jsonb end,
+    'activity_log', case when jsonb_typeof(v_state -> 'activity_log') = 'array' then v_state -> 'activity_log' else '[]'::jsonb end,
+    'updated_at', coalesce(v_state -> 'updated_at', to_jsonb(now()))
+  );
+end;
+$$;
+
+revoke all on function public.lso_get_state(text) from public;
+grant execute on function public.lso_get_state(text) to anon, authenticated;
+
+-- -----------------------------------------------------------------------------
+-- 3. SERVER-SIDE PAGING (V69, when installed) — same own-record boundary.
+--    Before V85 only `duty_entries` was scoped for Trainee/Probationary; the
+--    attendance, members, and events collections were not. The website never
+--    pages those collections for a Trainee, but the RPC is callable, so it is
+--    closed here. Every other role keeps the exact behaviour it had.
+-- -----------------------------------------------------------------------------
+do $v85_paging$
+begin
+  if to_regprocedure('public.lso_get_collection_page_v69(text,text,integer,integer,text)') is null then
+    raise notice 'LSO V85: lso_get_collection_page_v69 is not installed on this database; paging hardening skipped.';
+    return;
+  end if;
+
+  execute $ddl$
+create or replace function public.lso_get_collection_page_v69(
+  p_token text,
+  p_collection text,
+  p_offset integer default 0,
+  p_limit integer default 25,
+  p_search text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_member_id text;
+  v_source jsonb := '[]'::jsonb;
+  v_items jsonb := '[]'::jsonb;
+  v_total integer := 0;
+  v_offset integer := greatest(0, coalesce(p_offset, 0));
+  v_limit integer := greatest(1, least(100, coalesce(p_limit, 25)));
+  v_search text := lower(btrim(coalesce(p_search, '')));
+  v_scoped jsonb;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select role, member_id into v_role, v_member_id
+    from public.lso_accounts
+   where id = v_account_id;
+
+  select case p_collection
+    when 'members'      then coalesce(state.members, '[]'::jsonb)
+    when 'events'       then coalesce(state.events, '[]'::jsonb)
+    when 'attendance'   then coalesce(state.attendance, '[]'::jsonb)
+    when 'instruments'  then coalesce(state.instruments, '[]'::jsonb)
+    when 'activity_log' then coalesce(state.activity_log, '[]'::jsonb)
+    when 'duty_entries' then coalesce(state.duty_hours -> 'entries', '[]'::jsonb)
+    else null
+  end
+    into v_source
+    from public.system_state as state
+   where state.id = 1;
+
+  if v_source is null then
+    raise exception 'Unknown or unsupported collection.' using errcode = '22023';
+  end if;
+  if jsonb_typeof(v_source) <> 'array' then
+    v_source := '[]'::jsonb;
+  end if;
+
+  -- V85: Trainee/Probationary accounts page only their own records. The same
+  -- helper that scopes lso_get_state decides what belongs to the member.
+  if v_role = 'Trainee/Probationary' then
+    select public.lso_trainee_scoped_state_v85(to_jsonb(state), v_member_id)
+      into v_scoped
+      from public.system_state as state
+     where state.id = 1;
+    v_source := case p_collection
+      when 'members'      then coalesce(v_scoped -> 'members', '[]'::jsonb)
+      when 'events'       then coalesce(v_scoped -> 'events', '[]'::jsonb)
+      when 'attendance'   then coalesce(v_scoped -> 'attendance', '[]'::jsonb)
+      when 'duty_entries' then coalesce(v_scoped -> 'duty_hours' -> 'entries', '[]'::jsonb)
+      else '[]'::jsonb
+    end;
+  end if;
+
+  -- Case-insensitive text filter (matches the browser fallback behaviour).
+  if v_search <> '' then
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_source
+      from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+     where position(v_search in lower(coalesce(item::text, ''))) > 0;
+  end if;
+
+  v_total := jsonb_array_length(v_source);
+
+  -- V85 repair: the previous body ordered/limited an aggregate directly, which
+  -- PostgreSQL rejects ("column t.idx must appear in the GROUP BY clause"), so
+  -- every call failed. The page is now selected first and aggregated after.
+  select coalesce(jsonb_agg(page.item order by page.idx), '[]'::jsonb)
+    into v_items
+    from (
+      select t.item, t.idx
+        from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+       where t.idx > v_offset
+       order by t.idx
+       limit v_limit
+    ) as page;
+
+  return jsonb_build_object(
+    'items', v_items,
+    'total', v_total,
+    'offset', v_offset,
+    'limit', v_limit
+  );
+end;
+$lso$;
+$ddl$;
+
+  execute 'revoke all on function public.lso_get_collection_page_v69(text, text, integer, integer, text) from public, anon, authenticated';
+  execute 'grant execute on function public.lso_get_collection_page_v69(text, text, integer, integer, text) to anon, authenticated';
+end;
+$v85_paging$;
+
+-- -----------------------------------------------------------------------------
+-- 4. MIGRATION MARKER. lso_schema_migrations keeps version_number UNIQUE and the
+--    repository already ships markers numbered 14 (V69 repair and V84) and 15
+--    (V69 writer), so the number is derived from the table instead of being
+--    hard-coded: it can never collide with a row that is already there.
+-- -----------------------------------------------------------------------------
+commit;
+notify pgrst, 'reload schema';
+
+-- -----------------------------------------------------------------------------
+-- 5. SQL EDITOR VERIFICATION (read-only result)
+--    Expected: result = PASS.
+--      * stateLoaderScoped / pagingScoped ......... the new function bodies are live
+--      * migrationInstalled ....................... marker present
+--      * traineeSample ............................ the first approved, linked
+--        Trainee/Probationary account, with the number of own attendance rows
+--        and referenced activities it will now receive, and
+--        onlyOwnRowsReturned = true (no other member's row in the payload).
+--        If no Trainee/Probationary account is linked to a member yet,
+--        traineeSample is null and the account link is the next step
+--        (System Administration > Accounts > link the member).
+-- -----------------------------------------------------------------------------
+with trainee as (
+  select account.username, account.member_id
+    from public.lso_accounts as account
+   where account.role = 'Trainee/Probationary'
+     and account.approval_status = 'Approved'
+     and account.disabled = false
+     and nullif(btrim(coalesce(account.member_id, '')), '') is not null
+   order by account.created_at
+   limit 1
+),
+payload as (
+  select trainee.username,
+         trainee.member_id,
+         public.lso_trainee_scoped_state_v85(to_jsonb(state), trainee.member_id) as scoped,
+         (select count(*) from jsonb_array_elements(case when jsonb_typeof(state.attendance) = 'array' then state.attendance else '[]'::jsonb end) as stored_row
+           where btrim(coalesce(stored_row ->> 'memberId', '')) = btrim(trainee.member_id)) as stored_own_rows
+    from public.system_state as state
+   cross join trainee
+   where state.id = 1
+),
+checks as (
+  select
+    coalesce(position('lso_trainee_scoped_state_v85' in pg_get_functiondef(to_regprocedure('public.lso_get_state(text)'))) > 0, false) as state_loader_scoped,
+    -- to_regprocedure() yields null (never an error) on a database without the V69 paging RPC.
+    case
+      when to_regprocedure('public.lso_get_collection_page_v69(text,text,integer,integer,text)') is null then true
+      else coalesce(position('lso_trainee_scoped_state_v85' in pg_get_functiondef(to_regprocedure('public.lso_get_collection_page_v69(text,text,integer,integer,text)'))) > 0, false)
+    end as paging_scoped,
+    to_regprocedure('public.lso_get_collection_page_v69(text,text,integer,integer,text)') is not null as paging_installed,
+    exists (select 1 from public.lso_schema_migrations where migration_key = '016_self_attendance_live_feed_v85') as migration_installed,
+    (select count(*) from public.lso_accounts where role = 'Trainee/Probationary' and approval_status = 'Approved' and disabled = false) as trainee_accounts,
+    (select count(*) from public.lso_accounts where role = 'Trainee/Probationary' and approval_status = 'Approved' and disabled = false and nullif(btrim(coalesce(member_id, '')), '') is not null) as linked_trainee_accounts,
+    (select jsonb_build_object(
+        'username', payload.username,
+        'memberId', payload.member_id,
+        'memberRecordFound', jsonb_array_length(payload.scoped -> 'members') = 1,
+        'attendanceRowsReturned', jsonb_array_length(payload.scoped -> 'attendance'),
+        'attendanceRowsStoredForMember', payload.stored_own_rows,
+        'activitiesReturned', jsonb_array_length(payload.scoped -> 'events'),
+        'onlyOwnRowsReturned', not exists (
+          select 1 from jsonb_array_elements(payload.scoped -> 'attendance') as returned_row
+           where btrim(coalesce(returned_row ->> 'memberId', '')) <> btrim(payload.member_id)
+        ),
+        'settingsWithheld', payload.scoped -> 'settings' = '{}'::jsonb,
+        'activityLogWithheld', payload.scoped -> 'activity_log' = '[]'::jsonb
+      ) from payload) as trainee_sample
+)
+select jsonb_build_object(
+  'stateLoaderScoped', state_loader_scoped,
+  'pagingInstalled', paging_installed,
+  'pagingScoped', paging_scoped,
+  'migrationInstalled', migration_installed,
+  'traineeAccounts', trainee_accounts,
+  'linkedTraineeAccounts', linked_trainee_accounts,
+  'traineeSample', trainee_sample,
+  'result', case
+    when state_loader_scoped
+      and paging_scoped
+      and migration_installed
+      and coalesce((trainee_sample ->> 'onlyOwnRowsReturned')::boolean, true)
+      and coalesce((trainee_sample ->> 'attendanceRowsReturned')::integer = (trainee_sample ->> 'attendanceRowsStoredForMember')::integer, true)
+    then 'PASS'
+    else 'REVIEW'
+  end
+) as v85_self_attendance_live_feed_status
+from checks;
+
+-- -----------------------------------------------------------------------------
+-- 6. ROLLBACK
+--    Re-run LSO_DUTY_HOURS_COMPLETE_INSTALL.sql (or supabase-setup.sql) to
+--    restore the previous lso_get_state body, then:
+--      begin;
+--        drop function if exists public.lso_trainee_scoped_state_v85(jsonb, text);
+--        delete from public.lso_schema_migrations
+--         where migration_key = '016_self_attendance_live_feed_v85';
+--      commit;
+--    (If the V69 paging RPC was hardened, re-run LSO_MISSING_V69_RPC_REPAIR.sql
+--    to restore its previous body.) Rolling back returns the My Attendance
+--    section to its previous blank state; it never deletes attendance records.
 -- -----------------------------------------------------------------------------
 
 
@@ -12645,6 +14548,1045 @@ begin;
 -- ----------------------------------------------------------------------------
 -- 0. PRE-FLIGHT
 -- ----------------------------------------------------------------------------
+do $v89_preflight$
+begin
+  if to_regclass('public.system_state') is null
+     or to_regclass('public.lso_accounts') is null
+     or to_regclass('public.lso_sessions') is null then
+    raise exception 'LSO database tables not found. Run the base database installer first.' using errcode = 'P0002';
+  end if;
+  if to_regprocedure('public.lso_session_account_id(text,boolean)') is null then
+    raise exception 'public.lso_session_account_id(text,boolean) is missing.' using errcode = 'P0002';
+  end if;
+end;
+$v89_preflight$;
+
+create table if not exists public.lso_schema_migrations (
+  migration_key text primary key,
+  version_number integer not null,
+  title text not null,
+  checksum text not null,
+  applied_at timestamptz not null default now(),
+  applied_by text not null default 'master-installer',
+  notes text not null default ''
+);
+
+create table if not exists public.lso_role_permissions (
+  role_name text not null,
+  permission_key text not null,
+  resource text not null default '',
+  allowed boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (role_name, permission_key, resource)
+);
+
+create table if not exists public.lso_role_profiles (
+  role_name text primary key,
+  landing_view text not null,
+  updated_at timestamptz not null default now(),
+  updated_by text not null default 'migration-009'
+);
+
+-- ----------------------------------------------------------------------------
+-- 1. SERVER MANIFEST — one answer for every role and every write column
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_role_can(
+  p_role text,
+  p_permission_key text,
+  p_resource text default ''
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+  select case
+    when p_role = 'Administrator' then true
+    else coalesce((
+      select allowed
+      from public.lso_role_permissions
+      where role_name = p_role
+        and permission_key = p_permission_key
+        and resource = coalesce(p_resource, '')
+    ), false)
+  end;
+$$;
+
+-- Operational action -> required shared-state columns. This is the single
+-- source of truth used by the server writer and by the browser manifest.
+create or replace function public.lso_v89_columns_for_actions(p_actions text[])
+returns text[]
+language plpgsql
+immutable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_actions text[] := coalesce(p_actions, array[]::text[]);
+  v_columns text[] := array[]::text[];
+begin
+  if 'manageMembers' = any(v_actions) or 'generateContract' = any(v_actions) then
+    v_columns := array_append(v_columns, 'members');
+  end if;
+  if 'manageEvents' = any(v_actions) or 'deleteEvents' = any(v_actions) then
+    v_columns := array_append(v_columns, 'events');
+  end if;
+  if 'saveDraftAttendance' = any(v_actions) or 'finalizeAttendance' = any(v_actions)
+     or 'unlockAttendance' = any(v_actions) or 'deleteEvents' = any(v_actions) then
+    v_columns := array_append(v_columns, 'attendance');
+  end if;
+  if 'finalizeAttendance' = any(v_actions) or 'unlockAttendance' = any(v_actions) then
+    v_columns := array_append(v_columns, 'settings');
+  end if;
+  if 'manageDutyHours' = any(v_actions) or 'manageDutyRequirements' = any(v_actions) then
+    v_columns := array_append(v_columns, 'duty_hours');
+  end if;
+  if 'editMonthlyReport' = any(v_actions) or 'finalizeMonthlyReport' = any(v_actions)
+     or 'reopenMonthlyReport' = any(v_actions) then
+    v_columns := array_cat(v_columns, array['monthly_reports','monthly_reports_compat','settings']);
+  end if;
+  if 'writeActivityLog' = any(v_actions) then
+    v_columns := array_append(v_columns, 'activity_log');
+  end if;
+  select coalesce(array_agg(distinct item order by item), array[]::text[])
+    into v_columns
+  from unnest(v_columns) as item;
+  return coalesce(v_columns, array[]::text[]);
+end;
+$$;
+
+-- Keep the older helper name working for installations still calling V82 code.
+create or replace function public.lso_v82_columns_for_actions(p_actions text[])
+returns text[]
+language sql
+stable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+  select public.lso_v89_columns_for_actions(p_actions);
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 2. OFFICIAL DEFAULTS (used for Administrator, Reset, and first-time seeds)
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_default_role_configuration(p_role text)
+returns jsonb
+language plpgsql
+immutable
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  return case p_role
+    when 'Administrator' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView','accountsView','systemHealthView','dataView'),
+      'actions',jsonb_build_array('manageAccounts','manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport','manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','manageSettings','manageInventory','manageData','manageRecovery','viewSystemHealth','writeActivityLog','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','instruments','settings','activity_log')
+    )
+    when 'Membership' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','contractView','monthlyReportView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log')
+    )
+    when 'General Secretary' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('manageEvents','saveDraftAttendance','reviewDutyPunches','writeActivityLog','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array('events','attendance','activity_log')
+    )
+    when 'Staff Account' then jsonb_build_object(
+      'landingView','dashboardView',
+      'views',jsonb_build_array('dashboardView','membersView','attendanceView','dutyHoursView'),
+      'actions',jsonb_build_array('reviewDutyPunches','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array('Official Members','Trainee Members','Probationary Members'),
+      'columns',jsonb_build_array()
+    )
+    when 'Trainee/Probationary' then jsonb_build_object(
+      'landingView','dutyHoursView',
+      'views',jsonb_build_array('dutyHoursView','ownAttendanceView'),
+      'actions',jsonb_build_array('selfDutyPunch','manageAccessibility'),
+      'attendanceGroups',jsonb_build_array(),
+      'columns',jsonb_build_array()
+    )
+    else null
+  end;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 3. SHARED CONFIGURATION WRITER (Save / Reset / seed)
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_v89_write_role_configuration(
+  p_role text,
+  p_landing_view text,
+  p_views text[],
+  p_actions text[],
+  p_attendance_groups text[],
+  p_updated_by text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_value text;
+  v_columns text[];
+begin
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'The selected role is protected or invalid.' using errcode = '22023';
+  end if;
+  v_columns := public.lso_v89_columns_for_actions(p_actions);
+
+  delete from public.lso_role_permissions
+  where role_name = p_role
+    and permission_key in ('view','action','attendance_group','write_column');
+
+  foreach v_value in array coalesce(p_views, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'view',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+  foreach v_value in array coalesce(p_actions, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'action',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+  foreach v_value in array coalesce(p_attendance_groups, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'attendance_group',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+  foreach v_value in array coalesce(v_columns, array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'write_column',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+
+  insert into public.lso_role_profiles(role_name,landing_view,updated_at,updated_by)
+  values(p_role,p_landing_view,now(),coalesce(nullif(p_updated_by,''),'V89'))
+  on conflict(role_name) do update
+  set landing_view=excluded.landing_view,
+      updated_at=excluded.updated_at,
+      updated_by=excluded.updated_by;
+end;
+$$;
+
+create or replace function public.lso_v82_write_role_configuration(
+  p_role text,
+  p_landing_view text,
+  p_views text[],
+  p_actions text[],
+  p_attendance_groups text[],
+  p_updated_by text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+begin
+  perform public.lso_v89_write_role_configuration(p_role,p_landing_view,p_views,p_actions,p_attendance_groups,p_updated_by);
+end;
+$$;
+
+create or replace function public.lso_apply_default_role_configuration(
+  p_role text,
+  p_updated_by text default 'migration-009'
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_config jsonb;
+begin
+  v_config := public.lso_default_role_configuration(p_role);
+  if v_config is null then
+    raise exception 'Unknown LSO account role.' using errcode = '22023';
+  end if;
+  perform public.lso_v89_write_role_configuration(
+    p_role,
+    v_config ->> 'landingView',
+    array(select jsonb_array_elements_text(v_config -> 'views')),
+    array(select jsonb_array_elements_text(v_config -> 'actions')),
+    array(select jsonb_array_elements_text(v_config -> 'attendanceGroups')),
+    coalesce(nullif(p_updated_by,''),'migration-009')
+  );
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 4. NATIVE PERMISSION CENTER READ (identity + change fingerprint)
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_get_permission_center(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_account public.lso_accounts%rowtype;
+  v_roles jsonb := '[]'::jsonb;
+  v_role text;
+  v_default jsonb;
+  v_landing text;
+  v_views jsonb;
+  v_actions jsonb;
+  v_groups jsonb;
+  v_columns jsonb;
+  v_has_configuration boolean;
+  v_updated_at timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token,false);
+  select * into v_account from public.lso_accounts where id = v_account_id;
+  if not found then
+    raise exception 'Account not found.' using errcode = '42501';
+  end if;
+
+  select greatest(
+    coalesce((select max(updated_at) from public.lso_role_permissions), '-infinity'::timestamptz),
+    coalesce((select max(updated_at) from public.lso_role_profiles), '-infinity'::timestamptz),
+    coalesce(v_account.updated_at, '-infinity'::timestamptz)
+  ) into v_updated_at;
+  if v_updated_at = '-infinity'::timestamptz then v_updated_at := now(); end if;
+
+  foreach v_role in array array['Administrator','Membership','General Secretary','Staff Account','Trainee/Probationary'] loop
+    -- Non-administrators only receive their own configuration row.
+    if v_account.role <> 'Administrator' and v_role <> v_account.role then
+      continue;
+    end if;
+
+    v_default := public.lso_default_role_configuration(v_role);
+
+    if v_role = 'Administrator' then
+      v_landing := v_default ->> 'landingView';
+      v_views := v_default -> 'views';
+      v_actions := v_default -> 'actions';
+      v_groups := v_default -> 'attendanceGroups';
+      v_columns := v_default -> 'columns';
+    else
+      select exists(
+        select 1 from public.lso_role_profiles where role_name = v_role
+        union all
+        select 1 from public.lso_role_permissions where role_name = v_role
+      ) into v_has_configuration;
+
+      if not v_has_configuration then
+        v_landing := v_default ->> 'landingView';
+        v_views := v_default -> 'views';
+        v_actions := v_default -> 'actions';
+        v_groups := v_default -> 'attendanceGroups';
+        v_columns := v_default -> 'columns';
+      else
+        select coalesce(p.landing_view, v_default ->> 'landingView')
+          into v_landing
+        from public.lso_role_profiles p
+        where p.role_name = v_role;
+        v_landing := coalesce(v_landing, v_default ->> 'landingView');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_views
+        from public.lso_role_permissions
+        where role_name = v_role and permission_key = 'view' and allowed = true
+          and resource in ('dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView','ownAttendanceView')
+          and (resource <> 'ownAttendanceView' or v_role = 'Trainee/Probationary');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_actions
+        from public.lso_role_permissions
+        where role_name = v_role and permission_key = 'action' and allowed = true
+          and resource in (
+            'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+            'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+            'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+            'writeActivityLog','manageAccessibility','selfDutyPunch'
+          )
+          and (resource <> 'selfDutyPunch' or v_role = 'Trainee/Probationary');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_groups
+        from public.lso_role_permissions
+        where role_name = v_role and permission_key = 'attendance_group' and allowed = true
+          and resource in ('Official Members','Trainee Members','Probationary Members');
+
+        select coalesce(jsonb_agg(resource order by resource),'[]'::jsonb) into v_columns
+        from public.lso_role_permissions
+        where role_name = v_role and permission_key = 'write_column' and allowed = true
+          and resource in ('members','events','attendance','duty_hours','monthly_reports','monthly_reports_compat','settings','activity_log');
+      end if;
+    end if;
+
+    v_roles := v_roles || jsonb_build_array(jsonb_build_object(
+      'roleName', v_role,
+      'landingView', v_landing,
+      'views', coalesce(v_views,'[]'::jsonb),
+      'actions', coalesce(v_actions,'[]'::jsonb),
+      'attendanceGroups', coalesce(v_groups,'[]'::jsonb),
+      'columns', coalesce(v_columns,'[]'::jsonb),
+      'updatedAt', v_updated_at
+    ));
+  end loop;
+
+  return jsonb_build_object(
+    'roles', v_roles,
+    'updatedAt', v_updated_at,
+    'schemaVersion', 14,
+    'permissionModel', 'v89',
+    'editable', v_account.role = 'Administrator',
+    'requestedRole', v_account.role,
+    'account', public.lso_account_json(v_account.id),
+    'accountRole', v_account.role,
+    'accountRoleUpdatedAt', v_account.updated_at
+  );
+end;
+$$;
+
+-- Lightweight polling endpoint: detects role/permission changes without
+-- downloading the full manifest. The website uses the full read above.
+create or replace function public.lso_get_permission_revision(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_updated_at timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token,false);
+  select role into v_role from public.lso_accounts where id = v_account_id;
+  select greatest(
+    coalesce((select max(updated_at) from public.lso_role_permissions), '-infinity'::timestamptz),
+    coalesce((select max(updated_at) from public.lso_role_profiles), '-infinity'::timestamptz),
+    coalesce((select updated_at from public.lso_accounts where id = v_account_id), '-infinity'::timestamptz)
+  ) into v_updated_at;
+  if v_updated_at = '-infinity'::timestamptz then v_updated_at := now(); end if;
+  return jsonb_build_object(
+    'updatedAt', v_updated_at,
+    'schemaVersion', 14,
+    'accountRole', v_role
+  );
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 5. ADMIN SAVE / RESET — validation stays on the server
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_save_role_permissions(
+  p_token text,
+  p_role text,
+  p_landing_view text,
+  p_views jsonb,
+  p_actions jsonb,
+  p_attendance_groups jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_admin_id uuid;
+  v_views text[];
+  v_actions text[];
+  v_groups text[];
+begin
+  v_admin_id := public.lso_session_account_id(p_token,true);
+  select * into v_admin from public.lso_accounts where id = v_admin_id;
+
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'The selected role is protected or invalid.' using errcode = '22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_views
+  from jsonb_array_elements_text(coalesce(p_views,'[]'::jsonb)) as value
+  where value in ('dashboardView','membersView','contractView','interviewView','monthlyReportView','attendanceView','dutyHoursView','ownAttendanceView');
+  if coalesce(array_length(v_views,1),0) = 0 then
+    raise exception 'Assign at least one visible module.' using errcode = '22023';
+  end if;
+  if not (coalesce(p_landing_view,'') = any(v_views)) then
+    raise exception 'The landing page must be one of the assigned modules.' using errcode = '22023';
+  end if;
+  if 'ownAttendanceView' = any(v_views) and p_role <> 'Trainee/Probationary' then
+    raise exception 'My Attendance is identity-bound to Trainee/Probationary accounts only.' using errcode = '22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_actions
+  from jsonb_array_elements_text(coalesce(p_actions,'[]'::jsonb)) as value
+  where value in (
+    'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+    'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+    'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+    'writeActivityLog','manageAccessibility','selfDutyPunch'
+  );
+  if 'selfDutyPunch' = any(v_actions) and p_role <> 'Trainee/Probationary' then
+    raise exception 'Personal Duty punches are identity-bound to Trainee/Probationary accounts only.' using errcode = '22023';
+  end if;
+
+  select coalesce(array_agg(distinct value order by value),array[]::text[]) into v_groups
+  from jsonb_array_elements_text(coalesce(p_attendance_groups,'[]'::jsonb)) as value
+  where value in ('Official Members','Trainee Members','Probationary Members');
+
+  if 'attendanceView' = any(v_views) and coalesce(array_length(v_groups,1),0) = 0 then
+    raise exception 'Attendance access requires at least one assigned Attendance calendar.' using errcode = '22023';
+  end if;
+
+  if 'manageMembers' = any(v_actions) and not ('membersView' = any(v_views)) then
+    raise exception 'Manage member records requires the Members module.' using errcode = '22023';
+  end if;
+  if 'generateContract' = any(v_actions) and not ('contractView' = any(v_views)) then
+    raise exception 'Generate contracts requires the Contract module.' using errcode = '22023';
+  end if;
+  if ('editMonthlyReport' = any(v_actions) or 'finalizeMonthlyReport' = any(v_actions) or 'reopenMonthlyReport' = any(v_actions))
+     and not ('monthlyReportView' = any(v_views)) then
+    raise exception 'Monthly Report actions require the Monthly Report module.' using errcode = '22023';
+  end if;
+  if ('manageEvents' = any(v_actions) or 'deleteEvents' = any(v_actions) or 'saveDraftAttendance' = any(v_actions)
+      or 'finalizeAttendance' = any(v_actions) or 'unlockAttendance' = any(v_actions))
+     and not ('attendanceView' = any(v_views)) then
+    raise exception 'Attendance actions require the Attendance module.' using errcode = '22023';
+  end if;
+  if ('reviewDutyPunches' = any(v_actions) or 'manageDutyHours' = any(v_actions)
+      or 'manageDutyRequirements' = any(v_actions) or 'certifyDutyHours' = any(v_actions)
+      or 'selfDutyPunch' = any(v_actions)) and not ('dutyHoursView' = any(v_views)) then
+    raise exception 'Duty Hours actions require the Duty Hours module.' using errcode = '22023';
+  end if;
+
+  perform public.lso_v89_write_role_configuration(
+    p_role, p_landing_view, v_views, v_actions, v_groups, v_admin.username
+  );
+  return public.lso_get_permission_center(p_token);
+end;
+$$;
+
+create or replace function public.lso_reset_role_permissions(p_token text, p_role text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_admin_id uuid;
+begin
+  v_admin_id := public.lso_session_account_id(p_token,true);
+  select * into v_admin from public.lso_accounts where id = v_admin_id;
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'The selected role is protected or invalid.' using errcode = '22023';
+  end if;
+  perform public.lso_apply_default_role_configuration(p_role, v_admin.username);
+  return public.lso_get_permission_center(p_token);
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 6. REPAIR EXISTING ROLES WITHOUT RESETTING ADMINISTRATOR'S CUSTOM GRANTS
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_v89_repair_role(p_role text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_default jsonb;
+  v_baseline_views text[];
+  v_baseline_actions text[];
+  v_baseline_groups text[];
+  v_has_configuration boolean;
+  v_landing text;
+  v_actions text[];
+  v_columns text[];
+  v_value text;
+begin
+  if p_role not in ('Membership','General Secretary','Staff Account','Trainee/Probationary') then
+    raise exception 'Unknown configurable LSO role.' using errcode = '22023';
+  end if;
+  v_default := public.lso_default_role_configuration(p_role);
+
+  select exists(
+    select 1 from public.lso_role_profiles where role_name = p_role
+    union all
+    select 1 from public.lso_role_permissions where role_name = p_role
+  ) into v_has_configuration;
+
+  if not v_has_configuration then
+    perform public.lso_apply_default_role_configuration(p_role,'V89 default seed');
+    return jsonb_build_object('role',p_role,'seeded',true,'repaired',true);
+  end if;
+
+  -- Guarantee the minimum operational grants for every configured role.
+  v_baseline_views := case p_role
+    when 'Membership' then array['dashboardView','membersView','contractView','monthlyReportView','attendanceView','dutyHoursView']
+    when 'General Secretary' then array['dashboardView','membersView','attendanceView','dutyHoursView']
+    when 'Staff Account' then array['dashboardView','membersView','attendanceView','dutyHoursView']
+    else array['dutyHoursView','ownAttendanceView']
+  end;
+  v_baseline_actions := case p_role
+    when 'Membership' then array['manageMembers','generateContract','editMonthlyReport','manageEvents','saveDraftAttendance','reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours','writeActivityLog','manageAccessibility']
+    when 'General Secretary' then array['manageEvents','saveDraftAttendance','reviewDutyPunches','writeActivityLog','manageAccessibility']
+    when 'Staff Account' then array['reviewDutyPunches','manageAccessibility']
+    else array['selfDutyPunch','manageAccessibility']
+  end;
+  v_baseline_groups := case p_role
+    when 'Trainee/Probationary' then array[]::text[]
+    else array['Official Members','Trainee Members','Probationary Members']
+  end;
+
+  foreach v_value in array v_baseline_views loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'view',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+  foreach v_value in array v_baseline_actions loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'action',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+  foreach v_value in array v_baseline_groups loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'attendance_group',v_value,true,now())
+    on conflict(role_name,permission_key,resource) do update set allowed=true, updated_at=excluded.updated_at;
+  end loop;
+
+  select landing_view into v_landing from public.lso_role_profiles where role_name = p_role;
+  if v_landing is null or not exists (
+    select 1 from jsonb_array_elements_text(v_default -> 'views') as allowed_view where allowed_view = v_landing
+  ) then
+    v_landing := v_default ->> 'landingView';
+  end if;
+  insert into public.lso_role_profiles(role_name,landing_view,updated_at,updated_by)
+  values(p_role,v_landing,now(),'V89 repair')
+  on conflict(role_name) do update
+  set landing_view=excluded.landing_view, updated_at=excluded.updated_at, updated_by=excluded.updated_by;
+
+  -- Derive write columns from the CURRENT saved actions for this role. This is
+  -- what reconnects custom grants to the shared database writer.
+  select coalesce(array_agg(resource order by resource),array[]::text[]) into v_actions
+  from public.lso_role_permissions
+  where role_name = p_role and permission_key = 'action' and allowed = true
+    and resource in (
+      'manageMembers','generateContract','editMonthlyReport','finalizeMonthlyReport','reopenMonthlyReport',
+      'manageEvents','deleteEvents','saveDraftAttendance','finalizeAttendance','unlockAttendance',
+      'reviewDutyPunches','manageDutyHours','manageDutyRequirements','certifyDutyHours',
+      'writeActivityLog','manageAccessibility','selfDutyPunch'
+    );
+  v_columns := public.lso_v89_columns_for_actions(v_actions);
+  delete from public.lso_role_permissions where role_name = p_role and permission_key = 'write_column';
+  foreach v_value in array coalesce(v_columns,array[]::text[]) loop
+    insert into public.lso_role_permissions(role_name,permission_key,resource,allowed,updated_at)
+    values(p_role,'write_column',v_value,true,now());
+  end loop;
+
+  return jsonb_build_object('role',p_role,'seeded',false,'repaired',true);
+end;
+$$;
+
+do $v89_repair_roles$
+declare
+  v_role text;
+begin
+  foreach v_role in array array['Membership','General Secretary','Staff Account','Trainee/Probationary'] loop
+    perform public.lso_v89_repair_role(v_role);
+  end loop;
+end;
+$v89_repair_roles$;
+
+-- ----------------------------------------------------------------------------
+-- 7. SHARED STATE WRITER — V88 repair carried forward (non-admin + dynamic)
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_update_state_core(
+  p_token text,
+  p_column text,
+  p_value jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_existing jsonb;
+  v_old jsonb;
+  v_new jsonb;
+  v_key text;
+  v_value jsonb;
+  v_event jsonb;
+  v_allowed boolean;
+begin
+  -- Validate session for all authenticated accounts (false = non-admin allowed)
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select role into v_role from public.lso_accounts where id = v_account_id;
+
+  if p_column in ('members', 'events', 'attendance', 'instruments', 'activity_log')
+     and jsonb_typeof(p_value) <> 'array' then
+    raise exception 'The selected data collection must be a JSON array.' using errcode = '22023';
+  end if;
+  if p_column in ('settings', 'duty_hours', 'monthly_reports')
+     and jsonb_typeof(p_value) <> 'object' then
+    raise exception 'The selected data collection must be a JSON object.' using errcode = '22023';
+  end if;
+
+  v_allowed := public.lso_role_can(v_role, 'write_column', p_column);
+  if not v_allowed then
+    raise exception 'This account role cannot update the selected system area.' using errcode = '42501';
+  end if;
+
+  select case p_column
+    when 'members' then members
+    when 'events' then events
+    when 'attendance' then attendance
+    when 'duty_hours' then duty_hours
+    when 'monthly_reports' then monthly_reports
+    when 'instruments' then instruments
+    when 'settings' then settings
+    when 'activity_log' then activity_log
+  end
+  into v_existing
+  from public.system_state
+  where id = 1
+  for update;
+
+  -- Events protection: Non-administrator roles may create and edit activities,
+  -- but cannot delete them or alter finalized/unlocked attendance workflows.
+  if v_role <> 'Administrator' and p_column = 'events' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
+      select value into v_new
+      from jsonb_array_elements(p_value)
+      where value ->> 'id' = v_old ->> 'id'
+      limit 1;
+      if v_new is null then
+        raise exception 'Only the Administrator can delete activities.' using errcode = '42501';
+      end if;
+      for v_key, v_value in
+        select key, value from jsonb_each(coalesce(v_old -> 'attendanceWorkflows', '{}'::jsonb))
+        where value ->> 'state' = 'Finalized'
+           or nullif(value ->> 'unlockedAt', '') is not null
+           or nullif(value ->> 'finalizedAt', '') is not null
+      loop
+        if coalesce(v_new -> 'attendanceWorkflows' -> v_key, 'null'::jsonb) is distinct from v_value then
+          raise exception 'Only the Administrator can finalize, unlock, or modify a protected attendance workflow.' using errcode = '42501';
+        end if;
+      end loop;
+      for v_key, v_value in
+        select key, value from jsonb_each(coalesce(v_new -> 'attendanceWorkflows', '{}'::jsonb))
+        where value ->> 'state' = 'Finalized'
+           or nullif(value ->> 'unlockedAt', '') is not null
+           or nullif(value ->> 'finalizedAt', '') is not null
+      loop
+        if coalesce(v_old -> 'attendanceWorkflows' -> v_key, 'null'::jsonb) is distinct from v_value then
+          raise exception 'Only the Administrator can finalize, unlock, or modify a protected attendance workflow.' using errcode = '42501';
+        end if;
+      end loop;
+    end loop;
+
+    -- A newly created activity must begin with Draft attendance workflows.
+    for v_new in select value from jsonb_array_elements(p_value) loop
+      select value into v_old
+      from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb))
+      where value ->> 'id' = v_new ->> 'id'
+      limit 1;
+      for v_key, v_value in
+        select key, value from jsonb_each(coalesce(v_new -> 'attendanceWorkflows', '{}'::jsonb))
+        where value ->> 'state' = 'Finalized'
+           or nullif(value ->> 'unlockedAt', '') is not null
+           or nullif(value ->> 'finalizedAt', '') is not null
+      loop
+        if v_old is null
+           or coalesce(v_old -> 'attendanceWorkflows' -> v_key, 'null'::jsonb) is distinct from v_value then
+          raise exception 'Only the Administrator can create, finalize, unlock, or modify a protected attendance workflow.' using errcode = '42501';
+        end if;
+      end loop;
+    end loop;
+  end if;
+
+  -- Attendance protection: Draft editors cannot change attendance rows whose
+  -- matching roster is currently Finalized.
+  if v_role <> 'Administrator' and p_column = 'attendance' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
+      select value into v_event
+      from public.system_state as state,
+           jsonb_array_elements(coalesce(state.events, '[]'::jsonb)) as event
+      where state.id = 1 and event ->> 'id' = v_old ->> 'eventId'
+      limit 1;
+      v_key := coalesce(nullif(v_old ->> 'attendanceGroup', ''), 'Official Members') || '::' ||
+               coalesce(nullif(v_old ->> 'rosterModeAtEdit', ''), 'Current');
+      if coalesce(v_event -> 'attendanceWorkflows' -> v_key ->> 'state', 'Draft') = 'Finalized'
+         and not exists (select 1 from jsonb_array_elements(p_value) as item where item = v_old) then
+        raise exception 'Finalized attendance is locked. The Administrator must unlock it before corrections.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_new in select value from jsonb_array_elements(p_value) loop
+      select value into v_event
+      from public.system_state as state,
+           jsonb_array_elements(coalesce(state.events, '[]'::jsonb)) as event
+      where state.id = 1 and event ->> 'id' = v_new ->> 'eventId'
+      limit 1;
+      v_key := coalesce(nullif(v_new ->> 'attendanceGroup', ''), 'Official Members') || '::' ||
+               coalesce(nullif(v_new ->> 'rosterModeAtEdit', ''), 'Current');
+      if coalesce(v_event -> 'attendanceWorkflows' -> v_key ->> 'state', 'Draft') = 'Finalized'
+         and not exists (select 1 from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) as item where item = v_new) then
+        raise exception 'Finalized attendance is locked. The Administrator must unlock it before corrections.' using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  -- Attendance calendar permission: Non-administrator roles may only modify rows
+  -- belonging to attendance calendars assigned to their role in Role & Permission Center
+  -- (e.g. Official Members, Trainee Members, Probationary Members).
+  -- This replaces the obsolete hardcoded "limited to Trainee and Probationary" restriction.
+  if v_role <> 'Administrator' and p_column = 'attendance' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) loop
+      if not exists (select 1 from jsonb_array_elements(p_value) as item where item = v_old) then
+        if not public.lso_role_can(v_role, 'attendance_group', coalesce(nullif(v_old ->> 'attendanceGroup', ''), 'Official Members')) then
+          raise exception 'This account role is not assigned to the selected Attendance calendar.' using errcode = '42501';
+        end if;
+      end if;
+    end loop;
+    for v_new in select value from jsonb_array_elements(p_value) loop
+      if not exists (select 1 from jsonb_array_elements(coalesce(v_existing, '[]'::jsonb)) as item where item = v_new) then
+        if not public.lso_role_can(v_role, 'attendance_group', coalesce(nullif(v_new ->> 'attendanceGroup', ''), 'Official Members')) then
+          raise exception 'This account role is not assigned to the selected Attendance calendar.' using errcode = '42501';
+        end if;
+      end if;
+    end loop;
+  end if;
+
+  -- Settings protection: Membership may update monthly reports in settings,
+  -- but cannot change system-wide automation settings.
+  if v_role = 'Membership' and p_column = 'settings' then
+    if (p_value - '__lso_monthly_reports_v1') is distinct from (coalesce(v_existing, '{}'::jsonb) - '__lso_monthly_reports_v1') then
+      raise exception 'Only the Administrator can change system settings.' using errcode = '42501';
+    end if;
+  end if;
+
+  -- Duty Hours protection: Membership Duty Hours changes are restricted to
+  -- members currently in Trainee or Probationary Period.
+  if v_role = 'Membership' and p_column = 'duty_hours' then
+    for v_old in select value from jsonb_array_elements(coalesce(v_existing -> 'entries', '[]'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_old ->> 'memberId'
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and not exists (select 1 from jsonb_array_elements(coalesce(p_value -> 'entries', '[]'::jsonb)) as item where item = v_old) then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_new in select value from jsonb_array_elements(coalesce(p_value -> 'entries', '[]'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_new ->> 'memberId'
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and not exists (select 1 from jsonb_array_elements(coalesce(v_existing -> 'entries', '[]'::jsonb)) as item where item = v_new) then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_key, v_value in select key, value from jsonb_each(coalesce(v_existing -> 'commitments', '{}'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_key
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and coalesce(p_value -> 'commitments' -> v_key, 'null'::jsonb) is distinct from v_value then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+    for v_key, v_value in select key, value from jsonb_each(coalesce(p_value -> 'commitments', '{}'::jsonb)) loop
+      select exists (
+        select 1 from public.system_state as st,
+          jsonb_array_elements(coalesce(st.members, '[]'::jsonb)) as member
+        where st.id = 1 and member ->> 'id' = v_key
+          and public.lso_member_period_on_date(member, public.lso_local_date()) in ('Trainee Period', 'Probationary Period')
+      ) into v_allowed;
+      if not v_allowed and coalesce(v_existing -> 'commitments' -> v_key, 'null'::jsonb) is distinct from v_value then
+        raise exception 'Membership Duty Hours access is limited to current Trainee and Probationary members.' using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  case p_column
+    when 'members' then update public.system_state set members = p_value, updated_at = now() where id = 1;
+    when 'events' then update public.system_state set events = p_value, updated_at = now() where id = 1;
+    when 'attendance' then update public.system_state set attendance = p_value, updated_at = now() where id = 1;
+    when 'duty_hours' then update public.system_state set duty_hours = p_value, updated_at = now() where id = 1;
+    when 'monthly_reports' then update public.system_state set monthly_reports = p_value, updated_at = now() where id = 1;
+    when 'instruments' then update public.system_state set instruments = p_value, updated_at = now() where id = 1;
+    when 'settings' then update public.system_state set settings = p_value, updated_at = now() where id = 1;
+    when 'activity_log' then update public.system_state set activity_log = p_value, updated_at = now() where id = 1;
+    else raise exception 'Unsupported shared-data column.' using errcode = '22023';
+  end case;
+
+  return public.lso_get_state(p_token);
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 3. WRAPPER — NO-OP OPTIMIZATION WITH NON-ADMIN SESSION VALIDATION
+-- ----------------------------------------------------------------------------
+create or replace function public.lso_update_state(
+  p_token text,
+  p_column text,
+  p_value jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_existing jsonb;
+begin
+  -- Validate session for all authenticated accounts (false = non-admin allowed)
+  perform public.lso_session_account_id(p_token, false);
+
+  -- Read the stored column through the row image
+  select to_jsonb(state_row) -> p_column
+    into v_existing
+    from public.system_state as state_row
+   where id = 1;
+
+  -- No-op guard: identical payload -> skip redundant write and return current state
+  if v_existing is not null and v_existing = p_value then
+    return public.lso_get_state(p_token);
+  end if;
+
+  return public.lso_update_state_core(p_token, p_column, p_value);
+end;
+$lso$;
+
+-- ----------------------------------------------------------------------------
+-- 4. lso_update_state_v69 — CANONICAL, CONFLICT-FREE OPTIMISTIC CONCURRENCY WRITER
+--    Drops all competing overloads so PostgREST schema cache has exactly ONE
+--    unique function signature (preventing PGRST202 ambiguity errors).
+-- ----------------------------------------------------------------------------
+drop function if exists public.lso_update_state_v69(text, text, jsonb, integer) cascade;
+drop function if exists public.lso_update_state_v69(text, text, jsonb, bigint) cascade;
+
+create or replace function public.lso_update_state_v69(
+  p_token text,
+  p_column text,
+  p_value jsonb,
+  p_expected_version bigint default 0
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+as $lso$
+declare
+  v_existing jsonb;
+  v_versions jsonb;
+  v_result jsonb;
+  v_next bigint;
+begin
+  perform public.lso_session_account_id(p_token, false);
+
+  select to_jsonb(state_row) -> p_column
+    into v_existing
+    from public.system_state as state_row
+   where id = 1;
+
+  if v_existing is not null and v_existing = p_value then
+    select coalesce(column_versions, '{}'::jsonb) into v_versions from public.system_state where id = 1;
+    return public.lso_get_state(p_token) || jsonb_build_object('column_versions', v_versions, 'noop', true);
+  end if;
+
+  v_result := public.lso_update_state(p_token, p_column, p_value);
+
+  -- Advance the column version for diagnostics
+  select coalesce((coalesce(column_versions, '{}'::jsonb) ->> p_column)::bigint, 0) + 1
+    into v_next
+    from public.system_state
+   where id = 1;
+
+  update public.system_state
+     set column_versions = jsonb_set(
+           coalesce(column_versions, '{}'::jsonb),
+           array[p_column],
+           to_jsonb(v_next),
+           true
+         )
+   where id = 1
+   returning column_versions into v_versions;
+
+  return v_result || jsonb_build_object('column_versions', coalesce(v_versions, '{}'::jsonb));
+end;
+$lso$;
+
+
+-- ----------------------------------------------------------------------------
+-- 8. MIGRATION MARKER + SECURITY
+-- ----------------------------------------------------------------------------
+-- lso_schema_migrations.version_number is UNIQUE. Earlier patches already own
+-- version 14 (V84 / V69 repair) and 15/16, so never hard-code the number here.
+-- On a re-run, keep the version already assigned to this migration key; only
+-- on a first install take the next free version (at least 17).
+revoke all on function public.lso_v89_columns_for_actions(text[]) from public, anon, authenticated;
+revoke all on function public.lso_v82_columns_for_actions(text[]) from public, anon, authenticated;
+revoke all on function public.lso_v89_write_role_configuration(text,text,text[],text[],text[],text) from public, anon, authenticated;
+revoke all on function public.lso_v82_write_role_configuration(text,text,text[],text[],text[],text) from public, anon, authenticated;
+revoke all on function public.lso_apply_default_role_configuration(text,text) from public, anon, authenticated;
+revoke all on function public.lso_v89_repair_role(text) from public, anon, authenticated;
+
+revoke all on function public.lso_role_can(text,text,text) from public;
+revoke all on function public.lso_get_permission_center(text) from public;
+revoke all on function public.lso_get_permission_revision(text) from public;
+revoke all on function public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb) from public;
+revoke all on function public.lso_reset_role_permissions(text,text) from public;
+revoke all on function public.lso_update_state_core(text,text,jsonb) from public;
+revoke all on function public.lso_update_state(text,text,jsonb) from public;
+revoke all on function public.lso_update_state_v69(text,text,jsonb,bigint) from public;
+
+grant execute on function public.lso_role_can(text,text,text) to anon, authenticated;
+grant execute on function public.lso_get_permission_center(text) to anon, authenticated;
+grant execute on function public.lso_get_permission_revision(text) to anon, authenticated;
+grant execute on function public.lso_save_role_permissions(text,text,text,jsonb,jsonb,jsonb) to anon, authenticated;
+grant execute on function public.lso_reset_role_permissions(text,text) to anon, authenticated;
+grant execute on function public.lso_update_state_core(text,text,jsonb) to anon, authenticated;
+grant execute on function public.lso_update_state(text,text,jsonb) to anon, authenticated;
+grant execute on function public.lso_update_state_v69(text,text,jsonb,bigint) to anon, authenticated;
+
+commit;
+notify pgrst, 'reload schema';
+
+-- ----------------------------------------------------------------------------
+-- 9. VERIFICATION (read-only result)
+-- ----------------------------------------------------------------------------
+select jsonb_build_object(
+  'permission_schema', 14,
+  'membership_official_attendance_allowed', public.lso_role_can('Membership','attendance_group','Official Members'),
+  'membership_trainee_attendance_allowed', public.lso_role_can('Membership','attendance_group','Trainee Members'),
+  'membership_probationary_attendance_allowed', public.lso_role_can('Membership','attendance_group','Probationary Members'),
+  'membership_events_write_allowed', public.lso_role_can('Membership','write_column','events'),
+  'membership_attendance_write_allowed', public.lso_role_can('Membership','write_column','attendance'),
+  'membership_members_write_allowed', public.lso_role_can('Membership','write_column','members'),
+  'gensec_manage_events_allowed', public.lso_role_can('General Secretary','action','manageEvents'),
+  'gensec_record_attendance_allowed', public.lso_role_can('General Secretary','action','saveDraftAttendance'),
+  'gensec_official_attendance_allowed', public.lso_role_can('General Secretary','attendance_group','Official Members'),
+  'gensec_events_write_allowed', public.lso_role_can('General Secretary','write_column','events'),
+  'gensec_attendance_write_allowed', public.lso_role_can('General Secretary','write_column','attendance'),
+  'admin_always_allowed', public.lso_role_can('Administrator','write_column','settings'),
+  'get_permission_center_installed', to_regprocedure('public.lso_get_permission_center(text)') is not null,
+  'permission_revision_installed', to_regprocedure('public.lso_get_permission_revision(text)') is not null,
+  'lso_update_state_installed', to_regprocedure('public.lso_update_state(text,text,jsonb)') is not null,
+  'lso_update_state_core_installed', to_regprocedure('public.lso_update_state_core(text,text,jsonb)') is not null,
+  'lso_update_state_v69_installed', to_regprocedure('public.lso_update_state_v69(text,text,jsonb,bigint)') is not null
+) as verification_results;
 
 
 -- ########################################################################
