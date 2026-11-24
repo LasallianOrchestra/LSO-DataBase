@@ -77,8 +77,12 @@ DATABASE — LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql (idempotent, safe to rerun
   * Carries forward the V88 writer repair: non-admin sessions can save, and
     calendar access is validated dynamically via lso_role_can() instead of the
     obsolete hardcoded calendar restriction.
-  * Adds migration marker 014_access_control_realtime_sync_v89 and a
+  * Adds migration marker key 014_access_control_realtime_sync_v89 and a
     verification query with all Membership / General Secretary grants.
+    The marker's version_number is assigned from the next FREE number in
+    lso_schema_migrations (at least 17), because versions 14-16 are already
+    owned by the V69/V84/V85 patches. Re-running the script reuses the version
+    already recorded for this key instead of trying to insert another one.
 
 WEBSITE — role-access-sync-v89.js (loaded in index.html)
   * Polls the permission-center fingerprint every 7 seconds while active
@@ -144,6 +148,12 @@ F. Reset Role Permissions for a role: the official V89 defaults are restored
 
 6. TROUBLESHOOTING
 ------------------------------------------------------------------------------
+* "duplicate key value violates unique constraint
+  lso_schema_migrations_version_unique — Key (version_number)=(14) already
+  exists": this came from an older copy of the V89 SQL that hard-coded version
+  14. The corrected script assigns the next free version automatically. Simply
+  re-run the corrected LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql in full; no
+  table cleanup or manual delete is required.
 * "Permissions loaded ... Last updated" still shows an old timestamp:
   re-run the SQL patch and confirm lso_schema_migrations contains key
   '014_access_control_realtime_sync_v89'.
