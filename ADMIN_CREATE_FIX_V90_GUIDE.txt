@@ -39,6 +39,23 @@ NEW PROJECT OR MISSING BASE TABLES/FUNCTIONS:
 Then run LSO_SECURE_ADMIN_SETUP.sql privately once to create or rotate the
 Administrator credentials, and deploy the website files.
 
+IF THE REPAIR FAILS WITH 42883 (function ... does not exist)
+  The repair creates every lso_% function in dependency order, so a helper is
+  always created before the function that calls it. If you edited the file or
+  regenerated it from pg_get_functiondef, keep that order. PostgreSQL validates
+  SQL-language function bodies at CREATE time; creating
+  lso_v82_columns_for_actions before lso_v89_columns_for_actions fails with
+  42883 on a project that does not already have the helper.
+
+  The repair also restores the complete installer's privilege matrix: 42
+  functions are executable by anon/authenticated, and the 10 internal helpers
+  (lso_admin_account, lso_apply_default_role_configuration,
+  lso_default_role_configuration, lso_session_account_id,
+  lso_trainee_scoped_state_v85, lso_v82_columns_for_actions,
+  lso_v82_write_role_configuration, lso_v89_columns_for_actions,
+  lso_v89_repair_role, lso_v89_write_role_configuration) stay revoked from
+  browser roles.
+
 OTHER INSTALLERS CORRECTED IN PLACE (already applied to the files in this repo)
   supabase-setup.sql                              column_versions
   LSO_MASTER_MIGRATION_INSTALLER.sql              column_versions + Administrator bypass + missing V69/V82 RPCs

@@ -2400,9 +2400,24 @@ $function$;
 
 -- Function grants: CREATE OR REPLACE preserves existing grants, but a newly
 -- created function would otherwise keep the default PUBLIC grant.
+-- Match the complete installer's privilege matrix: browser roles get EXECUTE on
+-- the RPCs only. The ten internal helpers stay revoked from anon/authenticated
+-- because they are called only by other SECURITY DEFINER functions.
 do $lso_v90_master_grants$
 declare
   v_func record;
+  c_internal constant text[] := array[
+    'lso_admin_account',
+    'lso_apply_default_role_configuration',
+    'lso_default_role_configuration',
+    'lso_session_account_id',
+    'lso_trainee_scoped_state_v85',
+    'lso_v82_columns_for_actions',
+    'lso_v82_write_role_configuration',
+    'lso_v89_columns_for_actions',
+    'lso_v89_repair_role',
+    'lso_v89_write_role_configuration'
+  ];
 begin
   for v_func in
     select p.oid, p.proname
@@ -2412,8 +2427,13 @@ begin
   loop
     execute format('revoke all on function public.%I(%s) from public',
                    v_func.proname, pg_get_function_identity_arguments(v_func.oid));
-    execute format('grant execute on function public.%I(%s) to anon, authenticated',
-                   v_func.proname, pg_get_function_identity_arguments(v_func.oid));
+    if v_func.proname = any(c_internal) then
+      execute format('revoke all on function public.%I(%s) from anon, authenticated',
+                     v_func.proname, pg_get_function_identity_arguments(v_func.oid));
+    else
+      execute format('grant execute on function public.%I(%s) to anon, authenticated',
+                     v_func.proname, pg_get_function_identity_arguments(v_func.oid));
+    end if;
   end loop;
 end;
 $lso_v90_master_grants$;
