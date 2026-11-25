@@ -28,6 +28,14 @@ Website files:
 - lso-system-core-v4.js
 
 Additional repairs:
+- LSO_SUPABASE_REPAIR_V90.sql now creates every function in dependency order.
+  The previous alphabetical order created lso_v82_columns_for_actions (a
+  SQL-language wrapper) before lso_v89_columns_for_actions, so on a project
+  that did not already have the helper PostgreSQL rejected the file with
+  42883: function public.lso_v89_columns_for_actions(text[]) does not exist.
+- Both the repair and the master installer now reproduce the complete
+  installer's privilege matrix: 42 functions executable by anon/authenticated,
+  and the 10 internal helpers revoked from browser roles.
 - LSO_MASTER_MIGRATION_INSTALLER.sql now also installs the V69 notification
   preferences table, the V69 notification/collection/state-meta RPCs, the V82
   sync-health RPC, and lso_trainee_scoped_state_v85, so supabase-setup.sql +
