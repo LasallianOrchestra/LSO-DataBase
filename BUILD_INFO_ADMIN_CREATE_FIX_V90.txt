@@ -28,6 +28,15 @@ Website files:
 - lso-system-core-v4.js
 
 Additional repairs:
+- Role permissions could not be saved on a base + master project: the master
+  installer deleted every role's "view" rows and re-inserted them only for
+  Staff Account and Administrator, so Membership, General Secretary, and
+  Trainee/Probationary had zero visible modules and every save failed with
+  22023 "Assign at least one visible module". The master installer now seeds
+  the baseline views for every role, and the repair heals existing projects
+  with lso_v89_repair_role(). The repair verification now reports
+  roles_with_views, all_roles_have_views, all_roles_landing_valid, and
+  role_views.
 - LSO_SUPABASE_REPAIR_V90.sql now creates every function in dependency order.
   The previous alphabetical order created lso_v82_columns_for_actions (a
   SQL-language wrapper) before lso_v89_columns_for_actions, so on a project
