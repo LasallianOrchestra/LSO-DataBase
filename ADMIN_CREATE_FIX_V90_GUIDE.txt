@@ -1,0 +1,97 @@
+LASALLIAN SYMPHONY ORCHESTRA — ADMIN CREATE FIX (V90)
+=====================================================
+
+SYMPTOM
+-------
+Signed in as Administrator, nothing can be created or saved: members,
+activities, attendance, duty hours, monthly reports, settings, instruments,
+and activity-log entries all stay unchanged or show a database error.
+
+ROOT CAUSES FOUND
+-----------------
+1. MISSING COLUMN: system_state.column_versions
+   The base installer (supabase-setup.sql) and the master migration installer
+   define public.lso_update_state_v69 against system_state.column_versions but
+   never create that column. PostgreSQL rejects every write with 42703:
+   column "column_versions" does not exist.
+
+2. WRONG ACCOUNT ROLE CONSTRAINT
+   The merged Duty Hours installer resets lso_accounts_role_check to only
+   Administrator / Staff Account / Trainee-Probationary. Membership and
+   General Secretary accounts therefore cannot be created or approved
+   (23514), and re-running the installer fails when those accounts exist.
+
+3. NO ADMINISTRATOR BYPASS IN lso_role_can()
+   Older installers define lso_role_can() by reading lso_role_permissions only.
+   Administrator has no rows in that table, so its writes are rejected with
+   42501 "This account role cannot update the selected system area."
+
+WHAT TO RUN
+-----------
+EXISTING PROJECT (website can already sign in):
+  Run LSO_SUPABASE_REPAIR_V90.sql in Supabase Dashboard -> SQL Editor.
+  It is safe to re-run and preserves every account and shared record.
+
+NEW PROJECT OR MISSING BASE TABLES/FUNCTIONS:
+  Run LSO_SUPABASE_REWRITE_V90.sql in Supabase Dashboard -> SQL Editor.
+  It is the complete, rewritten installer. It is idempotent and safe to re-run.
+
+Then run LSO_SECURE_ADMIN_SETUP.sql privately once to create or rotate the
+Administrator credentials, and deploy the website files.
+
+OTHER INSTALLERS CORRECTED IN PLACE (already applied to the files in this repo)
+  supabase-setup.sql                              column_versions
+  LSO_MASTER_MIGRATION_INSTALLER.sql              column_versions + Administrator bypass + missing V69/V82 RPCs
+  LSO_SUPABASE_COMPLETE_INSTALL_V89.sql           column_versions + five-role CHECK
+  LSO_DUTY_HOURS_COMPLETE_INSTALL.sql             five-role CHECK
+  LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql        column_versions
+  LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql  column_versions
+  LSO_MEMBERSHIP_ROLE_ATTENDANCE_PERMISSION_FIX.sql column_versions
+
+The repair also normalizes the EXECUTE grants on all 52 lso_% functions
+(revokes PUBLIC, grants anon and authenticated), so a function that had to be
+recreated does not arrive with a default PUBLIC grant or without its grants.
+
+VERIFY
+------
+The SQL file ends with a JSON verification result. Every check must be true:
+  column_versions_present       true
+  all_five_roles_allowed        true
+  administrator_write_members   true
+  administrator_write_events    true
+  administrator_write_attendance true
+  administrator_write_settings  true
+  writer_v69_present            true
+  writer_core_present           true
+  save_accounts_present         true
+  permission_center_present     true
+
+WEBSITE-SIDE SAFETY NET
+-----------------------
+cloud-staff-v8.js now:
+  * treats the Administrator as always writable, even if a stale permission
+    payload says otherwise;
+  * falls back from lso_update_state_v69 to lso_update_state when the V69
+    writer fails because column_versions is missing (42703);
+  * uses the Administrator-only lso_replace_state writer as a last resort when
+    an older lso_role_can() rejects the Administrator (42501).
+role-access-v6.js and permissions-dynamic-v38.js also treat the Administrator
+as immutable, so a bad role row cannot hide the Add Member / Add Activity
+controls.
+
+VERIFICATION PERFORMED
+----------------------
+- PostgreSQL 16 (PGlite) install matrix:
+    fresh complete install                      OK
+    base + master                                OK after repair
+    base + master + individual V89 patch         OK after repair
+    complete install re-run with five roles      OK, data preserved
+    repair re-run with Membership/General Sec.   OK, data preserved
+- Administrator writes to all eight shared columns: OK.
+- Role permission matrix:
+    Membership: members/events/attendance/duty/monthly/activity_log OK
+    General Secretary: events/attendance/activity_log OK
+    Staff Account: no shared writes
+    Trainee/Probationary: no shared writes
+- Website harness: 51/51 checks passed (node self-attendance-audit/harness.js).
+- No uncaught browser errors in the Administrator session.

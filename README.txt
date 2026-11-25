@@ -1,3 +1,21 @@
+LASALLIAN SYMPHONY ORCHESTRA — ADMIN CREATE FIX (V90)
+=====================================================
+
+If the Administrator account cannot create or save anything, run
+LSO_SUPABASE_REPAIR_V90.sql in the Supabase SQL Editor. For a new project or a
+project missing base tables, run LSO_SUPABASE_REWRITE_V90.sql instead.
+
+Root causes fixed:
+- system_state.column_versions was missing, so every save failed with 42703.
+- lso_accounts_role_check was reset to three roles, blocking Membership and
+  General Secretary accounts.
+- Older lso_role_can() definitions had no Administrator bypass (42501).
+
+The website also now treats the Administrator as always writable and falls back
+to the base/replace-state writers when an older database rejects a save.
+
+See ADMIN_CREATE_FIX_V90_GUIDE.txt.
+
 LASALLIAN SYMPHONY ORCHESTRA — SEMESTER OPERATIONS RELEASE
 =========================================================
 

@@ -102,6 +102,12 @@ insert into public.system_state (id)
 values (1)
 on conflict (id) do nothing;
 
+-- V69 optimistic-concurrency bookkeeping. The base installer originally defined
+-- lso_update_state_v69 against this column without creating it, which made every
+-- shared-data write fail with 42703 (column "column_versions" does not exist).
+alter table public.system_state
+  add column if not exists column_versions jsonb not null default '{}'::jsonb;
+
 -- Upgrade existing projects created before Duty Hours was added.
 alter table public.system_state
   add column if not exists duty_hours jsonb not null
@@ -7376,7 +7382,7 @@ begin
   ) then
     alter table public.lso_accounts
       add constraint lso_accounts_role_check
-      check (role in ('Administrator', 'Staff Account', 'Trainee/Probationary'));
+      check (role in ('Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary'));
   end if;
 end;
 $$;
@@ -8041,7 +8047,7 @@ begin
   ) then
     alter table public.lso_accounts
       add constraint lso_accounts_role_check
-      check (role in ('Administrator', 'Staff Account', 'Trainee/Probationary'));
+      check (role in ('Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary'));
   end if;
 end;
 $$;

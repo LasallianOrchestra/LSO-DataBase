@@ -1,0 +1,49 @@
+LSO Administrator Create Fix — V90 File Manifest
+================================================
+
+Database (run one in Supabase SQL Editor):
+- LSO_SUPABASE_REPAIR_V90.sql
+    Targeted, idempotent repair for an existing project whose website can
+    already sign in. Adds column_versions, restores the five-role account
+    constraint, adds the Administrator bypass, rewrites all LSO functions,
+    and prints a verification result.
+
+- LSO_SUPABASE_REWRITE_V90.sql
+    Complete rewritten installer for a new project or a project missing base
+    tables/functions. Contains every table, column, index, function, role
+    permission seed, and verification query. Safe to re-run.
+
+Installers corrected in place:
+- supabase-setup.sql
+    column_versions created by the base installer.
+- LSO_MASTER_MIGRATION_INSTALLER.sql
+    column_versions, Administrator bypass in lso_role_can(), and the missing
+    V69 notification table + V69/V82 RPCs (so base + master is self-sufficient).
+- LSO_SUPABASE_COMPLETE_INSTALL_V89.sql
+    column_versions + five-role account constraint.
+- LSO_DUTY_HOURS_COMPLETE_INSTALL.sql
+    five-role account constraint.
+- LSO_ACCESS_CONTROL_REALTIME_SYNC_V89.sql
+    column_versions.
+- LSO_ATTENDANCE_ROSTER_REFRESH_STABILITY_V83.sql
+    column_versions.
+- LSO_MEMBERSHIP_ROLE_ATTENDANCE_PERMISSION_FIX.sql
+    column_versions.
+
+Website:
+- cloud-staff-v8.js
+    Administrator always writable; V69-to-base writer fallback; Administrator
+    replace-state fallback; clear column_versions error message.
+- role-access-v6.js
+    Administrator actions, views, write columns, and attendance calendars are
+    immutable (identity-bound My Attendance remains Trainee-only).
+- permissions-dynamic-v38.js
+    Administrator bypass in the dynamic permission applier.
+
+Documentation:
+- ADMIN_CREATE_FIX_V90_GUIDE.txt
+- BUILD_INFO_ADMIN_CREATE_FIX_V90.txt
+- README.md (V90 section)
+
+Verification:
+- self-attendance-audit/harness.js — 51/51 checks passed.

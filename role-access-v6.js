@@ -142,21 +142,35 @@
     }));
   }
 
+  // Administrator permissions are immutable in this system. Treat the
+  // Administrator as always allowed regardless of what a stale, partial, or
+  // older permission payload says, so a bad role row can never lock the
+  // Administrator out of creating or editing records.
+  function isAdminAccount(account = currentAccount()) {
+    return role(account) === ROLES.ADMIN;
+  }
+
   function canAccessView(viewId, account = currentAccount()) {
     const roleName = role(account);
+    // Identity-bound modules (My Attendance) stay exclusive to their role even
+    // for the Administrator. Everything else is immutable Administrator access.
     if (!viewAllowedForRole(viewId, roleName)) return false;
+    if (isAdminAccount(account)) return true;
     return (manifest.views?.[roleName] || []).includes(String(viewId || ''));
   }
 
   function can(action, account = currentAccount()) {
+    if (isAdminAccount(account)) return true;
     return (manifest.actions?.[String(action || '')] || []).includes(role(account));
   }
 
   function canWriteColumn(column, account = currentAccount()) {
+    if (isAdminAccount(account)) return true;
     return (manifest.columns?.[role(account)] || []).includes(String(column || ''));
   }
 
   function canUseAttendanceGroup(group, account = currentAccount()) {
+    if (isAdminAccount(account)) return true;
     return (manifest.attendanceGroups?.[role(account)] || []).includes(String(group || ''));
   }
 

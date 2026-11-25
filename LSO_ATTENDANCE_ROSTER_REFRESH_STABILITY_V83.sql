@@ -41,6 +41,11 @@
 
 begin;
 
+-- The V69 writer updates this column. Create it on older projects so the
+-- no-op guard and column-version bookkeeping do not fail with 42703.
+alter table public.system_state
+  add column if not exists column_versions jsonb not null default '{}'::jsonb;
+
 -- ----------------------------------------------------------------------------
 -- 0. PRE-FLIGHT — make sure the expected schema is present
 -- ----------------------------------------------------------------------------

@@ -215,6 +215,9 @@
 
   function canWriteColumn(column) {
     if (!sessionAccount) return false;
+    // Administrator permissions are immutable. Never let a stale or partial
+    // permission payload make the Administrator read-only.
+    if (sessionAccount.role === 'Administrator') return true;
     if (window.LSORoleAccess?.canWriteColumn) return window.LSORoleAccess.canWriteColumn(column, sessionAccount);
     return sessionAccount.role === 'Administrator';
   }
@@ -775,6 +778,52 @@
     });
   }
 
+  // Last-resort Administrator write path. Some older projects still have a
+  // pre-V89 lso_role_can() that has no Administrator bypass, so a column-level
+  // write is rejected with 42501 even though the Administrator is allowed.
+  // lso_replace_state() is Administrator-only and does not consult
+  // lso_role_permissions, so it can carry the same change without weakening any
+  // non-Administrator restriction.
+  async function adminReplaceStateFallback(column, value) {
+    if (sessionAccount?.role !== 'Administrator') return null;
+    if (!client) throw new Error('Supabase is not configured.');
+    // Start from the authoritative server row so this fallback never
+    // overwrites another device's newer change in an unrelated column.
+    let baseState = null;
+    try { baseState = await rpc('lso_get_state', { p_token: sessionToken }); } catch { baseState = null; }
+    const nextState = baseState && typeof baseState === 'object' ? {
+      members: stateColumn(baseState, 'members'),
+      events: stateColumn(baseState, 'events'),
+      attendance: stateColumn(baseState, 'attendance'),
+      duty_hours: stateColumn(baseState, 'duty_hours'),
+      monthly_reports: stateColumn(baseState, 'monthly_reports'),
+      instruments: stateColumn(baseState, 'instruments'),
+      settings: stateColumn(baseState, 'settings'),
+      activity_log: stateColumn(baseState, 'activity_log')
+    } : {
+      members: currentValueForColumn('members'),
+      events: currentValueForColumn('events'),
+      attendance: currentValueForColumn('attendance'),
+      duty_hours: currentValueForColumn('duty_hours'),
+      monthly_reports: currentValueForColumn('monthly_reports'),
+      instruments: currentValueForColumn('instruments'),
+      settings: settingsPayloadWithMonthlyCompatibility(),
+      activity_log: currentValueForColumn('activity_log')
+    };
+    if (column === 'settings') nextState.settings = value;
+    else if (column === MONTHLY_COMPAT_COLUMN) nextState.settings = { ...nextState.settings, [MONTHLY_SETTINGS_KEY]: value };
+    else nextState[column] = value;
+    const response = await client.rpc('lso_replace_state', { p_token: sessionToken, p_state: nextState });
+    if (response.error) {
+      const error = new Error(rpcErrorMessage(response.error));
+      error.permissionDenied = /42501|permission denied|access is required|Only the Administrator|role cannot update/i.test(String(response.error?.message || response.error?.details || ''));
+      error.technicalMessage = String(response.error?.message || response.error?.details || error.message);
+      throw error;
+    }
+    markConnectionSuccess();
+    return response.data;
+  }
+
   async function conflictAwareUpdate(column, value) {
     const expectedVersion = Number(columnVersions.get(column) || 0);
     if (!client) throw new Error('Supabase is not configured.');
@@ -785,9 +834,20 @@
     if (/LSO_CONFLICT:/i.test(raw)) {
       const error = new Error(raw); error.code = 'LSO_CONFLICT'; error.column = column; throw error;
     }
-    if (/lso_update_state_v69|could not find the function|function .* does not exist|schema cache/i.test(raw)) {
+    // The V69 writer also updates the column_versions bookkeeping column. On a
+    // project installed from the older base/master installers that column was
+    // never created, so every write failed with 42703. Fall back to the base
+    // writer, which does not touch column_versions, so the change still saves.
+    if (/lso_update_state_v69|could not find the function|function .* does not exist|schema cache|column .* does not exist|42703/i.test(raw)) {
       v69Capabilities = { ...(v69Capabilities || {}), conflictProtection: false };
-      return rpc('lso_update_state', { p_token: sessionToken, p_column: column, p_value: value });
+      try {
+        return await rpc('lso_update_state', { p_token: sessionToken, p_column: column, p_value: value });
+      } catch (fallbackError) {
+        if (!fallbackError?.permissionDenied || sessionAccount?.role !== 'Administrator') throw fallbackError;
+        const replaced = await adminReplaceStateFallback(column, value);
+        if (replaced) return replaced;
+        throw fallbackError;
+      }
     }
     const wrapped = new Error(rpcErrorMessage(response.error));
     wrapped.isTransportError = isTransportFailure(response.error);
@@ -800,6 +860,12 @@
     wrapped.permissionDenied = /42501|permission denied|access is required|Only the Administrator|role cannot update|Membership .* access|not assigned to the selected/i.test(wrapped.technicalMessage);
     wrapped.code = wrapped.permissionDenied ? (window.LSOSystemCore?.ERROR_CODES?.PERMISSION || 'AUTH-PERMISSION-005') : undefined;
     if (!wrapped.isTransportError) markConnectionSuccess();
+    // Administrator-only escape hatch for a database still running the old
+    // role check. Non-Administrators always receive the original rejection.
+    if (wrapped.permissionDenied && sessionAccount?.role === 'Administrator') {
+      const replaced = await adminReplaceStateFallback(column, value);
+      if (replaced) return replaced;
+    }
     throw wrapped;
   }
 
