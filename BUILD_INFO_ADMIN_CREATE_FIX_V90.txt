@@ -1,0 +1,46 @@
+LSO Administrator Create Fix — V90
+Build: 2026-11-24 admin-create-fix-v90
+
+Purpose:
+- Repair the shared Supabase database so the Administrator can create and save
+  members, activities, attendance, duty hours, monthly reports, settings,
+  instruments, and activity-log entries.
+- Restore the five-role account model (Administrator, Staff Account,
+  Membership, General Secretary, Trainee/Probationary).
+- Make Administrator permissions immutable in the website permission engine.
+
+Root causes corrected:
+- system_state.column_versions was referenced by lso_update_state_v69 but never
+  created by the base/master installers (42703 on every save).
+- The merged Duty Hours installer reset lso_accounts_role_check to three roles,
+  blocking Membership and General Secretary accounts (23514).
+- Older lso_role_can() definitions had no Administrator bypass (42501).
+
+Database files:
+- LSO_SUPABASE_REPAIR_V90.sql   — targeted repair for an existing project.
+- LSO_SUPABASE_REWRITE_V90.sql  — complete rewritten installer for a new or
+                                  partially installed project.
+
+Website files:
+- cloud-staff-v8.js
+- role-access-v6.js
+- permissions-dynamic-v38.js
+- lso-system-core-v4.js
+
+Additional repairs:
+- LSO_MASTER_MIGRATION_INSTALLER.sql now also installs the V69 notification
+  preferences table, the V69 notification/collection/state-meta RPCs, the V82
+  sync-health RPC, and lso_trainee_scoped_state_v85, so supabase-setup.sql +
+  master installer is a complete path (52/52 functions).
+- The website schema target now matches the migration the server reports
+  (009_dynamic_role_permissions), removing a false "run the installer" warning.
+
+Verification:
+- 51/51 checks in node self-attendance-audit/harness.js.
+- PostgreSQL 16 install matrix: fresh complete, base+master, base+master+repair,
+  rewrite fresh, rewrite+repair, base+duty+repair, base+duty+rewrite — all pass;
+  Administrator writes to all eight shared columns succeed on every chain.
+- Repair re-run with existing Membership and General Secretary accounts:
+  accounts preserved (2 -> 2), five-role constraint intact.
+- All 52 lso_% functions callable; 0 missing anon/authenticated EXECUTE grants.
+- Attendance roster rebuild audit: 0 spurious renders, no errors.

@@ -21,6 +21,7 @@ alter table if exists public.system_state
   add column if not exists instruments jsonb not null default '[]'::jsonb,
   add column if not exists settings jsonb not null default '{}'::jsonb,
   add column if not exists activity_log jsonb not null default '[]'::jsonb,
+  add column if not exists column_versions jsonb not null default '{}'::jsonb,
   add column if not exists updated_at timestamptz not null default now();
 
 insert into public.system_state (id) values (1) on conflict (id) do nothing;
@@ -113,8 +114,13 @@ stable
 security definer
 set search_path = public, extensions, pg_temp
 as $$
-  select coalesce((select allowed from public.lso_role_permissions
-    where role_name=p_role and permission_key=p_permission_key and resource=coalesce(p_resource,'')), false);
+  select case
+    when p_role = 'Administrator' then true
+    else coalesce((
+      select allowed from public.lso_role_permissions
+      where role_name = p_role and permission_key = p_permission_key and resource = coalesce(p_resource, '')
+    ), false)
+  end;
 $$;
 
 -- Server-side recovery points preserve complete system_state snapshots before
@@ -2016,6 +2022,404 @@ $$;
 
 insert into public.lso_schema_migrations(migration_key,version_number,title,checksum,notes)
 values('009_dynamic_role_permissions',9,'Dynamic Role and Permission Center','role-permission-009-v1','Administrator-controlled role landing pages, visible modules, action permissions, Attendance calendars, and derived server write access.')
+on conflict(migration_key) do update set title=excluded.title,checksum=excluded.checksum,notes=excluded.notes;
+
+commit;
+notify pgrst, 'reload schema';
+
+
+-- ============================================================================
+-- V90 — COMPLETE THE BASE + MASTER CHAIN
+-- The V69 notification preferences and V82 sync-health RPCs were previously
+-- installed only by the complete installer. They are added here so that
+-- supabase-setup.sql + this master installer is a self-sufficient path.
+-- ============================================================================
+begin;
+
+create table if not exists public.lso_v69_notification_preferences (
+  scope text not null check (scope in ('account', 'role')),
+  pref_key text not null,
+  preferences jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (scope, pref_key)
+);
+alter table public.lso_v69_notification_preferences enable row level security;
+revoke all on table public.lso_v69_notification_preferences from anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.lso_get_collection_page_v69(p_token text, p_collection text, p_offset integer DEFAULT 0, p_limit integer DEFAULT 25, p_search text DEFAULT ''::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_member_id text;
+  v_source jsonb := '[]'::jsonb;
+  v_items jsonb := '[]'::jsonb;
+  v_total integer := 0;
+  v_offset integer := greatest(0, coalesce(p_offset, 0));
+  v_limit integer := greatest(1, least(100, coalesce(p_limit, 25)));
+  v_search text := lower(btrim(coalesce(p_search, '')));
+  v_scoped jsonb;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select role, member_id into v_role, v_member_id
+    from public.lso_accounts
+   where id = v_account_id;
+
+  select case p_collection
+    when 'members'      then coalesce(state.members, '[]'::jsonb)
+    when 'events'       then coalesce(state.events, '[]'::jsonb)
+    when 'attendance'   then coalesce(state.attendance, '[]'::jsonb)
+    when 'instruments'  then coalesce(state.instruments, '[]'::jsonb)
+    when 'activity_log' then coalesce(state.activity_log, '[]'::jsonb)
+    when 'duty_entries' then coalesce(state.duty_hours -> 'entries', '[]'::jsonb)
+    else null
+  end
+    into v_source
+    from public.system_state as state
+   where state.id = 1;
+
+  if v_source is null then
+    raise exception 'Unknown or unsupported collection.' using errcode = '22023';
+  end if;
+  if jsonb_typeof(v_source) <> 'array' then
+    v_source := '[]'::jsonb;
+  end if;
+
+  -- V85: Trainee/Probationary accounts page only their own records. The same
+  -- helper that scopes lso_get_state decides what belongs to the member.
+  if v_role = 'Trainee/Probationary' then
+    select public.lso_trainee_scoped_state_v85(to_jsonb(state), v_member_id)
+      into v_scoped
+      from public.system_state as state
+     where state.id = 1;
+    v_source := case p_collection
+      when 'members'      then coalesce(v_scoped -> 'members', '[]'::jsonb)
+      when 'events'       then coalesce(v_scoped -> 'events', '[]'::jsonb)
+      when 'attendance'   then coalesce(v_scoped -> 'attendance', '[]'::jsonb)
+      when 'duty_entries' then coalesce(v_scoped -> 'duty_hours' -> 'entries', '[]'::jsonb)
+      else '[]'::jsonb
+    end;
+  end if;
+
+  -- Case-insensitive text filter (matches the browser fallback behaviour).
+  if v_search <> '' then
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_source
+      from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+     where position(v_search in lower(coalesce(item::text, ''))) > 0;
+  end if;
+
+  v_total := jsonb_array_length(v_source);
+
+  -- V85 repair: the previous body ordered/limited an aggregate directly, which
+  -- PostgreSQL rejects ("column t.idx must appear in the GROUP BY clause"), so
+  -- every call failed. The page is now selected first and aggregated after.
+  select coalesce(jsonb_agg(page.item order by page.idx), '[]'::jsonb)
+    into v_items
+    from (
+      select t.item, t.idx
+        from jsonb_array_elements(v_source) with ordinality as t(item, idx)
+       where t.idx > v_offset
+       order by t.idx
+       limit v_limit
+    ) as page;
+
+  return jsonb_build_object(
+    'items', v_items,
+    'total', v_total,
+    'offset', v_offset,
+    'limit', v_limit
+  );
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_get_notification_preferences_v69(p_token text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_account_id uuid;
+  v_account public.lso_accounts%rowtype;
+  v_account_prefs jsonb := '{}'::jsonb;
+  v_role_prefs jsonb := '{}'::jsonb;
+  v_role_defaults jsonb := '{}'::jsonb;
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select * into v_account from public.lso_accounts where id = v_account_id;
+  if not found then
+    raise exception 'Account not found.' using errcode = '42501';
+  end if;
+
+  select preferences into v_account_prefs
+    from public.lso_v69_notification_preferences
+   where scope = 'account' and pref_key = v_account.username;
+
+  select preferences into v_role_prefs
+    from public.lso_v69_notification_preferences
+   where scope = 'role' and pref_key = v_account.role;
+
+  select coalesce(jsonb_object_agg(pref_key, preferences), '{}'::jsonb)
+    into v_role_defaults
+    from public.lso_v69_notification_preferences
+   where scope = 'role';
+
+  return jsonb_build_object(
+    'ok', true,
+    'accountPreferences', coalesce(v_account_prefs, '{}'::jsonb),
+    'rolePreferences', coalesce(v_role_prefs, '{}'::jsonb),
+    'roleDefaults', v_role_defaults,
+    'serverTime', now()
+  );
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_get_state_meta_v69(p_token text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_versions jsonb;
+  v_updated timestamptz;
+begin
+  perform public.lso_session_account_id(p_token, false);
+
+  select column_versions, updated_at
+    into v_versions, v_updated
+    from public.system_state
+   where id = 1;
+
+  return jsonb_build_object(
+    'ok', true,
+    'columnVersions', coalesce(v_versions, '{}'::jsonb),
+    'updatedAt', v_updated,
+    'serverTime', now()
+  );
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_save_notification_preferences_v69(p_token text, p_preferences jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_account_id uuid;
+  v_username text;
+  v_prefs jsonb := coalesce(p_preferences, '{}'::jsonb);
+begin
+  v_account_id := public.lso_session_account_id(p_token, false);
+  select username into v_username from public.lso_accounts where id = v_account_id;
+
+  insert into public.lso_v69_notification_preferences (scope, pref_key, preferences, updated_at)
+  values ('account', v_username, v_prefs, now())
+  on conflict (scope, pref_key) do update
+    set preferences = excluded.preferences,
+        updated_at = now();
+
+  return jsonb_build_object('ok', true, 'accountPreferences', v_prefs);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_save_role_notification_preferences_v69(p_token text, p_role text, p_preferences jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_admin public.lso_accounts%rowtype;
+  v_role text := btrim(coalesce(p_role, ''));
+  v_prefs jsonb := coalesce(p_preferences, '{}'::jsonb);
+begin
+  v_admin := public.lso_admin_account(p_token);
+
+  if v_role not in ('Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary') then
+    raise exception 'Unknown account role.' using errcode = '22023';
+  end if;
+
+  insert into public.lso_v69_notification_preferences (scope, pref_key, preferences, updated_at)
+  values ('role', v_role, v_prefs, now())
+  on conflict (scope, pref_key) do update
+    set preferences = excluded.preferences,
+        updated_at = now();
+
+  return jsonb_build_object('ok', true, 'rolePreferences', v_prefs);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_sync_health_v82(p_token text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_account_id uuid;
+  v_role text;
+  v_state_updated timestamptz;
+begin
+  v_account_id := public.lso_session_account_id(p_token,false);
+  select role into v_role from public.lso_accounts where id=v_account_id;
+  select updated_at into v_state_updated from public.system_state where id=1;
+
+  return jsonb_build_object(
+    'ok',true,
+    'role',v_role,
+    'serverTime',now(),
+    'stateUpdatedAt',v_state_updated,
+    'schemaVersion',13,
+    'permissionModel','v82'
+  );
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_v69_capabilities(p_token text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_version integer := 0;
+begin
+  perform public.lso_session_account_id(p_token, false);
+
+  if to_regclass('public.lso_schema_migrations') is not null then
+    select coalesce(max(version_number), 0) into v_version
+      from public.lso_schema_migrations;
+  end if;
+
+  return jsonb_build_object(
+    'installed', true,
+    'conflictProtection', false,
+    'serverPagination', true,
+    'notificationPreferences', true,
+    'schemaVersion', v_version,
+    'serverTime', now()
+  );
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lso_trainee_scoped_state_v85(p_state jsonb, p_member_id text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v_member_id text := nullif(btrim(coalesce(p_member_id, '')), '');
+  v_members jsonb := '[]'::jsonb;
+  v_attendance jsonb := '[]'::jsonb;
+  v_events jsonb := '[]'::jsonb;
+  v_entries jsonb := '[]'::jsonb;
+  v_commitments jsonb := '{}'::jsonb;
+  v_duty_hours jsonb;
+  v_all_members jsonb;
+  v_all_attendance jsonb;
+  v_all_events jsonb;
+begin
+  if p_state is null or jsonb_typeof(p_state) <> 'object' then
+    raise exception 'The shared system state is missing.' using errcode = 'P0002';
+  end if;
+
+  v_all_members := case when jsonb_typeof(p_state -> 'members') = 'array' then p_state -> 'members' else '[]'::jsonb end;
+  v_all_attendance := case when jsonb_typeof(p_state -> 'attendance') = 'array' then p_state -> 'attendance' else '[]'::jsonb end;
+  v_all_events := case when jsonb_typeof(p_state -> 'events') = 'array' then p_state -> 'events' else '[]'::jsonb end;
+  v_duty_hours := case
+    when jsonb_typeof(p_state -> 'duty_hours') = 'object' then p_state -> 'duty_hours'
+    else '{"version":6,"commitments":{},"entries":[]}'::jsonb
+  end;
+
+  -- An account that is not linked to a member receives nothing but the shell.
+  if v_member_id is not null then
+    -- Own member record (unchanged behaviour).
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_members
+      from jsonb_array_elements(v_all_members) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'id', '')) = v_member_id;
+
+    -- V85: own attendance rows only (every roster mode and attendance calendar).
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_attendance
+      from jsonb_array_elements(v_all_attendance) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'memberId', '')) = v_member_id;
+
+    -- V85: only the activities referenced by those rows (date/title/type/venue
+    -- for the table). Activities without an own record are not disclosed.
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_events
+      from jsonb_array_elements(v_all_events) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'id', '')) <> ''
+       and exists (
+         select 1
+           from jsonb_array_elements(v_attendance) as own_record
+          where btrim(coalesce(own_record ->> 'eventId', '')) = btrim(coalesce(item ->> 'id', ''))
+       );
+
+    -- Own Duty Hours entries and commitment (unchanged behaviour).
+    select coalesce(jsonb_agg(item order by idx), '[]'::jsonb)
+      into v_entries
+      from jsonb_array_elements(
+        case when jsonb_typeof(v_duty_hours -> 'entries') = 'array' then v_duty_hours -> 'entries' else '[]'::jsonb end
+      ) with ordinality as t(item, idx)
+     where btrim(coalesce(item ->> 'memberId', '')) = v_member_id;
+
+    if jsonb_typeof(v_duty_hours -> 'commitments' -> v_member_id) = 'object' then
+      v_commitments := jsonb_build_object(v_member_id, v_duty_hours -> 'commitments' -> v_member_id);
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'id', coalesce(p_state -> 'id', '1'::jsonb),
+    'members', v_members,
+    'events', v_events,
+    'attendance', v_attendance,
+    'duty_hours', jsonb_build_object(
+      'version', coalesce(v_duty_hours -> 'version', '6'::jsonb),
+      'commitments', v_commitments,
+      'entries', v_entries
+    ),
+    'monthly_reports', '{}'::jsonb,
+    'instruments', '[]'::jsonb,
+    'settings', '{}'::jsonb,
+    'activity_log', '[]'::jsonb,
+    'updated_at', coalesce(p_state -> 'updated_at', to_jsonb(now())),
+    'scope', jsonb_build_object('role', 'Trainee/Probationary', 'memberId', coalesce(v_member_id, ''), 'model', 'v85-own-record')
+  );
+end;
+$function$;
+
+-- Function grants: CREATE OR REPLACE preserves existing grants, but a newly
+-- created function would otherwise keep the default PUBLIC grant.
+do $lso_v90_master_grants$
+declare
+  v_func record;
+begin
+  for v_func in
+    select p.oid, p.proname
+    from pg_proc as p
+    join pg_namespace as n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'lso_%'
+  loop
+    execute format('revoke all on function public.%I(%s) from public',
+                   v_func.proname, pg_get_function_identity_arguments(v_func.oid));
+    execute format('grant execute on function public.%I(%s) to anon, authenticated',
+                   v_func.proname, pg_get_function_identity_arguments(v_func.oid));
+  end loop;
+end;
+$lso_v90_master_grants$;
+
+insert into public.lso_schema_migrations(migration_key,version_number,title,checksum,notes)
+values('012_v69_notification_sync_health',12,'V69 Notification Preferences and V82 Sync Health','v69-sync-012-v1','Added the V69 notification preference table, the V69 collection/state-meta/notification RPCs, and the V82 sync-health RPC so the base + master chain is complete.')
 on conflict(migration_key) do update set title=excluded.title,checksum=excluded.checksum,notes=excluded.notes;
 
 commit;

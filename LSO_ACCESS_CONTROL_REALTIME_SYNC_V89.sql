@@ -54,6 +54,12 @@ create table if not exists public.lso_schema_migrations (
   notes text not null default ''
 );
 
+-- V69 optimistic-concurrency bookkeeping. The base installer defined
+-- lso_update_state_v69 against this column without creating it, which made
+-- every shared-data write fail with 42703.
+alter table public.system_state
+  add column if not exists column_versions jsonb not null default '{}'::jsonb;
+
 create table if not exists public.lso_role_permissions (
   role_name text not null,
   permission_key text not null,

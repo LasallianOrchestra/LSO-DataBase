@@ -27,6 +27,7 @@
   }
 
   function can(action) {
+    if (isAdmin()) return true;
     return window.LSORoleAccess?.can?.(action, account()) ?? role() === 'Administrator';
   }
 

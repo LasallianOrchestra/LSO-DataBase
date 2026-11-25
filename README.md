@@ -1,3 +1,27 @@
+# LSO Orchestra Management System — V90 Administrator Create Fix
+
+This release repairs the shared Supabase database so the **Administrator can create and save records again**. If the Administrator account could not create anything, run **`LSO_SUPABASE_REPAIR_V90.sql`** in the Supabase SQL Editor (use **`LSO_SUPABASE_REWRITE_V90.sql`** for a new project or a project missing base tables). Both files are idempotent and preserve accounts and shared records.
+
+## Root causes corrected
+
+- **Missing `system_state.column_versions`.** The base and master installers defined `public.lso_update_state_v69` against this column but never created it, so every shared-data write failed with PostgreSQL `42703: column "column_versions" does not exist`.
+- **Account role constraint reset to three roles.** The merged Duty Hours installer restored `lso_accounts_role_check` with only Administrator, Staff Account, and Trainee/Probationary. Membership and General Secretary accounts could not be created or approved (`23514`), and re-running the installer failed once those accounts existed.
+- **No Administrator bypass in `lso_role_can()`.** Older installers read `lso_role_permissions` only; Administrator has no rows there, so its writes were rejected with `42501`.
+
+## Website-side safety net
+
+- The Administrator is now immutable in `role-access-v6.js`, `permissions-dynamic-v38.js`, and `cloud-staff-v8.js`, so a stale or partial permission payload can never make the Administrator read-only.
+- `cloud-staff-v8.js` falls back from `lso_update_state_v69` to `lso_update_state` when the V69 writer fails because `column_versions` is missing, and uses the Administrator-only `lso_replace_state` writer as a last resort when an older `lso_role_can()` rejects the Administrator.
+- Identity-bound **My Attendance** remains exclusive to Trainee/Probationary even for the Administrator.
+
+## Verification
+
+- `LSO_SUPABASE_REPAIR_V90.sql` and `LSO_SUPABASE_REWRITE_V90.sql` end with a JSON verification result; every check must be `true`.
+- PostgreSQL 16 install matrix passed: fresh install, base + master, base + master + individual patches, and re-run with existing five-role accounts (data preserved).
+- 51/51 checks in `node self-attendance-audit/harness.js`.
+
+See `ADMIN_CREATE_FIX_V90_GUIDE.txt`, `BUILD_INFO_ADMIN_CREATE_FIX_V90.txt`, and `FILE_MANIFEST_ADMIN_CREATE_FIX_V90.txt`.
+
 # LSO Orchestra Management System — V85 My Attendance Live Feed
 
 This release fixes the blank **Duty Hours > My Attendance** section for Trainee/Probationary accounts and makes it live. It requires one Supabase patch: `LSO_SELF_ATTENDANCE_LIVE_FEED_V85.sql` (run it in the SQL Editor before uploading the website files).

@@ -116,7 +116,7 @@ begin
   ) then
     alter table public.lso_accounts
       add constraint lso_accounts_role_check
-      check (role in ('Administrator', 'Staff Account', 'Trainee/Probationary'));
+      check (role in ('Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary'));
   end if;
 end;
 $$;
@@ -781,7 +781,7 @@ begin
   ) then
     alter table public.lso_accounts
       add constraint lso_accounts_role_check
-      check (role in ('Administrator', 'Staff Account', 'Trainee/Probationary'));
+      check (role in ('Administrator', 'Staff Account', 'Membership', 'General Secretary', 'Trainee/Probationary'));
   end if;
 end;
 $$;

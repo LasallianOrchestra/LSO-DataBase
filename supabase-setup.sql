@@ -78,6 +78,11 @@ insert into public.system_state (id)
 values (1)
 on conflict (id) do nothing;
 
+-- V69 optimistic-concurrency bookkeeping. lso_update_state_v69 below reads and
+-- writes this column; create it here so the base installer is self-contained.
+alter table public.system_state
+  add column if not exists column_versions jsonb not null default '{}'::jsonb;
+
 -- Upgrade existing projects created before Duty Hours was added.
 alter table public.system_state
   add column if not exists duty_hours jsonb not null
