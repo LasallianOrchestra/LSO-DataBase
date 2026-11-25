@@ -3170,7 +3170,24 @@ begin
 end;
 $function$;
 
--- 7. SECURITY — match the installer grants. CREATE OR REPLACE preserves the
+-- 7. HEAL ROLE CONFIGURATIONS. The master installer deletes every role's
+--    'view' rows and re-inserts them only for Staff Account and Administrator.
+--    On a project that already had lso_role_profiles rows, its
+--    lso_apply_default_role_configuration() step is skipped, so Membership,
+--    General Secretary, and Trainee/Probationary end with no visible module.
+--    The permission center then shows nothing to select and every save fails
+--    with 22023 "Assign at least one visible module." Re-apply the packaged
+--    minimum grants so the roles are configurable again.
+do $v90_repair_roles$
+begin
+  perform public.lso_v89_repair_role('Membership');
+  perform public.lso_v89_repair_role('General Secretary');
+  perform public.lso_v89_repair_role('Staff Account');
+  perform public.lso_v89_repair_role('Trainee/Probationary');
+end;
+$v90_repair_roles$;
+
+-- 8. SECURITY — match the installer grants. CREATE OR REPLACE preserves the
 --    privileges of an existing function, but a function that was missing gets
 --    the default PUBLIC grant. Normalize every LSO function explicitly.
 -- The complete installer deliberately keeps ten helper functions internal:
@@ -3212,20 +3229,20 @@ begin
 end;
 $v90_grants$;
 
--- 8. MIGRATION MARKER.
+-- 9. MIGRATION MARKER.
 insert into public.lso_schema_migrations (migration_key, version_number, title, checksum, notes)
 select '900_supabase_repair_v90',
        greatest(coalesce((select max(version_number) from public.lso_schema_migrations), 0) + 1, 90),
        'Supabase repair V90 - Administrator writes, column_versions, five roles',
        'supabase-repair-v90',
-       'Adds system_state.column_versions, restores the five-role account constraint, adds an Administrator bypass to lso_role_can, and rewrites the shared-state writers.'
+       'Adds system_state.column_versions, restores the five-role account constraint, adds an Administrator bypass to lso_role_can, rewrites the shared-state writers, and restores the baseline module grants so every role is configurable.'
 where not exists (
   select 1 from public.lso_schema_migrations where migration_key = '900_supabase_repair_v90'
 );
 
 notify pgrst, 'reload schema';
 
--- 9. VERIFICATION — every check must be true.
+-- 10. VERIFICATION — every check must be true.
 select jsonb_build_object(
   'column_versions_present', exists (
     select 1 from information_schema.columns
@@ -3246,6 +3263,49 @@ select jsonb_build_object(
   'writer_core_present', to_regprocedure('public.lso_update_state_core(text,text,jsonb)') is not null,
   'save_accounts_present', to_regprocedure('public.lso_save_accounts(text,jsonb)') is not null,
   'permission_center_present', to_regprocedure('public.lso_get_permission_center(text)') is not null,
+  'roles_with_views', (
+    select count(*)
+    from (
+      select role_name
+      from public.lso_role_permissions
+      where permission_key = 'view' and allowed = true
+        and role_name in ('Membership','General Secretary','Staff Account','Trainee/Probationary')
+      group by role_name
+    ) as configured
+  ),
+  'all_roles_have_views', (
+    select count(*) = 4
+    from (
+      select role_name
+      from public.lso_role_permissions
+      where permission_key = 'view' and allowed = true
+        and role_name in ('Membership','General Secretary','Staff Account','Trainee/Probationary')
+      group by role_name
+    ) as configured
+  ),
+  'all_roles_landing_valid', (
+    select bool_and(
+      exists (
+        select 1 from public.lso_role_permissions rp
+        where rp.role_name = p.role_name
+          and rp.permission_key = 'view'
+          and rp.allowed = true
+          and rp.resource = p.landing_view
+      )
+    )
+    from public.lso_role_profiles p
+    where p.role_name in ('Membership','General Secretary','Staff Account','Trainee/Probationary')
+  ),
+  'role_views', (
+    select coalesce(jsonb_object_agg(role_name, views), '{}'::jsonb)
+    from (
+      select rp.role_name, coalesce(jsonb_agg(rp.resource order by rp.resource), '[]'::jsonb) as views
+      from public.lso_role_permissions rp
+      where rp.permission_key = 'view' and rp.allowed = true
+        and rp.role_name in ('Membership','General Secretary','Staff Account','Trainee/Probationary')
+      group by rp.role_name
+    ) as role_views
+  ),
   'account_count', (select count(*) from public.lso_accounts),
   'accounts_by_role', (
     select coalesce(jsonb_object_agg(role, n), '{}'::jsonb)

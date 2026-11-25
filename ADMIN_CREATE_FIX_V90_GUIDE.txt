@@ -83,6 +83,25 @@ The SQL file ends with a JSON verification result. Every check must be true:
   save_accounts_present         true
   permission_center_present     true
 
+ROLE PERMISSIONS CANNOT BE SAVED ("Assign at least one visible module")
+  Cause: LSO_MASTER_MIGRATION_INSTALLER.sql deletes every role's "view" rows
+  and re-inserts them only for Staff Account and Administrator. On a project
+  that already had lso_role_profiles rows, its default-configuration step is
+  skipped, so Membership, General Secretary, and Trainee/Probationary end with
+  zero visible modules. The permission center then shows nothing to select and
+  every save is rejected with 22023.
+
+  Fix: the master installer now seeds the baseline views for every role, and
+  LSO_SUPABASE_REPAIR_V90.sql heals existing projects by calling
+  lso_v89_repair_role() for all four configurable roles. The repair's JSON
+  result now reports:
+    roles_with_views           4
+    all_roles_have_views       true
+    all_roles_landing_valid    true
+    role_views                 { role: [modules...] }
+  Re-run LSO_SUPABASE_REPAIR_V90.sql, refresh the page, and open System
+  Administration -> Role Management.
+
 WEBSITE-SIDE SAFETY NET
 -----------------------
 cloud-staff-v8.js now:

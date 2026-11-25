@@ -7,6 +7,7 @@ This release repairs the shared Supabase database so the **Administrator can cre
 - **Missing `system_state.column_versions`.** The base and master installers defined `public.lso_update_state_v69` against this column but never created it, so every shared-data write failed with PostgreSQL `42703: column "column_versions" does not exist`.
 - **Account role constraint reset to three roles.** The merged Duty Hours installer restored `lso_accounts_role_check` with only Administrator, Staff Account, and Trainee/Probationary. Membership and General Secretary accounts could not be created or approved (`23514`), and re-running the installer failed once those accounts existed.
 - **No Administrator bypass in `lso_role_can()`.** Older installers read `lso_role_permissions` only; Administrator has no rows there, so its writes were rejected with `42501`.
+- **Role permissions could not be saved.** The master installer deleted every role's `view` rows and re-inserted them only for Staff Account and Administrator, so Membership, General Secretary, and Trainee/Probationary had no visible module and every save failed with `22023 Assign at least one visible module`. The master installer now seeds the baseline views for all roles, and the repair heals existing projects with `lso_v89_repair_role()`.
 
 ## Website-side safety net
 
